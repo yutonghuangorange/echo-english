@@ -18,6 +18,7 @@
     .word{display:inline;border:0;border-bottom:1px dotted #648a87;border-radius:0;padding:0 1px;background:transparent;font:inherit;color:inherit}.word:hover{background:#2d4647;color:#b3eedb}.word:disabled{opacity:1}.wordcard{background:#0e1821;border:1px solid #37505a;border-radius:12px;padding:12px;margin:12px 0}.wordcard p{font-size:13px;margin:8px 0}.wordcard .row{margin-top:0}canvas{width:100%;height:90px;background:#0e1821;border-radius:10px;margin:12px 0}.analysis-text{font-size:12px;color:#a3b7c6;white-space:pre-line;margin-bottom:12px}
     footer{border-top:1px solid #2b3946;background:#111b24;padding:12px 20px;display:flex;align-items:center;gap:10px;flex-shrink:0}.status{font-size:11px;color:#9ab2c1;flex:1;line-height:1.6;max-height:70px;overflow:auto}#stop{background:#643640;border-color:#88505a;color:#ffe2e6;font-size:12px;padding:8px 12px;flex-shrink:0}
     .history-row{display:block;width:100%;text-align:left;padding:10px 12px;margin:6px 0;font-size:12px;background:#192734}.history-row[aria-pressed="true"]{border-color:#8cc7b3;background:#263e3c}.history-row small{display:block;margin-top:4px}.history-actions{display:flex;justify-content:space-between;margin:12px 0}.history-actions button{font-size:12px;padding:6px 10px;background:transparent}.history-list{max-height:220px;overflow:auto}#historyInfo{font-size:12px;color:#90a4b6;margin-bottom:10px}
+    .recording-heading{display:flex;align-items:center;justify-content:space-between;gap:8px}.recording-heading .page-title{margin:0}.selected-recording{background:#192734;border:1px solid #355348;border-radius:12px;padding:14px;margin:16px 0}.selected-recording #historyInfo{margin:5px 0;font-size:12px}.selected-recording #recordingText{font-size:14px;line-height:1.6;display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical;overflow:hidden}.version-choices{display:flex;gap:6px;flex-wrap:wrap}.version-choice{font-size:11px;padding:5px 9px;border-radius:20px;background:transparent;color:#94adbc}.version-choice[aria-pressed="true"]{background:#b3eedb;color:#163b32;border-color:#b3eedb}.recording-search{font-size:12px;margin:10px 0 4px}.recording-timeline{max-height:260px;overflow:auto;scrollbar-width:thin}.recording-timeline .history-row{position:relative;padding-left:32px;border-color:transparent}.recording-timeline .history-row::before{content:'▷';position:absolute;left:11px;top:12px;color:#8fbdaf}.recording-timeline .history-row[aria-pressed="true"]{border-color:#8cc7b3}.recording-timeline .history-row small{white-space:nowrap;overflow:hidden;text-overflow:ellipsis}.recording-timeline .history-row:disabled{opacity:.65}
   </style><div class="panel">
     <header><div><div class="tag">A LITTLE BETTER, EVERY DAY</div><h1>Echo<small>英语配音练习</small></h1></div><button class="close" id="close" aria-label="关闭">×</button></header>
     <nav class="tabs" role="tablist" aria-label="练习面板"><button id="tab-practice" role="tab" aria-selected="true" aria-controls="page-practice" tabindex="0">练习</button><button id="tab-transcript" role="tab" aria-selected="false" aria-controls="page-transcript" tabindex="-1">台词</button><button id="tab-recordings" role="tab" aria-selected="false" aria-controls="page-recordings" tabindex="-1">录音</button></nav>
@@ -51,13 +52,22 @@
         <details class="fold"><summary>寻找更多视频</summary><div class="fold-content"><div class="row"><input id="query" placeholder="TED / Friends / 日常对话" aria-label="视频搜索"><button id="search">搜索</button></div><div class="hint">在 YouTube 打开搜索结果，优先选择有英文字幕的短视频。</div></div></details>
       </section>
       <section id="page-recordings" role="tabpanel" aria-labelledby="tab-recordings" hidden>
-        <h2 class="page-title">听听自己的声音</h2><div class="page-subtitle">回到原来的画面，比较节奏与停顿。</div><div id="recordingEmpty" class="empty"><strong>当前句暂无录音</strong>可以先练一句，或连播本视频已录片段。<br><button id="backToPractice">去练一句 →</button></div>
-        <div class="row"><button id="playAll" disabled>▶ 从头连播配音</button></div><div class="hint">每句播放最新录音，按视频时间排序，跳过未录部分。</div>
-        <details class="fold" id="historyDetails"><summary>录音版本<span id="historyCount">0 条</span></summary><div class="fold-content"><select id="historyScope" aria-label="录音范围"><option value="sentence">当前句子</option><option value="video">这个视频的全部录音</option></select><div id="historyList" class="history-list"></div><div class="history-actions"><button id="deleteTake" disabled>删除所选</button><button id="undoDelete" hidden>撤销删除</button></div><small>每句保留最近 3 次；第 4 次会替换最早的一次。</small></div></details>
-        <div id="recordingContent" hidden><div id="historyInfo"></div><div class="row"><button id="reviewReplay">▷ 回放配音</button><button id="compare">⇄ 原声 / 配音</button></div>
-          <details class="fold" open><summary>波形与停顿</summary><div id="analysis" hidden><canvas id="waveform" width="660" height="180" role="img" aria-label="录音音量波形，橙色表示低音量停顿"></canvas><div id="analysisText" class="analysis-text" role="status"></div><small>波形显示音量和停顿，不代表发音准确度。</small></div></details>
-          <div class="row"><a id="download">↓ 下载这次录音</a></div><p class="hint">每句保留最近 3 次。选择其他版本请展开「录音版本」。</p>
+        <div class="recording-heading"><h2 class="page-title">我的配音</h2><small id="historyCount">0 句</small></div>
+        <div class="row"><button class="primary" id="playAll" disabled>▶ 从头连播配音</button></div>
+        <div id="recordingEmpty" class="empty"><strong>从第一句开始</strong>录好以后，所有句子都会出现在这里。<br><button id="backToPractice">去练一句 →</button></div>
+        <div id="recordingContent" class="selected-recording" hidden>
+          <div class="eyebrow">当前录音</div><div id="historyInfo"></div><div id="recordingText"></div>
+          <div class="row"><button id="reviewReplay">▷ 回放配音</button><button id="compare">⇄ 对比原声</button></div>
+          <div id="versionChoices" class="version-choices" role="group" aria-label="当前句的录音版本"></div>
         </div>
+        <div class="recording-heading"><small>按视频顺序 · 点一句直接播放</small><small id="recordingSummary"></small></div>
+        <input id="recordingSearch" class="recording-search" placeholder="查找台词、句号或时间" aria-label="查找录音">
+        <div id="historyList" class="recording-timeline" aria-label="已录句子"></div>
+        <details class="fold" id="recordingDetails"><summary>所选录音详情</summary><div class="fold-content">
+          <div id="analysis" hidden><canvas id="waveform" width="660" height="180" role="img" aria-label="录音音量波形，橙色表示低音量停顿"></canvas><div id="analysisText" class="analysis-text" role="status"></div><small>波形显示音量和停顿，不代表发音准确度。</small></div>
+          <div class="row"><a id="download">↓ 下载所选录音</a></div><div class="history-actions"><button id="deleteTake" disabled>删除所选</button><button id="undoDelete" hidden>撤销删除</button></div>
+          <small>每句保留最近 3 次。连播默认使用每句最新版本。</small>
+        </div></details>
       </section>
     </div>
     <footer><div class="status" id="status" role="status">准备好了，从一句开始。</div><button id="stop" disabled hidden>■ 停止</button></footer>
@@ -81,6 +91,7 @@
     }
     if (focus) $('tab-'+name).focus();
     root.querySelector('.pages').scrollTop = 0;
+    if(name==='recordings'){ if(!take && videoHistory.length)setTake(EchoPractice.recordingQueue(videoHistory)[0]);renderHistory(); }
   }
   pageNames.forEach((name,i) => {
     $('tab-'+name).onclick = () => showPage(name);
@@ -119,8 +130,9 @@
     $('replay').disabled = busy || !take;
     $('compare').disabled = busy || !take;
     $('speakWord').disabled = busy;
-    $('deleteTake').disabled = busy || !take; $('undoDelete').disabled = busy; $('historyScope').disabled = busy;
-    root.querySelectorAll('.history-row').forEach(b=>b.disabled=busy);
+    $('deleteTake').disabled = busy || !take; $('undoDelete').disabled = busy;
+    root.querySelectorAll('.version-choice').forEach(b=>b.disabled=busy && mode!=='replay');
+    root.querySelectorAll('.history-row').forEach(b=>b.disabled=busy && mode!=='replay');
     root.querySelectorAll('.word').forEach(b => b.disabled = busy);
     root.querySelectorAll('.cue').forEach(b => b.disabled = busy);
   }
@@ -185,11 +197,13 @@
     if (token === generation) { cancelPlayback(); restoreVideo(); }
   }
   function setTake(value) {
+    if(value && take?.id===value.id){controls();return;}
     if (take?.url) URL.revokeObjectURL(take.url);
     take = value ? { ...value, url: URL.createObjectURL(value.blob) } : null;
     $('download').style.display = take ? 'block' : 'none';
-    $('recordingEmpty').hidden = !!take; $('recordingContent').hidden = !take;
+    $('recordingEmpty').hidden = !!take || !!videoHistory.length; $('recordingContent').hidden = !take;
     $('historyInfo').textContent = take ? `${take.label || '手动片段'} · ${take.start.toFixed(1)}–${take.end.toFixed(1)} 秒 · ${take.speed}×` : '';
+    $('recordingText').textContent=take ? recordingText(take) : '';
     if (take) { $('download').href = take.url; $('download').download = `echo-${videoId}-${take.start.toFixed(1)}.webm`; }
     controls();
     void analyzeTake(take);
@@ -206,19 +220,51 @@
       if (!progressWarning && session.videoId === videoId) { progressWarning=true; status('练习位置未能保存，请检查本地存储空间。录音仍可下载。'); }
     });
   }
+  function recordingText(value) {
+    const cue=cues.find(c=>c.key===value.cueKey);
+    return cue ? EchoPractice.splitCaption(cue.text).english || cue.text : value.label || '手动片段';
+  }
+  function recordingTime(value) {return `${Math.floor(value/60)}:${String(Math.floor(value%60)).padStart(2,'0')}`;}
+  async function playRecording(value) {
+    let token;
+    try {
+      if(mode==='replay'){
+        const same=take?.id===value.id;stop();
+        if(same){status('已停止回放。');return;}
+      } else if(mode!=='idle')return;
+      video();token=++generation;mode='replay';setTake(value);renderHistory();saveProgress();
+      status(`正在播放 · ${value.label || '手动片段'}`);await replay(token);
+    }catch(error){if(token===undefined || token===generation){stop();status(error.message || String(error));}}
+  }
   function renderHistory() {
-    const key = currentCueKey();
-    const shown = $('historyScope').value === 'video' ? videoHistory : videoHistory.filter(t=>t.cueKey===key);
-    $('historyCount').textContent = `${shown.length} 条`;
-    $('historyList').replaceChildren();
-    if (!shown.length) { const p=document.createElement('p'); p.className='hint'; p.textContent='这里还没有录音。'; $('historyList').append(p); }
-    shown.forEach((value,i)=>{
-      const button=document.createElement('button'); button.className='history-row'; button.disabled=mode!=='idle';
-      button.setAttribute('aria-pressed',String(value.id===take?.id));
-      button.append(document.createTextNode(`${i===0 ? '最近一次 · ' : ''}${new Date(value.createdAt).toLocaleString('zh-CN',{month:'2-digit',day:'2-digit',hour:'2-digit',minute:'2-digit',second:'2-digit'})}`));
-      const small=document.createElement('small'); small.textContent=`${value.label || '手动片段'} · ${value.start.toFixed(1)}–${value.end.toFixed(1)} 秒 · ${value.speed}×`;
-      button.append(small); button.onclick=()=>{if(mode==='idle') {setTake(value);renderHistory();saveProgress();}}; $('historyList').append(button);
+    const list=$('historyList'), scroll=list.scrollTop;
+    const queue=EchoPractice.recordingQueue(videoHistory);
+    const query=$('recordingSearch').value.trim().toLowerCase();
+    const shown=queue.filter(t=>`${recordingText(t)} ${t.label || ''} ${recordingTime(t.start)}`.toLowerCase().includes(query));
+    $('historyCount').textContent=`${queue.length} 句`;
+    $('recordingSummary').textContent=`${videoHistory.length} 个版本`;
+    $('recordingEmpty').hidden=!!queue.length || !!take;
+    list.replaceChildren();
+    if(!shown.length && queue.length){const p=document.createElement('p');p.className='hint';p.textContent='没有匹配的录音，试试其他关键词。';list.append(p);}
+    shown.forEach(value=>{
+      const button=document.createElement('button');button.className='history-row';button.disabled=mode!=='idle';
+      button.setAttribute('aria-pressed',String(value.cueKey===take?.cueKey));
+      const versions=videoHistory.filter(t=>t.cueKey===value.cueKey).length;
+      button.append(document.createTextNode(`${value.label || '手动片段'} · ${recordingTime(value.start)} · ${versions} 个版本`));
+      const small=document.createElement('small');small.textContent=recordingText(value);button.append(small);
+      button.onclick=guarded(()=>playRecording(value));list.append(button);
     });
+    list.scrollTop=scroll;
+    $('versionChoices').replaceChildren();$('versionChoices').hidden=true;
+    if(take){
+      const versions=videoHistory.filter(t=>t.cueKey===take.cueKey).sort((a,b)=>a.createdAt-b.createdAt || a.id.localeCompare(b.id));
+      $('versionChoices').hidden=versions.length<2;
+      versions.forEach((value,i)=>{
+        const button=document.createElement('button');button.className='version-choice';button.textContent=`版本 ${i+1}${i===versions.length-1?' · 最新':''}`;
+        button.title=new Date(value.createdAt).toLocaleString('zh-CN');button.setAttribute('aria-pressed',String(value.id===take.id));
+        button.onclick=guarded(()=>playRecording(value));$('versionChoices').append(button);
+      });
+    }
     controls();
   }
   function chooseCurrentTake(preferredId) {
@@ -271,7 +317,7 @@
     });
     if(token===generation){finish();status(`已播完 ${queue.length} 段配音。`);}
   });
-  $('historyScope').onchange=renderHistory;
+  $('recordingSearch').oninput=renderHistory;
   $('deleteTake').onclick=guarded(async()=>{
     if(!take || mode!=='idle') return;
     const value=take, id=videoId; mode='saving';controls();

@@ -12,7 +12,7 @@ async function mount(storage, overrides = {}) {
   class Element {
     constructor(){this.children=[];this.hidden=false;this.value='';this.style={};this.attrs={};this.classList={toggle:()=>{}};created.push(this);}
     set innerHTML(html){this.html=html;for(const match of html.matchAll(/\bid="([^"]+)"/g))nodes.set(match[1],new Element());
-      for(const [id,value] of Object.entries({start:'0',end:'5',speed:'1',loopCount:'3',prepSeconds:'3',historyScope:'sentence'}))nodes.get(id).value=value;}
+      for(const [id,value] of Object.entries({start:'0',end:'5',speed:'1',loopCount:'3',prepSeconds:'3'}))nodes.get(id).value=value;}
     get innerHTML(){return this.html;}
     setAttribute(k,v){this.attrs[k]=v;} getAttribute(k){return this.attrs[k];}
     append(...children){this.children.push(...children);} replaceChildren(...children){this.children=children;}
@@ -69,5 +69,26 @@ test('play all replays latest recordings in timeline order even without a curren
   await nodes.get('playAll').onclick();
   assert.deepEqual(positions,[1,10]);assert.equal(video.muted,false);assert.equal(nodes.get('playAll').disabled,false);
   assert.match(nodes.get('status').textContent,/已播完 2/);
+  (await storage.ready).close();
+});
+
+test('recording timeline plays in one click, exposes versions directly and filters by words',async()=>{
+  const storage=createStorage(new IDBFactory());const cue={start:0,end:1,text:'Hello world'};
+  await storage.saveSession({videoId:'video',index:0,start:0,end:1,speed:'1',cues:[cue]});
+  for(const [id,createdAt] of [['old',1],['new',2]])await storage.saveTake({id,createdAt,videoId:'video',cueKey:cueKey(cue),start:0,end:1,speed:1,label:'第 1 句',blob:new Blob([id])});
+  const listeners=new Map();let time=0,played=0;
+  const video={duration:60,muted:false,playbackRate:1,ended:false,pause(){},get currentTime(){return time;},set currentTime(value){time=value;queueMicrotask(()=>{for(const fn of listeners.get('seeked')||[])fn();});},addEventListener(name,fn){if(!listeners.has(name))listeners.set(name,new Set());listeners.get(name).add(fn);},removeEventListener(name,fn){listeners.get(name)?.delete(fn);},async play(){played++;time+=1;}};
+  class Audio {constructor(url){this.src=url;}pause(){}async play(){setTimeout(()=>this.onended?.(),1);}}
+  const {nodes,root}=await mount(storage,{video,globals:{Audio,requestAnimationFrame:fn=>setTimeout(fn,0),cancelAnimationFrame:clearTimeout}});
+  assert.equal(nodes.get('historyList').children.length,1);
+  assert.equal(nodes.get('versionChoices').children.length,2);
+  assert.equal(nodes.get('versionChoices').children[1].getAttribute('aria-pressed'),'true');
+  await nodes.get('historyList').children[0].onclick();assert.equal(played,1);
+  await nodes.get('versionChoices').children[0].onclick();assert.equal(played,2);
+  assert.equal(nodes.get('versionChoices').children[0].getAttribute('aria-pressed'),'true');
+  nodes.get('recordingSearch').value='missing';nodes.get('recordingSearch').oninput();
+  assert.equal(nodes.get('historyList').children[0].textContent,'没有匹配的录音，试试其他关键词。');
+  nodes.get('recordingSearch').value='hello';nodes.get('recordingSearch').oninput();
+  assert.equal(nodes.get('historyList').children.length,1);
   (await storage.ready).close();
 });
