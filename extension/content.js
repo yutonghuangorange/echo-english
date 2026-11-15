@@ -18,7 +18,7 @@
     .word{display:inline;border:0;border-bottom:1px dotted #648a87;border-radius:0;padding:0 1px;background:transparent;font:inherit;color:inherit}.word:hover{background:#2d4647;color:#b3eedb}.word:disabled{opacity:1}.wordcard{background:#0e1821;border:1px solid #37505a;border-radius:12px;padding:12px;margin:12px 0}.wordcard p{font-size:13px;margin:8px 0}.wordcard .row{margin-top:0}canvas{width:100%;height:90px;background:#0e1821;border-radius:10px;margin:12px 0}.analysis-text{font-size:12px;color:#a3b7c6;white-space:pre-line;margin-bottom:12px}
     footer{border-top:1px solid #2b3946;background:#111b24;padding:12px 20px;display:flex;align-items:center;gap:10px;flex-shrink:0}.status{font-size:11px;color:#9ab2c1;flex:1;line-height:1.6;max-height:70px;overflow:auto}#stop{background:#643640;border-color:#88505a;color:#ffe2e6;font-size:12px;padding:8px 12px;flex-shrink:0}
     .history-row{display:block;width:100%;text-align:left;padding:10px 12px;margin:6px 0;font-size:12px;background:#192734}.history-row[aria-pressed="true"]{border-color:#8cc7b3;background:#263e3c}.history-row small{display:block;margin-top:4px}.history-actions{display:flex;justify-content:space-between;margin:12px 0}.history-actions button{font-size:12px;padding:6px 10px;background:transparent}.history-list{max-height:220px;overflow:auto}#historyInfo{font-size:12px;color:#90a4b6;margin-bottom:10px}
-    .recording-heading{display:flex;align-items:center;justify-content:space-between;gap:8px}.recording-heading .page-title{margin:0}.selected-recording{background:#192734;border:1px solid #355348;border-radius:12px;padding:14px;margin:16px 0}.selected-recording #historyInfo{margin:5px 0;font-size:12px}.selected-recording #recordingText{font-size:14px;line-height:1.6;display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical;overflow:hidden}.version-choices{display:flex;gap:6px;flex-wrap:wrap}.version-choice{font-size:11px;padding:5px 9px;border-radius:20px;background:transparent;color:#94adbc}.version-choice[aria-pressed="true"]{background:#b3eedb;color:#163b32;border-color:#b3eedb}.recording-search{font-size:12px;margin:10px 0 4px}.recording-timeline{max-height:260px;overflow:auto;scrollbar-width:thin}.recording-timeline .history-row{position:relative;padding-left:32px;border-color:transparent}.recording-timeline .history-row::before{content:'▷';position:absolute;left:11px;top:12px;color:#8fbdaf}.recording-timeline .history-row[aria-pressed="true"]{border-color:#8cc7b3}.recording-timeline .history-row small{white-space:nowrap;overflow:hidden;text-overflow:ellipsis}.recording-timeline .history-row:disabled{opacity:.65}
+    .recording-heading{display:flex;align-items:center;justify-content:space-between;gap:8px}.recording-heading .page-title{margin:0}.selected-recording{background:#192734;border:1px solid #355348;border-radius:12px;padding:14px;margin:16px 0}.selected-recording #historyInfo{margin:5px 0;font-size:12px}.selected-recording #recordingText{font-size:14px;line-height:1.6;display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical;overflow:hidden}.version-choices{display:flex;gap:6px;flex-wrap:wrap}.version-choice{font-size:11px;padding:5px 9px;border-radius:20px;background:transparent;color:#94adbc}.version-choice[aria-pressed="true"]{background:#b3eedb;color:#163b32;border-color:#b3eedb}.recording-search{font-size:12px;margin:10px 0 4px}.recording-timeline{max-height:260px;overflow:auto;scrollbar-width:thin}.history-item{display:flex;align-items:center;gap:6px}.history-item .history-row{flex:1;min-width:0}.history-delete{flex-shrink:0;font-size:12px;padding:8px;color:#ffb4ad;background:transparent}.recording-timeline .history-row{position:relative;padding-left:32px;border-color:transparent}.recording-timeline .history-row::before{content:'▷';position:absolute;left:11px;top:12px;color:#8fbdaf}.recording-timeline .history-row[aria-pressed="true"]{border-color:#8cc7b3}.recording-timeline .history-row small{white-space:nowrap;overflow:hidden;text-overflow:ellipsis}.recording-timeline .history-row:disabled{opacity:.65}
   </style><div class="panel">
     <header><div><div class="tag">A LITTLE BETTER, EVERY DAY</div><h1>Echo<small>英语配音练习</small></h1></div><button class="close" id="close" aria-label="关闭">×</button></header>
     <nav class="tabs" role="tablist" aria-label="练习面板"><button id="tab-practice" role="tab" aria-selected="true" aria-controls="page-practice" tabindex="0">练习</button><button id="tab-transcript" role="tab" aria-selected="false" aria-controls="page-transcript" tabindex="-1">台词</button><button id="tab-recordings" role="tab" aria-selected="false" aria-controls="page-recordings" tabindex="-1">录音</button></nav>
@@ -63,9 +63,10 @@
         <div class="recording-heading"><small>按视频顺序 · 点一句直接播放</small><small id="recordingSummary"></small></div>
         <input id="recordingSearch" class="recording-search" placeholder="查找台词、句号或时间" aria-label="查找录音">
         <div id="historyList" class="recording-timeline" aria-label="已录句子"></div>
+        <div class="history-actions"><button id="deleteTake" disabled>删除所选版本</button><button id="undoDelete" hidden>撤销删除</button></div>
         <details class="fold" id="recordingDetails"><summary>所选录音详情</summary><div class="fold-content">
           <div id="analysis" hidden><canvas id="waveform" width="660" height="180" role="img" aria-label="录音音量波形，橙色表示低音量停顿"></canvas><div id="analysisText" class="analysis-text" role="status"></div><small>波形显示音量和停顿，不代表发音准确度。</small></div>
-          <div class="row"><a id="download">↓ 下载所选录音</a></div><div class="history-actions"><button id="deleteTake" disabled>删除所选</button><button id="undoDelete" hidden>撤销删除</button></div>
+          <div class="row"><a id="download">↓ 下载所选录音</a></div>
           <small>每句保留最近 3 次。连播默认使用每句最新版本。</small>
         </div></details>
       </section>
@@ -133,6 +134,7 @@
     $('deleteTake').disabled = busy || !take; $('undoDelete').disabled = busy;
     root.querySelectorAll('.version-choice').forEach(b=>b.disabled=busy && mode!=='replay');
     root.querySelectorAll('.history-row').forEach(b=>b.disabled=busy && mode!=='replay');
+    root.querySelectorAll('.history-delete').forEach(b=>b.disabled=busy && mode!=='replay');
     root.querySelectorAll('.word').forEach(b => b.disabled = busy);
     root.querySelectorAll('.cue').forEach(b => b.disabled = busy);
   }
@@ -252,7 +254,12 @@
       const versions=videoHistory.filter(t=>t.cueKey===value.cueKey).length;
       button.append(document.createTextNode(`${value.label || '手动片段'} · ${recordingTime(value.start)} · ${versions} 个版本`));
       const small=document.createElement('small');small.textContent=recordingText(value);button.append(small);
-      button.onclick=guarded(()=>playRecording(value));list.append(button);
+      button.onclick=guarded(()=>playRecording(value));
+      const row=document.createElement('div');row.className='history-item';
+      const remove=document.createElement('button');remove.className='history-delete';remove.textContent='删除';
+      remove.setAttribute('aria-label',`删除${value.label || '手动片段'}的最新录音版本`);
+      remove.title='删除此句的最新版本，可撤销';
+      remove.onclick=guarded(()=>deleteRecording(value));row.append(button,remove);list.append(row);
     });
     list.scrollTop=scroll;
     $('versionChoices').replaceChildren();$('versionChoices').hidden=true;
@@ -318,14 +325,17 @@
     if(token===generation){finish();status(`已播完 ${queue.length} 段配音。`);}
   });
   $('recordingSearch').oninput=renderHistory;
-  $('deleteTake').onclick=guarded(async()=>{
-    if(!take || mode!=='idle') return;
-    const value=take, id=videoId; mode='saving';controls();
+  async function deleteRecording(value) {
+    if(!value || (mode!=='idle' && mode!=='replay')) return;
+    if(mode==='replay')stop();
+    const selectedId=take?.id===value.id ? undefined : take?.id;
+    const id=videoId; mode='saving';controls();
     await storage.deleteTake(value.id);
     if(id!==videoId) return;
     deletedTake=value; $('undoDelete').hidden=false; mode='idle';
-    await refreshHistory(); status('录音已删除，可在「录音版本」中撤销。');
-  });
+    await refreshHistory(selectedId); saveProgress(); status('已删除一个录音版本，可点击「撤销删除」恢复。');
+  }
+  $('deleteTake').onclick=guarded(()=>deleteRecording(take));
   $('undoDelete').onclick=guarded(async()=>{
     if(!deletedTake || mode!=='idle') return;
     const value=deletedTake,id=videoId;mode='saving';controls();

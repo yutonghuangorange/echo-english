@@ -83,12 +83,30 @@ test('recording timeline plays in one click, exposes versions directly and filte
   assert.equal(nodes.get('historyList').children.length,1);
   assert.equal(nodes.get('versionChoices').children.length,2);
   assert.equal(nodes.get('versionChoices').children[1].getAttribute('aria-pressed'),'true');
-  await nodes.get('historyList').children[0].onclick();assert.equal(played,1);
+  await nodes.get('historyList').children[0].children[0].onclick();assert.equal(played,1);
   await nodes.get('versionChoices').children[0].onclick();assert.equal(played,2);
   assert.equal(nodes.get('versionChoices').children[0].getAttribute('aria-pressed'),'true');
   nodes.get('recordingSearch').value='missing';nodes.get('recordingSearch').oninput();
   assert.equal(nodes.get('historyList').children[0].textContent,'没有匹配的录音，试试其他关键词。');
   nodes.get('recordingSearch').value='hello';nodes.get('recordingSearch').oninput();
   assert.equal(nodes.get('historyList').children.length,1);
+  (await storage.ready).close();
+});
+
+ test('timeline delete removes an unselected take without playing and undo restores it',async()=>{
+  const storage=createStorage(new IDBFactory());const cue={start:0,end:1,text:'First'};
+  await storage.saveSession({videoId:'video',index:0,start:0,end:1,speed:'1',cues:[cue]});
+  for(const [id,key,start] of [['selected',cueKey(cue),0],['other','other',5]])
+    await storage.saveTake({id,videoId:'video',cueKey:key,start,end:start+1,speed:1,createdAt:1,blob:new Blob([id]),label:id});
+  let played=0;
+  const {nodes}=await mount(storage,{video:{duration:60,play(){played++;}}});
+  const row=nodes.get('historyList').children[1];
+  assert.equal(row.children[1].textContent,'删除');
+  await row.children[1].onclick();
+  assert.deepEqual((await storage.listTakes('video')).map(t=>t.id),['selected']);
+  assert.match(nodes.get('historyInfo').textContent,/selected/);
+  assert.equal(played,0);assert.equal(nodes.get('undoDelete').hidden,false);
+  await nodes.get('undoDelete').onclick();
+  assert.equal((await storage.listTakes('video')).length,2);assert.equal(played,0);
   (await storage.ready).close();
 });
