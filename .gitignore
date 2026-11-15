@@ -1,0 +1,17 @@
+# Local credentials and agent configuration
+.env
+.env.*
+!.env.example
+.aws/
+.codex/
+.agents/
+
+# Dependencies, editor files and generated artifacts
+node_modules/
+.venv/
+__pycache__/
+.DS_Store
+*.log
+*.webm
+*.wav
+*.mp3

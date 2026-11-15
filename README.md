@@ -4,6 +4,8 @@
 
 ## 安装
 
+从 GitHub 仓库选择 **Code → Download ZIP** 并解压，或使用 Git 克隆仓库。加载时选择解压目录中的 `extension/` 文件夹，不是整个仓库。
+
 1. 在 Chrome 地址栏打开 `chrome://extensions`。
 2. 打开右上角「开发者模式」，点击「加载已解压的扩展程序」。
 3. 选择本项目下的 `extension` 文件夹。
