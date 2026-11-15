@@ -1,7 +1,7 @@
 {
   "manifest_version": 3,
   "name": "Echo · 英语配音练习",
-  "version": "0.5.1",
+  "version": "0.5.0",
   "description": "在 YouTube 上选取片段，听原声、看台词、录制配音并随画面回放对比。",
   "action": {
     "default_title": "打开 / 收起配音练习"
@@ -21,7 +21,6 @@
         "audio-analysis.js",
         "practice.js",
         "storage.js",
-        "recording-player.js",
         "content.js"
       ],
       "run_at": "document_idle"

@@ -7,7 +7,7 @@ const {createStorage,cueKey}=require('../extension/storage.js');
 
 // Lightweight content-script DOM harness: run actual UI handlers against a real
 // IndexedDB implementation, without requesting microphone or YouTube access.
-async function mount(storage, overrides = {}) {
+async function mount(storage) {
   const nodes=new Map(),created=[];
   class Element {
     constructor(){this.children=[];this.hidden=false;this.value='';this.style={};this.attrs={};this.classList={toggle:()=>{}};created.push(this);}
@@ -21,11 +21,10 @@ async function mount(storage, overrides = {}) {
   }
   const root=new Element();root.getElementById=id=>nodes.get(id);
   root.querySelector=()=>({scrollTop:0});root.querySelectorAll=selector=>created.filter(n=>n.className===selector.slice(1));
-  const doc={getElementById:()=>null,documentElement:new Element(),createElement:()=>new Element(),createTextNode:text=>({textContent:text}),addEventListener(){},querySelector:selector=>selector==='video.html5-main-video'?(overrides.video || {duration:60}):null};
+  const doc={getElementById:()=>null,documentElement:new Element(),createElement:()=>new Element(),createTextNode:text=>({textContent:text}),addEventListener(){},querySelector:selector=>selector==='video.html5-main-video'?{duration:60}:null};
   const context={document:doc,location:{href:'https://www.youtube.com/watch?v=video',pathname:'/watch'},indexedDB:{},URL,Blob,console,setTimeout,clearTimeout,cancelAnimationFrame(){},requestAnimationFrame(){},crypto:globalThis.crypto,
     window:{addEventListener(){},speechSynthesis:{cancel(){}}},chrome:{runtime:{onMessage:{addListener(){}}}},
-    EchoRecordingPlayer:require('../extension/recording-player.js'),EchoStorage:{...require('../extension/storage.js'),createStorage:()=>storage},EchoPractice:require('../extension/practice.js'),EchoDictionary:require('../extension/dictionary.js'),EchoSubtitles:require('../extension/subtitles.js'),EchoAudioAnalysis:require('../extension/audio-analysis.js')};
-  Object.assign(context,overrides.globals || {});
+    EchoStorage:{...require('../extension/storage.js'),createStorage:()=>storage},EchoPractice:require('../extension/practice.js'),EchoDictionary:require('../extension/dictionary.js'),EchoSubtitles:require('../extension/subtitles.js'),EchoAudioAnalysis:require('../extension/audio-analysis.js')};
   vm.runInNewContext(fs.readFileSync('extension/content.js','utf8'),context);
   for(let i=0;i<20 && nodes.get('read').disabled;i++)await new Promise(r=>setTimeout(r,2));
   return {nodes,root};
@@ -54,37 +53,5 @@ test('recording history deletion and undo operate without adding practice-page c
   assert.equal(nodes.get('recordingContent').hidden,true);assert.equal(nodes.get('undoDelete').hidden,false);
   await nodes.get('undoDelete').onclick();assert.equal((await storage.listTakes('video')).length,1);
   assert.equal(nodes.get('recordingContent').hidden,false);assert.equal(nodes.get('undoDelete').hidden,true);
-  (await storage.ready).close();
-});
-
-test('automatic practice replays each completed take and keeps all sentences available',async()=>{
-  const storage=createStorage(new IDBFactory());
-  const cues=[{start:0,end:1,text:'First'},{start:1,end:2,text:'Second'}];
-  await storage.saveSession({videoId:'video',index:0,start:0,end:1,speed:'1',cues});
-  const events=new Map();let time=0,plays=0,unlocked=false,replays=0;
-  const video={duration:60,muted:false,playbackRate:1,ended:false,pause(){},
-    get currentTime(){return time;},set currentTime(value){time=value;queueMicrotask(()=>{for(const f of events.get('seeked')||[])f();});},
-    addEventListener(name,fn){if(!events.has(name))events.set(name,new Set());events.get(name).add(fn);},
-    removeEventListener(name,fn){events.get(name)?.delete(fn);},
-    async play(){plays++;time+=1;for(const f of events.get('playing')||[])f();}
-  };
-  class Recorder {
-    static isTypeSupported(){return true;}
-    constructor(){this.state='inactive';this.mimeType='audio/webm';}
-    start(){this.state='recording';}
-    stop(){this.state='inactive';queueMicrotask(()=>{this.ondataavailable({data:new Blob(['voice'])});void this.onstop();});}
-  }
-  const globals={navigator:{mediaDevices:{async getUserMedia(){return {getTracks:()=>[{stop(){}}]};}}},MediaRecorder:Recorder,
-    requestAnimationFrame:fn=>setTimeout(fn,0),cancelAnimationFrame:clearTimeout,
-    setTimeout:(fn,ms)=>setTimeout(fn,ms<=1000?0:ms),
-    EchoRecordingPlayer:{createPlayer:()=>({unlock(){unlocked=true;return Promise.resolve();},async prepare(blob){assert.equal(unlocked,true);assert.equal(await blob.text(),'voice');replays++;return {play(){},pause(){},stop(){}};}})}
-  };
-  const {nodes}=await mount(storage,{video,globals});nodes.get('autoNext').checked=true;
-  await nodes.get('autoPractice').onclick();
-  assert.equal(replays,2);assert.equal(plays,6);assert.equal(nodes.get('replay').disabled,false);
-  const takes=await storage.listTakes('video');assert.equal(takes.length,2);
-  assert.notEqual(takes[0].cueKey,takes[1].cueKey);
-  assert.equal(nodes.get('position').textContent,'2 / 2');
-  nodes.get('prev').onclick();assert.equal(nodes.get('replay').disabled,false);
   (await storage.ready).close();
 });
