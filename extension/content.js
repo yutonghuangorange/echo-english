@@ -17,6 +17,7 @@
     .list{max-height:340px;overflow:auto;scrollbar-width:thin;margin-top:16px}.cue{display:block;text-align:left;width:100%;margin:6px 0;font-size:13px;background:#192734;border-color:transparent;padding:12px}.cue.active{border-color:#8cc7b3;background:#263e3c}a{color:#b3eedb}#download{display:none;text-align:center;width:100%;padding:10px;border:1px solid #3a5b54;border-radius:10px;text-decoration:none}
     .word{display:inline;border:0;border-bottom:1px dotted #648a87;border-radius:0;padding:0 1px;background:transparent;font:inherit;color:inherit}.word:hover{background:#2d4647;color:#b3eedb}.word:disabled{opacity:1}.wordcard{background:#0e1821;border:1px solid #37505a;border-radius:12px;padding:12px;margin:12px 0}.wordcard p{font-size:13px;margin:8px 0}.wordcard .row{margin-top:0}canvas{width:100%;height:90px;background:#0e1821;border-radius:10px;margin:12px 0}.analysis-text{font-size:12px;color:#a3b7c6;white-space:pre-line;margin-bottom:12px}
     footer{border-top:1px solid #2b3946;background:#111b24;padding:12px 20px;display:flex;align-items:center;gap:10px;flex-shrink:0}.status{font-size:11px;color:#9ab2c1;flex:1;line-height:1.6;max-height:70px;overflow:auto}#stop{background:#643640;border-color:#88505a;color:#ffe2e6;font-size:12px;padding:8px 12px;flex-shrink:0}
+    .history-row{display:block;width:100%;text-align:left;padding:10px 12px;margin:6px 0;font-size:12px;background:#192734}.history-row[aria-pressed="true"]{border-color:#8cc7b3;background:#263e3c}.history-row small{display:block;margin-top:4px}.history-actions{display:flex;justify-content:space-between;margin:12px 0}.history-actions button{font-size:12px;padding:6px 10px;background:transparent}.history-list{max-height:220px;overflow:auto}#historyInfo{font-size:12px;color:#90a4b6;margin-bottom:10px}
   </style><div class="panel">
     <header><div><div class="tag">A LITTLE BETTER, EVERY DAY</div><h1>Echo<small>英语配音练习</small></h1></div><button class="close" id="close" aria-label="关闭">×</button></header>
     <nav class="tabs" role="tablist" aria-label="练习面板"><button id="tab-practice" role="tab" aria-selected="true" aria-controls="page-practice" tabindex="0">练习</button><button id="tab-transcript" role="tab" aria-selected="false" aria-controls="page-transcript" tabindex="-1">台词</button><button id="tab-recordings" role="tab" aria-selected="false" aria-controls="page-recordings" tabindex="-1">录音</button></nav>
@@ -51,9 +52,10 @@
       </section>
       <section id="page-recordings" role="tabpanel" aria-labelledby="tab-recordings" hidden>
         <h2 class="page-title">听听自己的声音</h2><div class="page-subtitle">回到原来的画面，比较节奏与停顿。</div><div id="recordingEmpty" class="empty"><strong>还没有录音</strong>在练习页录一句，这里就会显示波形。<br><button id="backToPractice">去练一句 →</button></div>
-        <div id="recordingContent" hidden><div class="row"><button id="reviewReplay">▷ 回放配音</button><button id="compare">⇄ 原声 / 配音</button></div>
+        <details class="fold" id="historyDetails"><summary>录音版本<span id="historyCount">0 条</span></summary><div class="fold-content"><select id="historyScope" aria-label="录音范围"><option value="sentence">当前句子</option><option value="video">这个视频的全部录音</option></select><div id="historyList" class="history-list"></div><div class="history-actions"><button id="deleteTake" disabled>删除所选</button><button id="undoDelete" hidden>撤销删除</button></div><small>每句保留最近 3 次；第 4 次会替换最早的一次。</small></div></details>
+        <div id="recordingContent" hidden><div id="historyInfo"></div><div class="row"><button id="reviewReplay">▷ 回放配音</button><button id="compare">⇄ 原声 / 配音</button></div>
           <details class="fold" open><summary>波形与停顿</summary><div id="analysis" hidden><canvas id="waveform" width="660" height="180" role="img" aria-label="录音音量波形，橙色表示低音量停顿"></canvas><div id="analysisText" class="analysis-text" role="status"></div><small>波形显示音量和停顿，不代表发音准确度。</small></div></details>
-          <div class="row"><a id="download">↓ 下载这次录音</a></div><p class="hint">每个视频仅保留最近一次录音。想留住这个版本，请先下载。</p>
+          <div class="row"><a id="download">↓ 下载这次录音</a></div><p class="hint">每句保留最近 3 次。选择其他版本请展开「录音版本」。</p>
         </div>
       </section>
     </div>
@@ -65,7 +67,8 @@
   let pendingDone = null;
   let wordRequest = 0, selectedWord = null, analysisRequest = 0;
   let videoId = currentId();
-  let database;
+  const storage = EchoStorage.createStorage();
+  let videoHistory = [], historyRequest = 0, restoring = true, progressWarning = false, deletedTake = null;
   const pageNames = ['practice','transcript','recordings'];
   function showPage(name, focus = false) {
     if (!pageNames.includes(name)) return;
@@ -96,15 +99,7 @@
     $('speedSummary').textContent = `${$('speed').value}× · ${$('loopCount').value === '0' ? '持续循环' : '循环 '+$('loopCount').value+' 次'}`;
     $('clipSummary').textContent = `${Number($('start').value).toFixed(1)}–${Number($('end').value).toFixed(1)} 秒`;
   }
-  $('speed').onchange = updateSummaries; $('loopCount').onchange = updateSummaries;
-  const dbReady = new Promise((resolve, reject) => {
-    const request = indexedDB.open('echo-dubbing-v1', 1);
-    request.onupgradeneeded = () => request.result.createObjectStore('takes', { keyPath: 'videoId' });
-    request.onsuccess = () => { database = request.result; resolve(database); };
-    request.onerror = () => reject(request.error);
-  });
-  // A rejected database must not prevent recording or produce an unhandled rejection.
-  dbReady.catch(() => {});
+  $('speed').onchange = () => {updateSummaries();saveProgress();}; $('loopCount').onchange = updateSummaries;
   function currentId() { return new URL(location.href).searchParams.get('v'); }
   function video() {
     if (location.pathname !== '/watch' || !currentId()) throw Error('请先打开一个 YouTube 视频播放页。');
@@ -122,6 +117,8 @@
     $('replay').disabled = busy || !take;
     $('compare').disabled = busy || !take;
     $('speakWord').disabled = busy;
+    $('deleteTake').disabled = busy || !take; $('undoDelete').disabled = busy; $('historyScope').disabled = busy;
+    root.querySelectorAll('.history-row').forEach(b=>b.disabled=busy);
     root.querySelectorAll('.word').forEach(b => b.disabled = busy);
     root.querySelectorAll('.cue').forEach(b => b.disabled = busy);
   }
@@ -143,6 +140,7 @@
   function finish() { cancelPlayback(); restoreVideo(); mode = 'idle'; controls(); }
   function stop() {
     window.speechSynthesis?.cancel();
+    if (mode === 'loading') restoring = false;
     if (mode === 'reading') status('已停止读取台词。');
     generation++;
     cancelPlayback(); restoreVideo();
@@ -189,36 +187,98 @@
     take = value ? { ...value, url: URL.createObjectURL(value.blob) } : null;
     $('download').style.display = take ? 'block' : 'none';
     $('recordingEmpty').hidden = !!take; $('recordingContent').hidden = !take;
+    $('historyInfo').textContent = take ? `${take.label || '手动片段'} · ${take.start.toFixed(1)}–${take.end.toFixed(1)} 秒 · ${take.speed}×` : '';
     if (take) { $('download').href = take.url; $('download').download = `echo-${videoId}-${take.start.toFixed(1)}.webm`; }
     controls();
     void analyzeTake(take);
   }
-  async function persist(value) {
-    await dbReady;
-    await new Promise((resolve, reject) => {
-      const tx = database.transaction('takes', 'readwrite'); tx.objectStore('takes').put(value);
-      tx.oncomplete = resolve; tx.onerror = () => reject(tx.error); tx.onabort = () => reject(tx.error);
+  function currentCueKey() {
+    return EchoStorage.cueKey(cues[index], Number($('start').value), Number($('end').value));
+  }
+  function saveProgress() {
+    if (restoring || !videoId) return;
+    const start = Number($('start').value), end = Number($('end').value);
+    if (!Number.isFinite(start) || !Number.isFinite(end) || start < 0 || end <= start) return;
+    const session = {videoId,cues:cues.map(c=>({...c})),index,start,end,speed:$('speed').value,showChinese:$('showChinese').checked,hideText:$('hideText').checked,selectedTakeId:take?.id,updatedAt:Date.now()};
+    void storage.saveSession(session).catch(()=>{
+      if (!progressWarning && session.videoId === videoId) { progressWarning=true; status('练习位置未能保存，请检查本地存储空间。录音仍可下载。'); }
     });
   }
-  async function loadTake(id) {
-    try {
-      await dbReady;
-      const value = await new Promise((resolve, reject) => {
-        const req = database.transaction('takes').objectStore('takes').get(id);
-        req.onsuccess = () => resolve(req.result); req.onerror = () => reject(req.error);
-      });
-      if (id === videoId && mode === 'idle' && !take && value) { setTake(value); status('已恢复这个视频最近一次录音。回放使用录制时的片段和速度。'); }
-    } catch { status('本地存储不可用，仍可录音并下载。'); }
+  function renderHistory() {
+    const key = currentCueKey();
+    const shown = $('historyScope').value === 'video' ? videoHistory : videoHistory.filter(t=>t.cueKey===key);
+    $('historyCount').textContent = `${shown.length} 条`;
+    $('historyList').replaceChildren();
+    if (!shown.length) { const p=document.createElement('p'); p.className='hint'; p.textContent='这里还没有录音。'; $('historyList').append(p); }
+    shown.forEach((value,i)=>{
+      const button=document.createElement('button'); button.className='history-row'; button.disabled=mode!=='idle';
+      button.setAttribute('aria-pressed',String(value.id===take?.id));
+      button.append(document.createTextNode(`${i===0 ? '最近一次 · ' : ''}${new Date(value.createdAt).toLocaleString('zh-CN',{month:'2-digit',day:'2-digit',hour:'2-digit',minute:'2-digit',second:'2-digit'})}`));
+      const small=document.createElement('small'); small.textContent=`${value.label || '手动片段'} · ${value.start.toFixed(1)}–${value.end.toFixed(1)} 秒 · ${value.speed}×`;
+      button.append(small); button.onclick=()=>{if(mode==='idle') {setTake(value);renderHistory();saveProgress();}}; $('historyList').append(button);
+    });
+    controls();
   }
+  function chooseCurrentTake(preferredId) {
+    const matching=videoHistory.filter(t=>t.cueKey===currentCueKey());
+    const value=videoHistory.find(t=>t.id===preferredId) || matching[0];
+    setTake(value || null); renderHistory();
+  }
+  async function refreshHistory(preferredId) {
+    const id=videoId, request=++historyRequest;
+    const values=await storage.listTakes(id);
+    if(id!==videoId || request!==historyRequest) return;
+    videoHistory=values; chooseCurrentTake(preferredId);
+  }
+  async function loadVideo(id) {
+    const token=++generation; restoring=true; mode='loading'; controls();
+    try {
+      const [session,values]=await Promise.all([storage.getSession(id),storage.listTakes(id)]);
+      if(id!==videoId || token!==generation) return;
+      videoHistory=values; mode='idle';
+      if(session) {
+        $('speed').value=['0.75','1','1.25'].includes(session.speed)?session.speed:'1';
+        $('showChinese').checked=!!session.showChinese; $('hideText').checked=!!session.hideText;
+        displayCues(session.cues || [],session.index);
+        $('start').value=session.start; $('end').value=session.end; index=session.index>=0 && session.index<cues.length?session.index:-1;
+        updateCaption(); $('list').style.display=$('hideText').checked?'none':'';
+        status(index>=0 ? `已回到上次练习的第 ${index+1} 句。` : '已恢复上次的手动片段。');
+      } else if(values.length) {
+        $('start').value=values[0].start; $('end').value=values[0].end; $('speed').value=String(values[0].speed); updateCaption();
+        status('旧版录音已保留，可在「录音」页回放。');
+      }
+      chooseCurrentTake(session?.selectedTakeId); restoring=false; controls();
+    } catch(error) {
+      if(id===videoId && token===generation) { restoring=false; mode='idle'; controls(); status(error.message || '本地存储不可用，仍可录音并下载。'); }
+    }
+  }
+  $('historyScope').onchange=renderHistory;
+  $('deleteTake').onclick=guarded(async()=>{
+    if(!take || mode!=='idle') return;
+    const value=take, id=videoId; mode='saving';controls();
+    await storage.deleteTake(value.id);
+    if(id!==videoId) return;
+    deletedTake=value; $('undoDelete').hidden=false; mode='idle';
+    await refreshHistory(); status('录音已删除，可在「录音版本」中撤销。');
+  });
+  $('undoDelete').onclick=guarded(async()=>{
+    if(!deletedTake || mode!=='idle') return;
+    const value=deletedTake,id=videoId;mode='saving';controls();
+    await storage.saveTake(value);
+    if(id!==videoId) return;
+    deletedTake=null;$('undoDelete').hidden=true;mode='idle';await refreshHistory(value.id);status('已恢复录音。');
+  });
   async function record(options = {}) {
     window.speechSynthesis?.cancel();
     const r = range(), v = video(), id = videoId, token = options.token ?? ++generation;
+    deletedTake=null;$('undoDelete').hidden=true;
     mode = 'permission'; controls(); status('正在请求麦克风权限…');
     const mic = await navigator.mediaDevices.getUserMedia({ audio: { echoCancellation: true }, video: false });
     if (token !== generation) { mic.getTracks().forEach(t => t.stop()); return; }
     stream = mic;
     const mimeType = ['audio/webm;codecs=opus', 'audio/webm'].find(t => MediaRecorder.isTypeSupported(t));
     recorder = mimeType ? new MediaRecorder(mic, { mimeType }) : new MediaRecorder(mic);
+    const recordedKey=currentCueKey(), recordedLabel=index>=0 ? `第 ${index+1} 句` : '手动片段';
     const currentRecorder = recorder, chunks = [];
     let resolveRecording;
     const completed = new Promise(resolve => { resolveRecording = resolve; });
@@ -227,12 +287,13 @@
     recorder.onstop = async () => {
       mic.getTracks().forEach(t => t.stop());
       const blob = new Blob(chunks, { type: currentRecorder.mimeType });
-      if (id !== videoId || !blob.size) { if (recorder === currentRecorder) { recorder = null; mode = 'idle'; controls(); } resolveRecording(false); return; }
-      const value = { videoId: id, ...r, blob, createdAt: Date.now() };
+      if (id !== videoId || !blob.size) { if (recorder === currentRecorder) { recorder = null; stream=null; if(id===videoId) {mode = 'idle'; controls();} } resolveRecording(false); return; }
+      const value = { id:crypto.randomUUID(),videoId:id,cueKey:recordedKey,label:recordedLabel,...r,blob,createdAt:Date.now() };
       setTake(value); recorder = null; stream = null; mode = options.keepBusy && token === generation ? 'practice' : 'idle'; controls();
-      status('配音完成，可以随画面回放或对比原声。');
+      saveProgress();
+      status('配音完成，已加入本句录音版本。');
       resolveRecording(true);
-      try { await persist(value); } catch { if (videoId === id && take?.createdAt === value.createdAt) status('录音已完成，但保存失败，请下载备份。'); }
+      try { await storage.saveTake(value); if(id===videoId) { const values=await storage.listTakes(id); if(id===videoId) { videoHistory=values; renderHistory(); } } } catch { if (videoId === id && take?.createdAt === value.createdAt) status('录音已完成，但保存失败，请下载备份。'); }
     };
     saveVideo(v); v.muted = true; v.playbackRate = r.speed;
     await seek(v, r.start, token);
@@ -367,18 +428,19 @@
   function select(i) {
     if (mode !== 'idle' || !cues[i]) return;
     index = i; $('start').value = cues[i].start.toFixed(2); $('end').value = cues[i].end.toFixed(2);
-    updateCaption(); showPage('practice'); root.querySelectorAll('.cue').forEach((b, n) => b.classList.toggle('active', n === i));
+    updateCaption(); chooseCurrentTake(); saveProgress(); showPage('practice'); root.querySelectorAll('.cue').forEach((b, n) => b.classList.toggle('active', n === i));
   }
-  function displayCues(next) {
-    cues = next; index = -1; $('list').replaceChildren();
+  function displayCues(next, preferredIndex = 0) {
+    cues = next.map(c=>({...c,key:EchoStorage.cueKey(c)})); index = -1; $('list').replaceChildren();
     $('transcriptEmpty').hidden = next.length > 0;
     cues.forEach((cue, i) => { const b = document.createElement('button'); b.className = 'cue'; b.textContent = `${Math.floor(cue.start / 60)}:${String(Math.floor(cue.start % 60)).padStart(2, '0')}  ${EchoPractice.splitCaption(cue.text).english || '查看原文'}`; b.onclick = () => select(i); $('list').append(b); });
-    if (cues.length) select(0); else updateCaption();
+    if (cues.length && preferredIndex >= 0) select(Math.min(preferredIndex,cues.length-1)); else {updateCaption();chooseCurrentTake();saveProgress();}
   }
   function rememberBounds() {
     updateSummaries();
     const start = Number($('start').value), end = Number($('end').value);
     if (cues[index] && Number.isFinite(start) && end > start) { cues[index].start = start; cues[index].end = end; }
+    chooseCurrentTake(); saveProgress();
   }
   for (const [id, edge, delta] of [['startEarlier','start',-.2],['startLater','start',.2],['endEarlier','end',-.2],['endLater','end',.2]]) {
     $(id).onclick = guarded(() => {
@@ -387,7 +449,7 @@
     });
   }
   $('start').onchange = rememberBounds; $('end').onchange = rememberBounds;
-  $('showChinese').onchange = updateCaption;
+  $('showChinese').onchange = () => {updateCaption();saveProgress();};
   function pauseBetween(ms, token) {
     if (token !== generation) return Promise.resolve();
     return new Promise(resolve => { pendingDone = resolve; timer = setTimeout(() => { pendingDone = null; resolve(); }, ms); });
@@ -418,10 +480,10 @@
     if (token === generation) { finish(); status('自动跟读完成。可以重练或下载这次录音。'); }
   });
   $('close').onclick = () => { closeWord(); stop(); host.style.display = 'none'; };
-  $('hideText').onchange = () => { updateCaption(); $('list').style.display = $('hideText').checked ? 'none' : ''; };
+  $('hideText').onchange = () => { updateCaption(); $('list').style.display = $('hideText').checked ? 'none' : ''; saveProgress(); };
   $('prev').onclick = () => select(index - 1); $('next').onclick = () => select(index + 1);
-  $('markStart').onclick = guarded(() => { $('start').value = video().currentTime.toFixed(2); index = -1; updateCaption(); });
-  $('markEnd').onclick = guarded(() => { $('end').value = video().currentTime.toFixed(2); index = -1; updateCaption(); });
+  $('markStart').onclick = guarded(() => { $('start').value = video().currentTime.toFixed(2); index = -1; updateCaption();chooseCurrentTake();saveProgress(); });
+  $('markEnd').onclick = guarded(() => { $('end').value = video().currentTime.toFixed(2); index = -1; updateCaption();chooseCurrentTake();saveProgress(); });
   $('original').onclick = guarded(async () => { const r = range(), token = ++generation; mode = 'original'; controls(); status('正在播放原声…'); await original(r, token); if (token === generation) { finish(); status('原声播放完成。'); } });
   $('record').onclick = guarded(() => record()); $('stop').onclick = stop;
   $('replay').onclick = guarded(async () => { const token = ++generation; mode = 'replay'; controls(); status('正在随画面播放你的配音…'); await replay(token); });
@@ -450,9 +512,9 @@
   chrome.runtime.onMessage.addListener(message => { if (message.type === 'echo-toggle') { const open = host.style.display === 'none'; host.style.display = open ? 'block' : 'none'; if (!open) stop(); } });
   document.addEventListener('yt-navigate-finish', () => {
     const id = currentId(); if (id === videoId) return;
-    stop(); videoId = id; setTake(null); displayCues([]); $('start').value = 0; $('end').value = 5; updateSummaries();
-    status('已切换视频，请重新选择台词或片段。'); if (id) void loadTake(id);
+    stop(); restoring=true; videoId=id; historyRequest++;videoHistory=[];deletedTake=null;$('undoDelete').hidden=true;setTake(null);displayCues([]); $('start').value = 0; $('end').value = 5; updateSummaries();
+    status('已切换视频，请重新选择台词或片段。'); if (id) void loadVideo(id); else restoring=false;
   });
-  window.addEventListener('pagehide', stop);
-  controls(); if (videoId) void loadTake(videoId);
+  window.addEventListener('pagehide',()=>{saveProgress();stop();});
+  controls(); if(videoId) void loadVideo(videoId); else restoring=false;
 })();
