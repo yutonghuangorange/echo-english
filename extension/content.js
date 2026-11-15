@@ -65,6 +65,7 @@
   let cues = [], index = -1, take = null, mode = 'idle', generation = 0;
   let recorder = null, stream = null, audio = null, frame = 0, timer = 0, savedVideo = null;
   let pendingDone = null;
+  const recordingPlayer=EchoRecordingPlayer.createPlayer();
   let wordRequest = 0, selectedWord = null, analysisRequest = 0;
   let videoId = currentId();
   const storage = EchoStorage.createStorage();
@@ -135,7 +136,7 @@
   function cancelPlayback() {
     cancelAnimationFrame(frame); clearTimeout(timer);
     if (pendingDone) { const done = pendingDone; pendingDone = null; done(); }
-    if (audio) { audio.pause(); audio.src = ''; audio = null; }
+    if (audio) { audio.stop(); audio = null; }
   }
   function finish() { cancelPlayback(); restoreVideo(); mode = 'idle'; controls(); }
   function stop() {
@@ -289,7 +290,8 @@
       const blob = new Blob(chunks, { type: currentRecorder.mimeType });
       if (id !== videoId || !blob.size) { if (recorder === currentRecorder) { recorder = null; stream=null; if(id===videoId) {mode = 'idle'; controls();} } resolveRecording(false); return; }
       const value = { id:crypto.randomUUID(),videoId:id,cueKey:recordedKey,label:recordedLabel,...r,blob,createdAt:Date.now() };
-      setTake(value); recorder = null; stream = null; mode = options.keepBusy && token === generation ? 'practice' : 'idle'; controls();
+      videoHistory=[value,...videoHistory.filter(t=>t.id!==value.id)];
+      setTake(value); renderHistory(); recorder = null; stream = null; mode = options.keepBusy && token === generation ? 'practice' : 'idle'; controls();
       saveProgress();
       status('配音完成，已加入本句录音版本。');
       resolveRecording(true);
@@ -317,23 +319,27 @@
     const t = take, v = video(); saveVideo(v); v.muted = true; v.playbackRate = t.speed;
     await seek(v, t.start, token);
     if (token !== generation) return;
-    audio = new Audio(t.url);
-    const a = audio;
-    // Pause both tracks on buffering; resynchronize video to recorded elapsed time.
-    const onWaiting = () => a.pause();
-    const onPlaying = () => { if (audio === a) { a.currentTime = Math.max(0, (v.currentTime - t.start) / t.speed); void a.play().catch(() => { stop(); status('录音无法播放，请重新录制。'); }); } };
-    v.addEventListener('waiting', onWaiting); v.addEventListener('playing', onPlaying);
+    let resolveEnded;
+    const ended=new Promise(resolve=>{resolveEnded=resolve;});
+    const a=await recordingPlayer.prepare(t.blob,()=>resolveEnded());
+    if(token!==generation) {a.stop();return;}
+    audio=a;
+    const startSound=()=>{
+      if(audio!==a || token!==generation)return;
+      try {a.play(Math.max(0,(v.currentTime-t.start)/t.speed));}
+      catch(error) {stop();status(error.message);}
+    };
+    const onWaiting=()=>a.pause();
+    v.addEventListener('waiting',onWaiting);v.addEventListener('playing',startSound);
     try {
       await v.play();
-      if (token !== generation) return;
-      await a.play();
-      await new Promise(resolve => {
-        pendingDone = resolve;
-        a.onended = resolve;
-        watchEnd(v, t.end, resolve);
-        timer = setTimeout(resolve, 135000);
+      if(token!==generation)return;
+      startSound();
+      await new Promise(resolve=>{
+        pendingDone=resolve;ended.then(resolve);
+        watchEnd(v,t.end,resolve);timer=setTimeout(resolve,135000);
       });
-    } finally { v.removeEventListener('waiting', onWaiting); v.removeEventListener('playing', onPlaying); }
+    } finally {v.removeEventListener('waiting',onWaiting);v.removeEventListener('playing',startSound);}
     if (token === generation) { if (keepBusy) { cancelPlayback(); restoreVideo(); mode = 'practice'; controls(); } else finish(); }
   }
   async function analyzeTake(value) {
@@ -463,8 +469,10 @@
     if (token === generation) { finish(); status('单句循环完成。'); }
   });
   $('autoPractice').onclick = guarded(async () => {
-    range(); const token = ++generation, autoNext = $('autoNext').checked, seconds = Number($('prepSeconds').value);
+    range(); const unlocked=recordingPlayer.unlock();
+    const token = ++generation, autoNext = $('autoNext').checked, seconds = Number($('prepSeconds').value);
     closeWord(); mode = 'practice'; controls(); status('首次练习：正在检查麦克风权限…');
+    await unlocked; if(token!==generation)return;
     // Obtain permission before the listening/preparation stages so its dialog
     // cannot consume the learner's preparation time. Release immediately.
     const mic = await navigator.mediaDevices.getUserMedia({audio:true});
@@ -486,8 +494,8 @@
   $('markEnd').onclick = guarded(() => { $('end').value = video().currentTime.toFixed(2); index = -1; updateCaption();chooseCurrentTake();saveProgress(); });
   $('original').onclick = guarded(async () => { const r = range(), token = ++generation; mode = 'original'; controls(); status('正在播放原声…'); await original(r, token); if (token === generation) { finish(); status('原声播放完成。'); } });
   $('record').onclick = guarded(() => record()); $('stop').onclick = stop;
-  $('replay').onclick = guarded(async () => { const token = ++generation; mode = 'replay'; controls(); status('正在随画面播放你的配音…'); await replay(token); });
-  $('compare').onclick = guarded(async () => { if (!take) return; const token = ++generation; mode = 'compare'; controls(); status('对比 1/2：原声'); await original(take, token); if (token !== generation) return; status('对比 2/2：你的配音'); await replay(token); });
+  $('replay').onclick = guarded(async () => { const unlocked=recordingPlayer.unlock(); const token = ++generation; mode = 'replay'; controls(); await unlocked; if(token!==generation)return; status('正在随画面播放你的配音…'); await replay(token); });
+  $('compare').onclick = guarded(async () => { if (!take) return; const unlocked=recordingPlayer.unlock(); const token = ++generation; mode = 'compare'; controls(); await unlocked; if(token!==generation)return; status('对比 1/2：原声'); await original(take, token); if (token !== generation) return; status('对比 2/2：你的配音'); await replay(token); });
   $('import').onclick = () => $('file').click();
   $('file').onchange = guarded(async () => { const file = $('file').files[0]; if (!file) return; if (file.size > 5e6) throw Error('字幕文件请小于 5 MB。'); const next = EchoSubtitles.parse(await file.text()); $('file').value = ''; if (!next.length) throw Error('未找到有效字幕，请使用 SRT 或 VTT 文件。'); displayCues(next); status(`已导入 ${next.length} 句台词。`); });
   $('read').onclick = guarded(async () => {
