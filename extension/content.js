@@ -6,36 +6,58 @@
   document.documentElement.append(host);
   const root = host.attachShadow({ mode: 'open' });
   root.innerHTML = `<style>
-    *{box-sizing:border-box} :host{font:14px/1.5 system-ui,sans-serif;color:#e9edf6} .panel{width:380px;max-width:calc(100vw - 32px);max-height:calc(100vh - 100px);overflow:auto;background:#141923;border:1px solid #30394a;border-radius:20px;box-shadow:0 20px 70px #0008;padding:22px} header{display:flex;justify-content:space-between;align-items:center} h1{font-size:23px;letter-spacing:1px;margin:0} small,.hint{color:#a0acc1;font-size:12px} .tag{color:#a5e6d5;font-size:11px;letter-spacing:2px} button,a{cursor:pointer} button,input,select,textarea{font:inherit} button{border:1px solid #394456;border-radius:10px;background:#232c3a;color:#e9edf6;padding:10px 12px} button:hover{background:#344156} button:disabled{opacity:.4;cursor:default} .primary{background:#a5e6d5;color:#102e27;border:0;font-weight:700} .primary:hover{background:#c3f4e7} .danger{background:#9e3f4b} .row{display:flex;gap:8px;margin:10px 0;align-items:center}.row>*{flex:1}.row label{display:flex;gap:5px;align-items:center} input,select,textarea{min-width:0;background:#0e131c;color:#e9edf6;border:1px solid #394456;border-radius:8px;padding:8px;width:100%} textarea{resize:vertical} .caption{font-size:20px;line-height:1.5;padding:18px 0;min-height:90px} .status{color:#a5e6d5;margin:14px 0;min-height:36px;font-size:12px} .list{max-height:210px;overflow:auto;margin:12px 0}.cue{display:block;text-align:left;width:100%;margin:5px 0;font-size:13px}.cue.active{border-color:#a5e6d5;background:#263e3c} .section{border-top:1px solid #30394a;margin-top:18px;padding-top:14px} a{color:#a5e6d5} .close{flex:0;padding:4px 10px} details summary{cursor:pointer;color:#a0acc1} #download{display:none} #hideText{width:auto}
-    .word{display:inline;border:0;border-bottom:1px dotted #789b94;border-radius:0;padding:0 1px;background:transparent;font:inherit;color:inherit}.word:hover{color:#a5e6d5;background:#263e3c}.word:disabled{opacity:1}.wordcard{background:#0e131c;border:1px solid #394456;border-radius:12px;padding:12px;margin:8px 0}.wordcard p{margin:8px 0;font-size:13px} [hidden]{display:none!important} canvas{width:100%;height:90px;background:#0e131c;border-radius:8px}.analysis-text{font-size:12px;color:#a0acc1;white-space:pre-line}
-    #translation{font-size:14px;color:#a0acc1;padding:4px 0 12px}.caption{min-height:65px;padding-bottom:8px}.micro button{font-size:12px;padding:6px}.check{display:block;color:#a0acc1;font-size:12px;margin:8px 0}.check input{width:auto} #rawCaption{font-size:12px;color:#a0acc1} .settings-label{font-size:12px;color:#a0acc1}
+    *{box-sizing:border-box} :host{font:14px/1.5 system-ui,-apple-system,sans-serif;color:#edf2f7} [hidden]{display:none!important}
+    button,input,select{font:inherit}button,a,summary{cursor:pointer}button{color:inherit;border:1px solid #334252;background:#202c39;border-radius:10px;padding:10px 12px;transition:background .15s}button:hover{background:#2f4152}button:disabled{opacity:.38;cursor:default}button:focus-visible,a:focus-visible,summary:focus-visible{outline:2px solid #b3eedb;outline-offset:3px}
+    .panel{width:384px;max-width:calc(100vw - 32px);max-height:calc(100dvh - 100px);display:flex;flex-direction:column;background:#131d27;border:1px solid #34414d;border-radius:20px;box-shadow:0 24px 70px #0009;overflow:hidden}
+    header{padding:19px 22px 14px;display:flex;align-items:center;justify-content:space-between;flex-shrink:0}h1{font-size:22px;letter-spacing:.5px;margin:0;font-weight:650}h1 small{font-size:12px;letter-spacing:0;font-weight:400;color:#91a5b6;margin-left:8px}.tag{font-size:9px;letter-spacing:2px;color:#90c9b9;margin-bottom:3px}.close{padding:4px 10px;border:0;background:transparent;color:#91a5b6;font-size:22px}
+    .tabs{display:flex;padding:0 20px;gap:20px;border-bottom:1px solid #2b3946;flex-shrink:0}.tabs button{background:transparent;border:0;border-radius:0;padding:10px 1px 12px;color:#8fa1b2;font-size:13px;border-bottom:2px solid transparent}.tabs button[aria-selected="true"]{color:#b3eedb;border-bottom-color:#b3eedb}
+    .pages{overflow:auto;min-height:0;padding:20px 22px;scrollbar-width:thin;scrollbar-color:#405467 transparent}.row{display:flex;gap:8px;align-items:center;margin:10px 0}.row>*{flex:1;min-width:0}.row label{display:flex;gap:6px;align-items:center}input,select{min-width:0;background:#101922;color:#edf2f7;border:1px solid #364957;border-radius:8px;padding:8px;width:100%}input[type="checkbox"]{width:auto;accent-color:#b3eedb}
+    .hint,small{color:#90a4b6;font-size:12px}.eyebrow{font-size:10px;color:#90a4b6;letter-spacing:1.5px}.cue-card{padding:17px;background:#192734;border:1px solid #2e414f;border-radius:14px;margin-bottom:16px}.caption{font-size:21px;line-height:1.65;min-height:64px;padding:10px 0 14px}.cue-nav{display:flex;align-items:center;justify-content:space-between;color:#90a4b6;font-size:12px}.cue-nav button{background:transparent;border:0;padding:2px 8px;color:#a3bbcc;font-size:18px}.caption-options{display:flex;flex-wrap:wrap;gap:12px;border-top:1px solid #30414e;padding-top:10px}.check{display:flex;gap:5px;align-items:center;color:#9ab0bf;font-size:12px;margin:0}#translation{color:#b2c1cd;font-size:14px;line-height:1.7;margin-bottom:14px}#rawCaption{font-size:12px;color:#9ab0bf;margin-top:8px}
+    .primary{background:#b3eedb;border-color:#b3eedb;color:#163b32;font-weight:700}.primary:hover{background:#c9f5e8}.main-actions{display:grid;grid-template-columns:1fr 1fr;gap:8px}.main-actions .primary{grid-column:1 / -1;padding:13px}.secondary-actions{display:flex;gap:8px;margin:10px 0 18px}.secondary-actions button{flex:1;font-size:12px;background:transparent;color:#a5c5d6;padding:8px}.fold{border-top:1px solid #2b3946;padding:13px 0 0;margin-top:14px}.fold summary{color:#b6c8d6;font-size:12px;list-style:none;display:flex;justify-content:space-between}.fold summary::after{content:'＋';color:#8199aa}.fold[open] summary::after{content:'−'}.fold-content{padding-top:8px}.micro button{font-size:11px;padding:7px 4px}.setup{display:flex;gap:12px;align-items:center;justify-content:space-between;background:#192734;border:1px dashed #3b505f;border-radius:10px;padding:10px 12px;margin-bottom:14px;font-size:12px;color:#90a4b6}.setup button{flex-shrink:0;padding:7px 10px;font-size:12px}.page-title{font-size:17px;font-weight:600;margin:0 0 6px}.page-subtitle{font-size:12px;color:#90a4b6;margin-bottom:18px}.empty{padding:24px 16px;text-align:center;border:1px dashed #3b505f;border-radius:12px;color:#90a4b6;font-size:13px}.empty strong{display:block;color:#d4e1e9;font-size:15px;margin-bottom:6px}.empty button{margin-top:12px}
+    .list{max-height:340px;overflow:auto;scrollbar-width:thin;margin-top:16px}.cue{display:block;text-align:left;width:100%;margin:6px 0;font-size:13px;background:#192734;border-color:transparent;padding:12px}.cue.active{border-color:#8cc7b3;background:#263e3c}a{color:#b3eedb}#download{display:none;text-align:center;width:100%;padding:10px;border:1px solid #3a5b54;border-radius:10px;text-decoration:none}
+    .word{display:inline;border:0;border-bottom:1px dotted #648a87;border-radius:0;padding:0 1px;background:transparent;font:inherit;color:inherit}.word:hover{background:#2d4647;color:#b3eedb}.word:disabled{opacity:1}.wordcard{background:#0e1821;border:1px solid #37505a;border-radius:12px;padding:12px;margin:12px 0}.wordcard p{font-size:13px;margin:8px 0}.wordcard .row{margin-top:0}canvas{width:100%;height:90px;background:#0e1821;border-radius:10px;margin:12px 0}.analysis-text{font-size:12px;color:#a3b7c6;white-space:pre-line;margin-bottom:12px}
+    footer{border-top:1px solid #2b3946;background:#111b24;padding:12px 20px;display:flex;align-items:center;gap:10px;flex-shrink:0}.status{font-size:11px;color:#9ab2c1;flex:1;line-height:1.6;max-height:70px;overflow:auto}#stop{background:#643640;border-color:#88505a;color:#ffe2e6;font-size:12px;padding:8px 12px;flex-shrink:0}
   </style><div class="panel">
-    <header><div><div class="tag">LISTEN · DUB · REPEAT</div><h1>Echo <small>英语配音练习</small></h1></div><button class="close" id="close" aria-label="关闭">×</button></header>
-    <div class="status" id="status" role="status">选一个有英文字幕的视频，从一句开始。</div>
-    <div class="row"><button id="read">读取台词</button><button id="import">导入 SRT / VTT</button><input id="file" type="file" accept=".srt,.vtt" hidden></div>
-    <div class="hint">自动展开文字记录并等待加载。长视频建议导入完整字幕。</div>
-    <div class="row"><button id="prev">← 上一句</button><span id="position" style="text-align:center">手动片段</span><button id="next">下一句 →</button></div>
-    <div class="caption" id="caption">也可以直接标记视频中的起点和终点。</div>
-    <div id="translation" hidden></div>
-    <label class="check"><input type="checkbox" id="showChinese"> 显示中文参考</label>
-    <details id="rawDetails" hidden><summary>查看未拆分台词</summary><div id="rawCaption"></div></details>
-    <div class="hint">点击上方台词中的英文单词，查看发音和英文释义。</div>
-    <div id="wordcard" class="wordcard" hidden><div class="row"><strong id="wordTitle"></strong><button id="speakWord">▶ 朗读</button><button id="closeWord" aria-label="关闭词卡">×</button></div><small id="phonetic"></small><div id="definitions" role="status"></div><small>释义来自 Free Dictionary API；查询时仅发送所选单词。</small></div>
-    <label class="hint"><input type="checkbox" id="hideText"> 隐藏台词，试着脱稿</label>
-    <div class="row"><label><small>起点 / 秒</small><input id="start" type="number" min="0" step="0.1" value="0"></label><label><small>终点 / 秒</small><input id="end" type="number" min="0" step="0.1" value="5"></label></div>
-    <div class="row micro"><button id="startEarlier">起点 −0.2s</button><button id="startLater">起点 +0.2s</button><button id="endEarlier">终点 −0.2s</button><button id="endLater">终点 +0.2s</button></div>
-    <div class="row"><button id="markStart">此刻设为起点</button><button id="markEnd">此刻设为终点</button></div>
-    <div class="row"><button id="original">▶ 听原声</button><select id="speed" aria-label="练习速度"><option value="0.75">0.75× 慢速</option><option value="1" selected>1× 原速</option><option value="1.25">1.25×</option></select></div>
-    <div class="row"><button class="primary" id="record">● 开始配音</button><button id="stop" disabled>■ 停止</button></div>
-    <div class="row"><button id="replay" disabled>▶ 我的配音 + 画面</button><button id="compare" disabled>⇄ 原声 / 配音</button></div>
-    <div class="section"><div class="row"><button id="loop">↻ 单句循环</button><select id="loopCount" aria-label="循环次数"><option value="3">循环 3 次</option><option value="5">循环 5 次</option><option value="0">持续循环</option></select></div>
-    <div class="row"><button id="autoPractice">▶ 自动跟读</button><select id="prepSeconds" aria-label="跟读准备时间"><option value="2">准备 2 秒</option><option value="3" selected>准备 3 秒</option><option value="5">准备 5 秒</option></select></div>
-    <label class="check"><input type="checkbox" id="autoNext"> 完成回放后，自动练下一句</label>
-    <div class="hint">自动跟读：听原声 → 准备 → 静音配音 → 回放。首次先授权麦克风；每个视频仅保留最近一次录音。</div></div>
-    <div class="hint">配音时视频静音。建议戴耳机；最长录制 120 秒。</div>
-    <div id="analysis" class="section" hidden><small>我的录音 · 波形与停顿</small><canvas id="waveform" width="660" height="180" role="img" aria-label="录音音量波形，橙色区域表示低音量停顿"></canvas><div id="analysisText" class="analysis-text" role="status"></div><small>波形显示音量和停顿，不代表发音准确度。</small></div>
-    <div class="row"><a id="download">下载这次录音</a></div>
-    <div class="section"><details><summary>台词列表 / 查找练习视频</summary><div class="list" id="list"></div><div class="row"><input id="query" placeholder="例如 TED / Friends / 日常对话" aria-label="视频搜索"><button id="search">搜索</button></div><div class="hint">在 YouTube 搜索；优先选有英文字幕、语速适中的短视频。</div></details></div>
+    <header><div><div class="tag">A LITTLE BETTER, EVERY DAY</div><h1>Echo<small>英语配音练习</small></h1></div><button class="close" id="close" aria-label="关闭">×</button></header>
+    <nav class="tabs" role="tablist" aria-label="练习面板"><button id="tab-practice" role="tab" aria-selected="true" aria-controls="page-practice" tabindex="0">练习</button><button id="tab-transcript" role="tab" aria-selected="false" aria-controls="page-transcript" tabindex="-1">台词</button><button id="tab-recordings" role="tab" aria-selected="false" aria-controls="page-recordings" tabindex="-1">录音</button></nav>
+    <div class="pages">
+      <section id="page-practice" role="tabpanel" aria-labelledby="tab-practice">
+        <div class="cue-card"><div class="cue-nav"><span class="eyebrow">YOUR NEXT LINE</span><span><button id="prev" aria-label="上一句">‹</button><span id="position">手动片段</span><button id="next" aria-label="下一句">›</button></span></div>
+          <div class="caption" id="caption">从一句台词开始，听见自己的进步。</div><div id="translation" hidden></div>
+          <div class="caption-options"><label class="check"><input type="checkbox" id="showChinese">中文参考</label><label class="check"><input type="checkbox" id="hideText">脱稿练习</label></div>
+          <details id="rawDetails" class="fold" hidden><summary>完整原文</summary><div id="rawCaption"></div></details>
+        </div>
+        <div id="practiceSetup" class="setup"><span>先选台词，也可在下方标记片段。</span><button id="openTranscript">选台词 →</button></div>
+        <div id="wordcard" class="wordcard" hidden><div class="row"><strong id="wordTitle"></strong><button id="speakWord">▶ 朗读</button><button id="closeWord" aria-label="关闭词卡">×</button></div><small id="phonetic"></small><div id="definitions" role="status"></div><small>释义：Free Dictionary API · 查询时仅发送所选单词</small></div>
+        <div class="main-actions"><button id="original">▶ 听原声</button><button id="replay" disabled>▷ 我的配音</button><button class="primary" id="record">● 开始配音</button></div>
+        <div class="secondary-actions"><button id="loop">↻ 单句循环</button><button id="autoPractice">▶ 自动跟读</button></div>
+        <details class="fold" id="practiceSettings"><summary>练习设置<span id="speedSummary">1× · 循环 3 次</span></summary><div class="fold-content">
+          <div class="row"><label class="hint" for="speed">播放速度</label><select id="speed" aria-label="练习速度"><option value="0.75">0.75× 慢速</option><option value="1" selected>1× 原速</option><option value="1.25">1.25×</option></select></div>
+          <div class="row"><label class="hint" for="loopCount">循环次数</label><select id="loopCount" aria-label="循环次数"><option value="3">3 次</option><option value="5">5 次</option><option value="0">持续循环</option></select></div>
+          <div class="row"><label class="hint" for="prepSeconds">跟读准备</label><select id="prepSeconds" aria-label="跟读准备时间"><option value="2">2 秒</option><option value="3" selected>3 秒</option><option value="5">5 秒</option></select></div>
+          <label class="check"><input type="checkbox" id="autoNext">回放结束后自动练下一句</label><p class="hint">自动跟读：原声 → 准备 → 配音 → 回放。</p>
+        </div></details>
+        <details class="fold" id="clipSettings"><summary>片段与边界<span id="clipSummary">0.0–5.0 秒</span></summary><div class="fold-content">
+          <div class="row"><label><small>起点</small><input id="start" aria-label="片段起点（秒）" type="number" min="0" step="0.1" value="0"></label><label><small>终点</small><input id="end" aria-label="片段终点（秒）" type="number" min="0" step="0.1" value="5"></label></div>
+          <div class="row micro"><button id="startEarlier">起点 −0.2s</button><button id="startLater">起点 +0.2s</button><button id="endEarlier">终点 −0.2s</button><button id="endLater">终点 +0.2s</button></div>
+          <div class="row"><button id="markStart">此刻设为起点</button><button id="markEnd">此刻设为终点</button></div><p class="hint">配音时原声静音；每段最长 120 秒。</p>
+        </div></details>
+      </section>
+      <section id="page-transcript" role="tabpanel" aria-labelledby="tab-transcript" hidden>
+        <h2 class="page-title">找到想说的那一句</h2><div class="page-subtitle">读取视频文字记录，选择台词后回到练习。</div>
+        <div class="row"><button class="primary" id="read">读取台词</button><button id="import">导入字幕</button><input id="file" type="file" accept=".srt,.vtt" hidden></div>
+        <div class="hint">自动展开文字记录；也可导入 SRT / VTT。</div><div id="transcriptEmpty" class="empty" style="margin-top:18px">还没有台词。点击上方按钮读取。</div><div class="list" id="list"></div>
+        <details class="fold"><summary>寻找更多视频</summary><div class="fold-content"><div class="row"><input id="query" placeholder="TED / Friends / 日常对话" aria-label="视频搜索"><button id="search">搜索</button></div><div class="hint">在 YouTube 打开搜索结果，优先选择有英文字幕的短视频。</div></div></details>
+      </section>
+      <section id="page-recordings" role="tabpanel" aria-labelledby="tab-recordings" hidden>
+        <h2 class="page-title">听听自己的声音</h2><div class="page-subtitle">回到原来的画面，比较节奏与停顿。</div><div id="recordingEmpty" class="empty"><strong>还没有录音</strong>在练习页录一句，这里就会显示波形。<br><button id="backToPractice">去练一句 →</button></div>
+        <div id="recordingContent" hidden><div class="row"><button id="reviewReplay">▷ 回放配音</button><button id="compare">⇄ 原声 / 配音</button></div>
+          <details class="fold" open><summary>波形与停顿</summary><div id="analysis" hidden><canvas id="waveform" width="660" height="180" role="img" aria-label="录音音量波形，橙色表示低音量停顿"></canvas><div id="analysisText" class="analysis-text" role="status"></div><small>波形显示音量和停顿，不代表发音准确度。</small></div></details>
+          <div class="row"><a id="download">↓ 下载这次录音</a></div><p class="hint">每个视频仅保留最近一次录音。想留住这个版本，请先下载。</p>
+        </div>
+      </section>
+    </div>
+    <footer><div class="status" id="status" role="status">准备好了，从一句开始。</div><button id="stop" disabled hidden>■ 停止</button></footer>
   </div>`;
   const $ = id => root.getElementById(id);
   let cues = [], index = -1, take = null, mode = 'idle', generation = 0;
@@ -44,6 +66,37 @@
   let wordRequest = 0, selectedWord = null, analysisRequest = 0;
   let videoId = currentId();
   let database;
+  const pageNames = ['practice','transcript','recordings'];
+  function showPage(name, focus = false) {
+    if (!pageNames.includes(name)) return;
+    for (const page of pageNames) {
+      const selected = page === name;
+      $('page-'+page).hidden = !selected;
+      $('tab-'+page).setAttribute('aria-selected', String(selected));
+      $('tab-'+page).tabIndex = selected ? 0 : -1;
+    }
+    if (focus) $('tab-'+name).focus();
+    root.querySelector('.pages').scrollTop = 0;
+  }
+  pageNames.forEach((name,i) => {
+    $('tab-'+name).onclick = () => showPage(name);
+    $('tab-'+name).onkeydown = event => {
+      let next;
+      if (event.key === 'ArrowRight') next = (i+1)%3;
+      if (event.key === 'ArrowLeft') next = (i+2)%3;
+      if (event.key === 'Home') next = 0;
+      if (event.key === 'End') next = 2;
+      if (next !== undefined) { event.preventDefault(); showPage(pageNames[next],true); }
+    };
+  });
+  $('openTranscript').onclick = () => showPage('transcript',true);
+  $('backToPractice').onclick = () => showPage('practice',true);
+  $('reviewReplay').onclick = () => $('replay').click();
+  function updateSummaries() {
+    $('speedSummary').textContent = `${$('speed').value}× · ${$('loopCount').value === '0' ? '持续循环' : '循环 '+$('loopCount').value+' 次'}`;
+    $('clipSummary').textContent = `${Number($('start').value).toFixed(1)}–${Number($('end').value).toFixed(1)} 秒`;
+  }
+  $('speed').onchange = updateSummaries; $('loopCount').onchange = updateSummaries;
   const dbReady = new Promise((resolve, reject) => {
     const request = indexedDB.open('echo-dubbing-v1', 1);
     request.onupgradeneeded = () => request.result.createObjectStore('takes', { keyPath: 'videoId' });
@@ -64,7 +117,8 @@
   function controls() {
     const busy = mode !== 'idle';
     for (const id of ['read','import','prev','next','markStart','markEnd','original','speed','start','end','record','startEarlier','startLater','endEarlier','endLater','loop','loopCount','autoPractice','prepSeconds','autoNext']) $(id).disabled = busy;
-    $('stop').disabled = !busy;
+    $('stop').disabled = !busy; $('stop').hidden = !busy;
+    $('reviewReplay').disabled = busy || !take;
     $('replay').disabled = busy || !take;
     $('compare').disabled = busy || !take;
     $('speakWord').disabled = busy;
@@ -133,7 +187,8 @@
   function setTake(value) {
     if (take?.url) URL.revokeObjectURL(take.url);
     take = value ? { ...value, url: URL.createObjectURL(value.blob) } : null;
-    $('download').style.display = take ? 'inline' : 'none';
+    $('download').style.display = take ? 'block' : 'none';
+    $('recordingEmpty').hidden = !!take; $('recordingContent').hidden = !take;
     if (take) { $('download').href = take.url; $('download').download = `echo-${videoId}-${take.start.toFixed(1)}.webm`; }
     controls();
     void analyzeTake(take);
@@ -305,19 +360,23 @@
     $('translation').hidden = $('hideText').checked || !$('showChinese').checked || !parts.chinese;
     $('rawDetails').hidden = $('hideText').checked || !parts.chinese;
     $('rawCaption').textContent = parts.original;
+    $('practiceSetup').hidden = cues.length > 0;
+    updateSummaries();
     $('position').textContent = index >= 0 ? `${index + 1} / ${cues.length}` : '手动片段';
   }
   function select(i) {
     if (mode !== 'idle' || !cues[i]) return;
     index = i; $('start').value = cues[i].start.toFixed(2); $('end').value = cues[i].end.toFixed(2);
-    updateCaption(); root.querySelectorAll('.cue').forEach((b, n) => b.classList.toggle('active', n === i));
+    updateCaption(); showPage('practice'); root.querySelectorAll('.cue').forEach((b, n) => b.classList.toggle('active', n === i));
   }
   function displayCues(next) {
     cues = next; index = -1; $('list').replaceChildren();
+    $('transcriptEmpty').hidden = next.length > 0;
     cues.forEach((cue, i) => { const b = document.createElement('button'); b.className = 'cue'; b.textContent = `${Math.floor(cue.start / 60)}:${String(Math.floor(cue.start % 60)).padStart(2, '0')}  ${EchoPractice.splitCaption(cue.text).english || '查看原文'}`; b.onclick = () => select(i); $('list').append(b); });
     if (cues.length) select(0); else updateCaption();
   }
   function rememberBounds() {
+    updateSummaries();
     const start = Number($('start').value), end = Number($('end').value);
     if (cues[index] && Number.isFinite(start) && end > start) { cues[index].start = start; cues[index].end = end; }
   }
@@ -391,7 +450,7 @@
   chrome.runtime.onMessage.addListener(message => { if (message.type === 'echo-toggle') { const open = host.style.display === 'none'; host.style.display = open ? 'block' : 'none'; if (!open) stop(); } });
   document.addEventListener('yt-navigate-finish', () => {
     const id = currentId(); if (id === videoId) return;
-    stop(); videoId = id; setTake(null); displayCues([]); $('start').value = 0; $('end').value = 5;
+    stop(); videoId = id; setTake(null); displayCues([]); $('start').value = 0; $('end').value = 5; updateSummaries();
     status('已切换视频，请重新选择台词或片段。'); if (id) void loadTake(id);
   });
   window.addEventListener('pagehide', stop);
