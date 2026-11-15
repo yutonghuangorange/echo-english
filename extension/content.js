@@ -7,6 +7,7 @@
   const root = host.attachShadow({ mode: 'open' });
   root.innerHTML = `<style>
     *{box-sizing:border-box} :host{font:14px/1.5 system-ui,sans-serif;color:#e9edf6} .panel{width:380px;max-width:calc(100vw - 32px);max-height:calc(100vh - 100px);overflow:auto;background:#141923;border:1px solid #30394a;border-radius:20px;box-shadow:0 20px 70px #0008;padding:22px} header{display:flex;justify-content:space-between;align-items:center} h1{font-size:23px;letter-spacing:1px;margin:0} small,.hint{color:#a0acc1;font-size:12px} .tag{color:#a5e6d5;font-size:11px;letter-spacing:2px} button,a{cursor:pointer} button,input,select,textarea{font:inherit} button{border:1px solid #394456;border-radius:10px;background:#232c3a;color:#e9edf6;padding:10px 12px} button:hover{background:#344156} button:disabled{opacity:.4;cursor:default} .primary{background:#a5e6d5;color:#102e27;border:0;font-weight:700} .primary:hover{background:#c3f4e7} .danger{background:#9e3f4b} .row{display:flex;gap:8px;margin:10px 0;align-items:center}.row>*{flex:1}.row label{display:flex;gap:5px;align-items:center} input,select,textarea{min-width:0;background:#0e131c;color:#e9edf6;border:1px solid #394456;border-radius:8px;padding:8px;width:100%} textarea{resize:vertical} .caption{font-size:20px;line-height:1.5;padding:18px 0;min-height:90px} .status{color:#a5e6d5;margin:14px 0;min-height:36px;font-size:12px} .list{max-height:210px;overflow:auto;margin:12px 0}.cue{display:block;text-align:left;width:100%;margin:5px 0;font-size:13px}.cue.active{border-color:#a5e6d5;background:#263e3c} .section{border-top:1px solid #30394a;margin-top:18px;padding-top:14px} a{color:#a5e6d5} .close{flex:0;padding:4px 10px} details summary{cursor:pointer;color:#a0acc1} #download{display:none} #hideText{width:auto}
+    .word{display:inline;border:0;border-bottom:1px dotted #789b94;border-radius:0;padding:0 1px;background:transparent;font:inherit;color:inherit}.word:hover{color:#a5e6d5;background:#263e3c}.word:disabled{opacity:1}.wordcard{background:#0e131c;border:1px solid #394456;border-radius:12px;padding:12px;margin:8px 0}.wordcard p{margin:8px 0;font-size:13px} [hidden]{display:none!important} canvas{width:100%;height:90px;background:#0e131c;border-radius:8px}.analysis-text{font-size:12px;color:#a0acc1;white-space:pre-line}
   </style><div class="panel">
     <header><div><div class="tag">LISTEN · DUB · REPEAT</div><h1>Echo <small>英语配音练习</small></h1></div><button class="close" id="close" aria-label="关闭">×</button></header>
     <div class="status" id="status" role="status">选一个有英文字幕的视频，从一句开始。</div>
@@ -14,6 +15,8 @@
     <div class="hint">自动展开文字记录并等待加载。长视频建议导入完整字幕。</div>
     <div class="row"><button id="prev">← 上一句</button><span id="position" style="text-align:center">手动片段</span><button id="next">下一句 →</button></div>
     <div class="caption" id="caption">也可以直接标记视频中的起点和终点。</div>
+    <div class="hint">点击上方台词中的英文单词，查看发音和英文释义。</div>
+    <div id="wordcard" class="wordcard" hidden><div class="row"><strong id="wordTitle"></strong><button id="speakWord">▶ 朗读</button><button id="closeWord" aria-label="关闭词卡">×</button></div><small id="phonetic"></small><div id="definitions" role="status"></div><small>释义来自 Free Dictionary API；查询时仅发送所选单词。</small></div>
     <label class="hint"><input type="checkbox" id="hideText"> 隐藏台词，试着脱稿</label>
     <div class="row"><label><small>起点 / 秒</small><input id="start" type="number" min="0" step="0.1" value="0"></label><label><small>终点 / 秒</small><input id="end" type="number" min="0" step="0.1" value="5"></label></div>
     <div class="row"><button id="markStart">此刻设为起点</button><button id="markEnd">此刻设为终点</button></div>
@@ -21,6 +24,7 @@
     <div class="row"><button class="primary" id="record">● 开始配音</button><button id="stop" disabled>■ 停止</button></div>
     <div class="row"><button id="replay" disabled>▶ 我的配音 + 画面</button><button id="compare" disabled>⇄ 原声 / 配音</button></div>
     <div class="hint">配音时视频静音。建议戴耳机；最长录制 120 秒。</div>
+    <div id="analysis" class="section" hidden><small>我的录音 · 波形与停顿</small><canvas id="waveform" width="660" height="180" role="img" aria-label="录音音量波形，橙色区域表示低音量停顿"></canvas><div id="analysisText" class="analysis-text" role="status"></div><small>波形显示音量和停顿，不代表发音准确度。</small></div>
     <div class="row"><a id="download">下载这次录音</a></div>
     <div class="section"><details><summary>台词列表 / 查找练习视频</summary><div class="list" id="list"></div><div class="row"><input id="query" placeholder="例如 TED / Friends / 日常对话" aria-label="视频搜索"><button id="search">搜索</button></div><div class="hint">在 YouTube 搜索；优先选有英文字幕、语速适中的短视频。</div></details></div>
   </div>`;
@@ -28,6 +32,7 @@
   let cues = [], index = -1, take = null, mode = 'idle', generation = 0;
   let recorder = null, stream = null, audio = null, frame = 0, timer = 0, savedVideo = null;
   let pendingDone = null;
+  let wordRequest = 0, selectedWord = null, analysisRequest = 0;
   let videoId = currentId();
   let database;
   const dbReady = new Promise((resolve, reject) => {
@@ -53,6 +58,8 @@
     $('stop').disabled = !busy;
     $('replay').disabled = busy || !take;
     $('compare').disabled = busy || !take;
+    $('speakWord').disabled = busy;
+    root.querySelectorAll('.word').forEach(b => b.disabled = busy);
     root.querySelectorAll('.cue').forEach(b => b.disabled = busy);
   }
   function range() {
@@ -72,6 +79,7 @@
   }
   function finish() { cancelPlayback(); restoreVideo(); mode = 'idle'; controls(); }
   function stop() {
+    window.speechSynthesis?.cancel();
     if (mode === 'reading') status('已停止读取台词。');
     generation++;
     cancelPlayback(); restoreVideo();
@@ -100,6 +108,7 @@
     if (token !== generation) throw Error('操作已停止。');
   }
   async function original(r, token) {
+    window.speechSynthesis?.cancel();
     const v = video(); saveVideo(v); v.muted = false; v.playbackRate = r.speed;
     await seek(v, r.start, token);
     if (token !== generation) return;
@@ -117,6 +126,7 @@
     $('download').style.display = take ? 'inline' : 'none';
     if (take) { $('download').href = take.url; $('download').download = `echo-${videoId}-${take.start.toFixed(1)}.webm`; }
     controls();
+    void analyzeTake(take);
   }
   async function persist(value) {
     await dbReady;
@@ -136,6 +146,7 @@
     } catch { status('本地存储不可用，仍可录音并下载。'); }
   }
   async function record() {
+    window.speechSynthesis?.cancel();
     const r = range(), v = video(), id = videoId, token = ++generation;
     mode = 'permission'; controls(); status('正在请求麦克风权限…');
     const mic = await navigator.mediaDevices.getUserMedia({ audio: { echoCancellation: true }, video: false });
@@ -166,6 +177,7 @@
     timer = setTimeout(stop, 120000);
   }
   async function replay(token) {
+    window.speechSynthesis?.cancel();
     if (!take) return;
     const t = take, v = video(); saveVideo(v); v.muted = true; v.playbackRate = t.speed;
     await seek(v, t.start, token);
@@ -189,8 +201,85 @@
     } finally { v.removeEventListener('waiting', onWaiting); v.removeEventListener('playing', onPlaying); }
     if (token === generation) finish();
   }
+  async function analyzeTake(value) {
+    const request = ++analysisRequest;
+    $('analysis').hidden = !value;
+    if (!value) return;
+    $('analysisText').textContent = '正在本机分析录音…';
+    const canvas = $('waveform'), ctx = canvas.getContext('2d');
+    ctx.clearRect(0,0,canvas.width,canvas.height);
+    let context;
+    try {
+      context = new AudioContext();
+      const decoded = await context.decodeAudioData(await value.blob.arrayBuffer());
+      if (request !== analysisRequest) return;
+      const mono = new Float32Array(decoded.length);
+      for (let c = 0; c < decoded.numberOfChannels; c++) {
+        const channel = decoded.getChannelData(c);
+        for (let i = 0; i < mono.length; i++) mono[i] += channel[i] / decoded.numberOfChannels;
+      }
+      const result = EchoAudioAnalysis.analyze(mono, decoded.sampleRate);
+      ctx.fillStyle = '#895d2c';
+      for (const pause of result.pauses) ctx.fillRect(pause.start/result.duration*canvas.width,0,(pause.end-pause.start)/result.duration*canvas.width,canvas.height);
+      ctx.strokeStyle = '#a5e6d5'; ctx.lineWidth = 2; ctx.beginPath();
+      for (let x = 0; x < canvas.width; x++) {
+        const from = Math.floor(x/canvas.width*result.peaks.length), to = Math.max(from+1,Math.floor((x+1)/canvas.width*result.peaks.length));
+        let peak = 0; for (let i = from; i < to; i++) peak = Math.max(peak,result.peaks[i] || 0);
+        const height = Math.min(1,peak)*canvas.height/2;
+        ctx.moveTo(x,canvas.height/2-height); ctx.lineTo(x,canvas.height/2+height);
+      }
+      ctx.stroke();
+      const ranges = result.pauses.slice(0,8).map(p=>`${p.start.toFixed(1)}–${p.end.toFixed(1)} 秒`).join('、');
+      $('analysisText').textContent = result.silent ? '录音整体音量很低，请检查麦克风或靠近一些。' : `录音 ${result.duration.toFixed(1)} 秒；检测到 ${result.pauses.length} 处 ≥0.4 秒的低音量停顿。${ranges ? '\n停顿位置：'+ranges : ''}\n停顿可能是自然换气或句间停顿，请结合原声回听。`;
+    } catch { if (request === analysisRequest) $('analysisText').textContent = '浏览器暂时无法解码这次录音，仍可回放或下载。'; }
+    finally { if (context) await context.close().catch(()=>{}); }
+  }
+  function closeWord() { wordRequest++; selectedWord = null; $('wordcard').hidden = true; window.speechSynthesis?.cancel(); }
+  async function lookupWord(word) {
+    if (mode !== 'idle') return;
+    selectedWord = EchoDictionary.normalize(word);
+    if (!selectedWord) return;
+    const request = ++wordRequest;
+    try { video().pause(); } catch {}
+    $('wordcard').hidden = false; $('wordTitle').textContent = word; $('phonetic').textContent = '';
+    $('definitions').textContent = '正在查词…';
+    try {
+      const result = await chrome.runtime.sendMessage({type:'echo-dictionary',word:selectedWord});
+      if (request !== wordRequest) return;
+      if (!result?.entry) throw Error(result?.error || '无法连接词典，请重新加载插件及视频页。');
+      const entry = result.entry;
+      $('phonetic').textContent = entry.phonetic;
+      $('definitions').replaceChildren();
+      for (const meaning of entry.meanings) {
+        const p = document.createElement('p');
+        p.textContent = `${meaning.partOfSpeech} · ${meaning.definition}${meaning.example ? ' 例：'+meaning.example : ''}`;
+        $('definitions').append(p);
+      }
+    } catch (error) { if (request === wordRequest) $('definitions').textContent = error.message; }
+  }
+  $('closeWord').onclick = closeWord;
+  $('speakWord').onclick = () => {
+    if (!selectedWord || mode !== 'idle') return;
+    if (!window.speechSynthesis) { $('definitions').textContent = '当前浏览器不支持朗读。'; return; }
+    window.speechSynthesis.cancel();
+    const utterance = new SpeechSynthesisUtterance(selectedWord); utterance.lang = 'en-US'; utterance.rate = 0.85;
+    const voices = window.speechSynthesis.getVoices().filter(v=>v.lang.startsWith('en'));
+    utterance.voice = voices.find(v=>v.localService && v.lang === 'en-US') || voices.find(v=>v.localService) || voices[0] || null;
+    utterance.onerror = () => { if (selectedWord === utterance.text) $('phonetic').textContent = '朗读失败，请检查浏览器语音设置。'; };
+    window.speechSynthesis.speak(utterance);
+  };
   function updateCaption() {
-    $('caption').textContent = $('hideText').checked ? '••• 听节奏，试着说出来' : cues[index]?.text || '标记片段后，点击开始配音。';
+    closeWord(); $('caption').replaceChildren();
+    if ($('hideText').checked) $('caption').textContent = '••• 听节奏，试着说出来';
+    else {
+      const text = cues[index]?.text || '标记片段后，点击开始配音。';
+      for (const part of text.split(/([A-Za-z]+(?:['’‘-][A-Za-z]+)*)/)) {
+        if (EchoDictionary.normalize(part)) {
+          const b = document.createElement('button'); b.className = 'word'; b.textContent = part;
+          b.title = '查看发音和释义'; b.onclick = () => void lookupWord(part); b.disabled = mode !== 'idle'; $('caption').append(b);
+        } else $('caption').append(document.createTextNode(part));
+      }
+    }
     $('position').textContent = index >= 0 ? `${index + 1} / ${cues.length}` : '手动片段';
   }
   function select(i) {
@@ -203,7 +292,7 @@
     cues.forEach((cue, i) => { const b = document.createElement('button'); b.className = 'cue'; b.textContent = `${Math.floor(cue.start / 60)}:${String(Math.floor(cue.start % 60)).padStart(2, '0')}  ${cue.text}`; b.onclick = () => select(i); $('list').append(b); });
     if (cues.length) select(0); else updateCaption();
   }
-  $('close').onclick = () => { stop(); host.style.display = 'none'; };
+  $('close').onclick = () => { closeWord(); stop(); host.style.display = 'none'; };
   $('hideText').onchange = () => { updateCaption(); $('list').style.display = $('hideText').checked ? 'none' : ''; };
   $('prev').onclick = () => select(index - 1); $('next').onclick = () => select(index + 1);
   $('markStart').onclick = guarded(() => { $('start').value = video().currentTime.toFixed(2); index = -1; updateCaption(); });
