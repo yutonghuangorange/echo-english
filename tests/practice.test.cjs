@@ -39,3 +39,14 @@ test('cancelling preparation never starts a microphone recording', async () => {
 test('recording failure never replays a previous take', async () => {
   await runPractice({active:()=>true,listen:async()=>{},prepare:async()=>{},record:async()=>false,replay:async()=>assert.fail('stale recording'),advance:()=>assert.fail('advance after failure')});
 });
+
+test('continuous dub playback chooses latest take per sentence and sorts by video time',()=>{
+  const {recordingQueue}=require('../extension/practice.js');
+  const takes=[{id:'b',cueKey:'second',start:10,end:12,createdAt:2},{id:'old',cueKey:'first',start:0,end:2,createdAt:1},{id:'new',cueKey:'first',start:.2,end:2.2,createdAt:3},{id:'bad',cueKey:'bad',start:20,end:10,createdAt:4}];
+  assert.deepEqual(recordingQueue(takes).map(t=>t.id),['new','b']);
+});
+test('continuous dub playback stops without starting the next segment',async()=>{
+  const {playQueue}=require('../extension/practice.js');let active=true;const played=[];
+  await playQueue({queue:['first','second'],active:()=>active,play:async value=>{played.push(value);active=false;}});
+  assert.deepEqual(played,['first']);
+});

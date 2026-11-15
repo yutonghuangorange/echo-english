@@ -51,7 +51,8 @@
         <details class="fold"><summary>寻找更多视频</summary><div class="fold-content"><div class="row"><input id="query" placeholder="TED / Friends / 日常对话" aria-label="视频搜索"><button id="search">搜索</button></div><div class="hint">在 YouTube 打开搜索结果，优先选择有英文字幕的短视频。</div></div></details>
       </section>
       <section id="page-recordings" role="tabpanel" aria-labelledby="tab-recordings" hidden>
-        <h2 class="page-title">听听自己的声音</h2><div class="page-subtitle">回到原来的画面，比较节奏与停顿。</div><div id="recordingEmpty" class="empty"><strong>还没有录音</strong>在练习页录一句，这里就会显示波形。<br><button id="backToPractice">去练一句 →</button></div>
+        <h2 class="page-title">听听自己的声音</h2><div class="page-subtitle">回到原来的画面，比较节奏与停顿。</div><div id="recordingEmpty" class="empty"><strong>当前句暂无录音</strong>可以先练一句，或连播本视频已录片段。<br><button id="backToPractice">去练一句 →</button></div>
+        <div class="row"><button id="playAll" disabled>▶ 从头连播配音</button></div><div class="hint">每句播放最新录音，按视频时间排序，跳过未录部分。</div>
         <details class="fold" id="historyDetails"><summary>录音版本<span id="historyCount">0 条</span></summary><div class="fold-content"><select id="historyScope" aria-label="录音范围"><option value="sentence">当前句子</option><option value="video">这个视频的全部录音</option></select><div id="historyList" class="history-list"></div><div class="history-actions"><button id="deleteTake" disabled>删除所选</button><button id="undoDelete" hidden>撤销删除</button></div><small>每句保留最近 3 次；第 4 次会替换最早的一次。</small></div></details>
         <div id="recordingContent" hidden><div id="historyInfo"></div><div class="row"><button id="reviewReplay">▷ 回放配音</button><button id="compare">⇄ 原声 / 配音</button></div>
           <details class="fold" open><summary>波形与停顿</summary><div id="analysis" hidden><canvas id="waveform" width="660" height="180" role="img" aria-label="录音音量波形，橙色表示低音量停顿"></canvas><div id="analysisText" class="analysis-text" role="status"></div><small>波形显示音量和停顿，不代表发音准确度。</small></div></details>
@@ -114,6 +115,7 @@
     for (const id of ['read','import','prev','next','markStart','markEnd','original','speed','start','end','record','startEarlier','startLater','endEarlier','endLater','loop','loopCount','autoPractice','prepSeconds','autoNext']) $(id).disabled = busy;
     $('stop').disabled = !busy; $('stop').hidden = !busy;
     $('reviewReplay').disabled = busy || !take;
+    $('playAll').disabled = busy || !videoHistory.length;
     $('replay').disabled = busy || !take;
     $('compare').disabled = busy || !take;
     $('speakWord').disabled = busy;
@@ -252,6 +254,23 @@
       if(id===videoId && token===generation) { restoring=false; mode='idle'; controls(); status(error.message || '本地存储不可用，仍可录音并下载。'); }
     }
   }
+  $('playAll').onclick=guarded(async()=>{
+    video();const token=++generation,id=videoId;
+    mode='playlist';controls();status('正在准备配音连播…');
+    const stored=await storage.listTakes(id);
+    if(token!==generation || id!==videoId)return;
+    const queue=EchoPractice.recordingQueue(stored);
+    if(!queue.length){finish();status('还没有可连播的录音，请先录制一两句。');return;}
+    videoHistory=stored;closeWord();
+    await EchoPractice.playQueue({queue,active:()=>token===generation && id===videoId,
+      play:async(value,i,total)=>{
+        mode='playlist';setTake(value);renderHistory();
+        status(`配音连播 · ${i+1} / ${total} · ${value.label || '手动片段'}`);
+        await replay(token,true);
+      }
+    });
+    if(token===generation){finish();status(`已播完 ${queue.length} 段配音。`);}
+  });
   $('historyScope').onchange=renderHistory;
   $('deleteTake').onclick=guarded(async()=>{
     if(!take || mode!=='idle') return;

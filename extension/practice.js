@@ -29,6 +29,19 @@
       if (!advance()) return;
     }
   }
-  const api = {splitCaption,nudge,runLoop,runPractice};
+  function recordingQueue(takes) {
+    const latest=new Map();
+    for(const take of takes) {
+      if(!Number.isFinite(take.start) || !Number.isFinite(take.end) || take.end<=take.start)continue;
+      const key=take.cueKey || `manual:${take.start}:${take.end}`;
+      const previous=latest.get(key);
+      if(!previous || take.createdAt>previous.createdAt || (take.createdAt===previous.createdAt && take.id.localeCompare(previous.id)>0))latest.set(key,take);
+    }
+    return [...latest.values()].sort((a,b)=>a.start-b.start || a.end-b.end || a.id.localeCompare(b.id));
+  }
+  async function playQueue({queue,active,play}) {
+    for(let i=0;i<queue.length && active();i++)await play(queue[i],i,queue.length);
+  }
+  const api = {splitCaption,nudge,runLoop,runPractice,recordingQueue,playQueue};
   if (typeof module !== 'undefined') module.exports = api; else root.EchoPractice = api;
 })(globalThis);
