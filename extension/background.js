@@ -5,8 +5,13 @@ chrome.action.onClicked.addListener(async (tab) => {
 });
 
 importScripts('dictionary.js');
+importScripts('karaoke-relay.js');
 const dictionaryCache = new Map();
 chrome.runtime.onMessage.addListener((message, sender, reply) => {
+  if (message.type === 'echo-karaoke') {
+    EchoKaraokeRelay.request(message,sender).then(reply,error=>reply({error:error.message}));
+    return true;
+  }
   if (message.type !== 'echo-dictionary') return;
   if (!sender.tab?.url?.startsWith('https://www.youtube.com/')) { reply({error:'不支持的页面。'}); return; }
   const word = EchoDictionary.normalize(message.word);

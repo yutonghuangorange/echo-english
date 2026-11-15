@@ -50,3 +50,23 @@ test('continuous dub playback stops without starting the next segment',async()=>
   await playQueue({queue:['first','second'],active:()=>active,play:async value=>{played.push(value);active=false;}});
   assert.deepEqual(played,['first']);
 });
+
+test('playback watchdog allows whole songs and slower playback without a fixed two-minute cutoff',()=>{
+  const {playbackTimeout}=require('../extension/practice.js');
+  assert.equal(playbackTimeout({start:0,end:180,speed:1}),195000);
+  assert.equal(playbackTimeout({start:30,end:330,speed:0.75}),415000);
+});
+
+test('caption frames handle upcoming lines, exact boundaries, gaps, seeks and the end of subtitles',()=>{
+  const {captionFrame}=require('../extension/practice.js');
+  const cues=[{start:2,end:4},{start:4,end:6},{start:9,end:10}];
+  assert.deepEqual(captionFrame(cues,0),{index:0,phase:'upcoming'});
+  assert.deepEqual(captionFrame(cues,2),{index:0,phase:'active'});
+  assert.deepEqual(captionFrame(cues,4),{index:1,phase:'active'});
+  assert.deepEqual(captionFrame(cues,7),{index:2,phase:'upcoming'});
+  assert.deepEqual(captionFrame(cues,9.5),{index:2,phase:'active'});
+  assert.deepEqual(captionFrame(cues,10),{index:2,phase:'ended'});
+  assert.deepEqual(captionFrame(cues,3),{index:0,phase:'active'});
+  assert.deepEqual(captionFrame([],3),{index:-1,phase:'empty'});
+  assert.deepEqual(captionFrame(cues,NaN),{index:-1,phase:'empty'});
+});

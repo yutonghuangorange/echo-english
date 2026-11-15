@@ -6,6 +6,16 @@
     const english = String(text || '').replace(/\p{Script=Han}[^A-Za-z]*/gu, chunk => { chinese.push(chunk.trim()); return ' '; }).replace(/\s+/g,' ').trim();
     return { english, chinese:chinese.join(' '), original:String(text || '') };
   }
+  // Captions follow media time independently of the selected recording range.
+  function captionFrame(cues, time) {
+    if(!cues.length || !Number.isFinite(time))return {index:-1,phase:'empty'};
+    let low=0,high=cues.length;
+    while(low<high){const mid=(low+high)>>>1;if(cues[mid].start<=time)low=mid+1;else high=mid;}
+    const previous=low-1;
+    if(previous>=0 && time<cues[previous].end)return {index:previous,phase:'active'};
+    if(low<cues.length)return {index:low,phase:'upcoming'};
+    return {index:cues.length-1,phase:'ended'};
+  }
   function nudge(start, end, edge, delta, duration) {
     if (![start,end,delta,duration].every(Number.isFinite) || start < 0 || end <= start || end > duration) throw Error('请先设置有效片段，再微调边界。');
     if (edge === 'start') start = Math.max(0, Math.min(end - .1, start + delta));
@@ -29,6 +39,7 @@
       if (!advance()) return;
     }
   }
+  function playbackTimeout(range) {return Math.ceil((range.end-range.start)/range.speed*1000)+15000;}
   function recordingQueue(takes) {
     const latest=new Map();
     for(const take of takes) {
@@ -42,6 +53,6 @@
   async function playQueue({queue,active,play}) {
     for(let i=0;i<queue.length && active();i++)await play(queue[i],i,queue.length);
   }
-  const api = {splitCaption,nudge,runLoop,runPractice,recordingQueue,playQueue};
+  const api = {splitCaption,captionFrame,nudge,runLoop,runPractice,recordingQueue,playQueue,playbackTimeout};
   if (typeof module !== 'undefined') module.exports = api; else root.EchoPractice = api;
 })(globalThis);

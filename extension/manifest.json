@@ -19,6 +19,7 @@
         "transcript.js",
         "dictionary.js",
         "audio-analysis.js",
+        "karaoke.js",
         "practice.js",
         "storage.js",
         "content.js"
@@ -27,6 +28,7 @@
     }
   ],
   "host_permissions": [
-    "https://api.dictionaryapi.dev/*"
+    "https://api.dictionaryapi.dev/*",
+    "http://127.0.0.1:8765/*"
   ]
 }

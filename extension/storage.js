@@ -5,10 +5,14 @@
   }
   function createStorage(factory = root.indexedDB, name = 'echo-dubbing-v1') {
     const ready = new Promise((resolve,reject) => {
-      const request = factory.open(name,2);
+      const request = factory.open(name,3);
       request.onupgradeneeded = () => {
         const db = request.result, tx = request.transaction;
         if (!db.objectStoreNames.contains('sessions')) db.createObjectStore('sessions',{keyPath:'videoId'});
+        if (!db.objectStoreNames.contains('backings')) {
+          const backings=db.createObjectStore('backings',{keyPath:'key'});
+          backings.createIndex('videoId','videoId');
+        }
         const recordings = db.objectStoreNames.contains('recordings') ? tx.objectStore('recordings') : db.createObjectStore('recordings',{keyPath:'id'});
         if (!recordings.indexNames.contains('videoId')) recordings.createIndex('videoId','videoId');
         if (!recordings.indexNames.contains('segment')) recordings.createIndex('segment',['videoId','cueKey']);
@@ -42,6 +46,11 @@
       ready,
       saveSession(value) { return transaction(['sessions'],'readwrite',tx=>tx.objectStore('sessions').put(value)); },
       getSession(videoId) { return transaction(['sessions'],'readonly',(tx,set)=>{tx.objectStore('sessions').get(videoId).onsuccess=e=>set(e.target.result);}); },
+      listBackings(videoId) { return transaction(['backings'],'readonly',(tx,set)=>{tx.objectStore('backings').index('videoId').getAll(videoId).onsuccess=e=>set(e.target.result.sort((a,b)=>b.createdAt-a.createdAt));}); },
+      saveBacking(value) { return transaction(['backings'],'readwrite',tx=>{
+        const store=tx.objectStore('backings');store.put(value);
+        store.getAll().onsuccess=e=>{for(const old of e.target.result.sort((a,b)=>b.createdAt-a.createdAt).slice(8))store.delete(old.key);};
+      }); },
       listTakes(videoId) { return transaction(['recordings'],'readonly',(tx,set)=>{tx.objectStore('recordings').index('videoId').getAll(videoId).onsuccess=e=>set(e.target.result.sort((a,b)=>b.createdAt-a.createdAt || b.id.localeCompare(a.id)));}); },
       saveTake(value) {
         return transaction(['recordings'],'readwrite',(tx,set)=>{

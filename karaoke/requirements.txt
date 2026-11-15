@@ -1,0 +1,6 @@
+# Install the matching CPU-only torch/torchaudio wheels first (see README).
+torch==2.5.1
+torchaudio==2.5.1
+numpy<2
+demucs==4.0.1
+yt-dlp[default]>=2025.11.12

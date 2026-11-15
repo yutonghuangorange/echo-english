@@ -49,3 +49,15 @@ test('stable sentence keys survive boundary changes and distinguish manual range
   assert.equal(cueKey({...cue,start:1.2,key}),key);
   assert.notEqual(cueKey(null,1,3),cueKey(null,2,3));
 });
+
+test('accompaniment audio survives database reopen and keeps a bounded cache independently of recordings',async()=>{
+  const factory=new IDBFactory(),first=createStorage(factory);
+  await first.saveTake(take('1'));
+  for(let i=0;i<9;i++)await first.saveBacking({key:`video:${i}`,videoId:'video',start:i,end:i+1,createdAt:i,blob:new Blob([`backing-${i}`])});
+  (await first.ready).close();
+  const reopened=createStorage(factory),values=await reopened.listBackings('video');
+  assert.equal(values.length,8);assert.equal(values[0].key,'video:8');
+  assert.equal(await values[0].blob.text(),'backing-8');assert(!values.some(v=>v.key==='video:0'));
+  assert.equal((await reopened.listTakes('video')).length,1);
+  (await reopened.ready).close();
+});

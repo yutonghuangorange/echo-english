@@ -9,6 +9,7 @@
 # Dependencies, editor files and generated artifacts
 node_modules/
 .venv/
+.cache/
 __pycache__/
 .DS_Store
 *.log
