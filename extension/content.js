@@ -37,7 +37,7 @@
           <div id="karaokeNotice" role="alert" style="padding:10px 12px;border:1px solid #d8aa69;border-radius:10px;color:#ffe0ac;font-size:13px;overflow-wrap:anywhere" hidden></div>
           <p class="hint" id="karaokeInfo" role="status"></p>
           <progress id="karaokeProgress" max="100" aria-label="去原唱阶段进度" style="width:100%;accent-color:#b3eedb" hidden></progress>
-          <div id="songResult" hidden><small id="songInfo"></small><div class="row"><button id="songAgain" title="重录会保留上一版">重新录唱</button><a id="songDownload">↓ 下载演唱</a></div></div>
+          <div id="songResult" hidden><small id="songInfo"></small><div class="row"><a id="songDownload">↓ 下载演唱</a></div></div>
         </div>
         <div class="cue-card"><div class="cue-nav"><span class="eyebrow" id="cueHeading">当前台词</span><span><button id="prev" aria-label="上一句">‹</button><span aria-label="当前练习句">练习 <span id="position">手动片段</span></span><button id="next" aria-label="下一句">›</button></span></div>
           <div id="captionPrevious" class="caption-context" aria-label="上一句" hidden></div><div id="captionPhase" class="caption-phase"></div>
@@ -106,6 +106,7 @@
         <div class="history-actions"><button id="deleteTake" disabled>删除所选版本</button><button id="undoDelete" hidden>撤销删除</button></div>
         <details class="fold" id="recordingDetails"><summary>所选录音详情</summary><div class="fold-content">
           <div id="analysis" hidden><canvas id="waveform" width="660" height="180" role="img" aria-label="录音音量波形，橙色表示低音量停顿"></canvas><div id="analysisText" class="analysis-text" role="status"></div><small>波形显示音量和停顿，不代表发音准确度。</small></div>
+          <button id="reuseSongRange" hidden>使用此版范围练唱</button>
           <div class="row"><a id="download">↓ 下载所选录音</a></div>
           <small>每个练习片段保留最近 3 次，演唱与配音分别保存。连播使用各片段最新版本。</small>
         </div></details>
@@ -195,7 +196,7 @@
   }
   function updateBackingControls() {
     if(!isSinging()){
-      for(const id of ['previewBacking','recordSong','prepareBacking','songReplay','songAgain','songOriginal'])$(id).disabled=true;
+      for(const id of ['previewBacking','recordSong','prepareBacking','songReplay','songOriginal'])$(id).disabled=true;
       return;
     }
     const busy=mode!=='idle', whole=$('karaokeScope').value!=='clip';
@@ -211,9 +212,10 @@
     $('karaokeNotice').hidden=!karaokeIssue;
     $('karaokeNotice').textContent=karaokeIssue;
     $('prepareBacking').textContent=mode==='separating'?'正在生成伴奏…':ready?'伴奏已就绪':whole?'生成整首伴奏':'生成片段伴奏';
-    $('recordSong').textContent=whole?'● 开始整首录唱':'● 开始片段录唱';
+    const recorded=target && videoHistory.some(t=>t.kind==='song' && Math.abs(t.start-target.start)<0.01 && Math.abs(t.end-target.end)<0.01 && t.speed===target.speed);
+    $('recordSong').textContent=recorded?'● 再录一次':whole?'● 开始整首录唱':'● 开始片段录唱';
+    $('recordSong').title='使用当前范围和速度录唱，保留之前的版本。';
     $('songReplay').disabled=busy || !songTake;
-    $('songAgain').disabled=busy || !songTake || !backingFor(songTake);
     if(busy)return;
     if(restoringBacking)$('karaokeInfo').textContent='正在查找已生成的伴奏…';
     else if(error)$('karaokeInfo').textContent=error;
@@ -263,6 +265,7 @@
     $('replay').disabled = busy || !take;
     $('compare').disabled = busy || !take;
     $('speakWord').disabled = busy;
+    $('reuseSongRange').disabled=busy;
     $('deleteTake').disabled = busy || !take; $('undoDelete').disabled = busy;
     root.querySelectorAll('.version-choice').forEach(b=>b.disabled=busy && mode!=='replay');
     root.querySelectorAll('.history-row').forEach(b=>b.disabled=busy && mode!=='replay');
@@ -341,6 +344,7 @@
     $('recordingEmpty').hidden = !!take || !!videoHistory.length; $('recordingContent').hidden = !take;
     $('historyInfo').textContent = take ? `${take.label || '手动片段'} · ${take.start.toFixed(1)}–${take.end.toFixed(1)} 秒 · ${take.speed}×${take.withBacking ? ' · 含伴奏' : ''}` : '';
     $('recordingText').textContent=take ? recordingText(take) : '';
+    $('reuseSongRange').hidden=take?.kind!=='song';
     if (take) { $('download').href = take.url; $('download').download = `echo-${videoId}-${take.start.toFixed(1)}.webm`; }
     controls();
     analysisRequest++;
@@ -547,12 +551,14 @@
     $('useBacking').checked=true;
     return record({range:r,song:true});
   });
+  $('reuseSongRange').onclick=()=>{
+    if(mode!=='idle' || take?.kind!=='song')return;
+    const value=take;activity='sing';renderActivity();
+    $('start').value=value.start;$('end').value=value.end;$('speed').value=String(value.speed);
+    $('karaokeScope').value='clip';updateSummaries();controls();saveProgress();showPage('practice');
+    status('已使用此版的范围和速度，点击主按钮录唱。');void checkKaraokeService();void restoreServerBacking();
+  };
   $('songReplay').onclick=guarded(()=>isSinging() && songTake && playRecording(songTake));
-  $('songAgain').onclick=guarded(()=>{
-    if(mode!=='idle' || !isSinging() || !songTake)return;
-    $('useBacking').checked=true;
-    return record({range:{start:songTake.start,end:songTake.end,speed:songTake.speed},song:true});
-  });
   $('prepareBacking').onclick=guarded(async()=>{
     if(mode!=='idle' || !isSinging())return;
     // Explicit generation takes priority over the optional cache lookup.

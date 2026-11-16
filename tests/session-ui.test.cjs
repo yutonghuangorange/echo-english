@@ -343,7 +343,12 @@ test('whole-song recording uses the full duration and offers replay, retry and d
   assert.match(takes[0].cueKey,/^song:/);
   assert.equal(takes[0].kind,'song');assert.equal(takes[0].start,0);assert.equal(takes[0].end,180);
   assert.equal(nodes.get('end').value,1);assert.equal(nodes.get('songResult').hidden,false);
-  assert.equal(nodes.get('songAgain').disabled,false);assert.match(nodes.get('songDownload').href,/^blob:/);
+  assert.equal(nodes.get('recordSong').textContent,'● 再录一次');assert.match(nodes.get('songDownload').href,/^blob:/);
+  nodes.get('karaokeScope').value='clip';nodes.get('karaokeScope').onchange();
+  assert.equal(nodes.get('recordSong').textContent,'● 开始片段录唱');
+  assert.equal(nodes.get('reuseSongRange').hidden,false);nodes.get('reuseSongRange').onclick();
+  assert.equal(nodes.get('start').value,0);assert.equal(nodes.get('end').value,180);
+  assert.equal(nodes.get('recordSong').textContent,'● 再录一次');
   assert.equal(takes[0].withBacking,true);assert.equal(await takes[0].blob.text(),'mixed-audio');
   assert(events.includes('dispose'));assert(events.includes('mic-stop'));assert.equal(video.muted,false);
   assert.match(nodes.get('historyInfo').textContent,/含伴奏/);
