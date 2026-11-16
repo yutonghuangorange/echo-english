@@ -22,16 +22,16 @@
     .caption-stage{position:relative}.caption-context{font-size:14px;line-height:1.5;color:#c3d4df;opacity:.42;min-height:22px;max-height:44px;overflow:hidden;display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical;transition:opacity .2s}.caption[data-phase="upcoming"]{color:#c4d9df}.caption[data-phase="ended"]{opacity:.65}.caption-phase{font-size:11px;color:#8fbdae;min-height:17px;margin-top:5px}
     @media(prefers-reduced-motion:reduce){.caption-context{transition:none}}
   </style><div class="panel">
-    <header><div><div class="tag">A LITTLE BETTER, EVERY DAY</div><h1>Echo<small>英语配音练习</small></h1></div><button class="close" id="close" aria-label="关闭">×</button></header>
+    <header><div><div class="tag">A LITTLE BETTER, EVERY DAY</div><h1>Echo<small>配音与唱歌练习</small></h1></div><button class="close" id="close" aria-label="关闭">×</button></header>
     <nav class="tabs" role="tablist" aria-label="练习面板"><button id="tab-practice" role="tab" aria-selected="true" aria-controls="page-practice" tabindex="0">练习</button><button id="tab-transcript" role="tab" aria-selected="false" aria-controls="page-transcript" tabindex="-1">台词</button><button id="tab-recordings" role="tab" aria-selected="false" aria-controls="page-recordings" tabindex="-1">录音</button></nav>
     <div class="pages">
       <section id="page-practice" role="tabpanel" aria-labelledby="tab-practice">
-        <select id="activityMode" aria-label="练习模式"><option value="speech" selected>配音练习</option><option value="sing">唱歌 · 保留伴奏</option></select>
+        <select id="activityMode" aria-label="练习模式"><option value="speech" selected>说对白 · 配音跟读</option><option value="sing">唱歌曲 · 保留伴奏</option></select>
         <div class="cue-card"><div class="cue-nav"><span class="eyebrow">YOUR NEXT LINE</span><span><button id="prev" aria-label="上一句">‹</button><span aria-label="当前练习句">练习 <span id="position">手动片段</span></span><button id="next" aria-label="下一句">›</button></span></div>
           <div id="captionPrevious" class="caption-context" aria-label="上一句" hidden></div><div id="captionPhase" class="caption-phase"></div>
           <div class="caption-stage"><div class="caption" id="caption">从一句台词开始，听见自己的进步。</div></div><div id="translation" hidden></div>
           <div id="captionNext" class="caption-context" aria-label="下一句预告" hidden></div>
-          <div class="caption-options"><label class="check"><input type="checkbox" id="followCaptions" checked>字幕跟随视频</label><label class="check"><input type="checkbox" id="showChinese">中文参考</label><label class="check"><input type="checkbox" id="hideText">脱稿练习</label></div>
+          <div class="caption-options"><label class="check"><input type="checkbox" id="followCaptions" checked>字幕跟随视频</label><label class="check" id="referenceToggle" hidden><input type="checkbox" id="showChinese">显示参考</label><label class="check"><input type="checkbox" id="hideText">脱稿练习</label></div>
           <details id="rawDetails" class="fold" hidden><summary>完整原文</summary><div id="rawCaption"></div></details>
         </div>
         <div class="row"><button class="primary" id="read">读取台词</button><button id="import">导入字幕</button><button id="openTranscript">选台词 →</button><input id="file" type="file" accept=".srt,.vtt" hidden></div>
@@ -50,7 +50,11 @@
           <progress id="karaokeProgress" max="100" aria-label="去原唱阶段进度" style="width:100%;accent-color:#b3eedb" hidden></progress>
           <div id="songResult" hidden><small id="songInfo"></small><div class="row"><button id="songReplay">回听演唱</button><button id="songAgain" title="需先生成伴奏，重录会保留上一版">重新录唱</button><a id="songDownload">下载演唱</a></div></div>
         </div></details>
-        <details class="fold" id="practiceSettings"><summary>练习设置<span id="speedSummary">1× · 循环 3 次</span></summary><div class="fold-content">
+        <details class="fold" id="practiceSettings"><summary>语言与练习设置<span id="speedSummary">1× · 循环 3 次</span></summary><div class="fold-content">
+          <div class="row"><label class="hint" for="contentLanguage">内容语言</label><select id="contentLanguage" aria-label="内容语言"><option value="auto" selected>自动建议</option><option value="en">英语</option><option value="zh">中文</option><option value="ja">日语</option><option value="ko">韩语</option><option value="und">其他 / 不确定</option></select></div>
+          <div class="hint" id="languageInfo">保留完整原文；有台词后可自动建议语言。</div>
+          <div class="row"><label class="hint" for="captionLayout">台词格式</label><select id="captionLayout" aria-label="台词格式"><option value="original" selected>完整原文（默认）</option><option value="en-zh">英中混排分开显示</option></select></div>
+          <div class="hint">英中拆分仅用于英语内容。中文歌词、日语及韩语均保留原文。读音提示与自动翻译暂未提供。</div>
           <div class="row"><label class="hint" for="speed">播放速度</label><select id="speed" aria-label="练习速度"><option value="0.75">0.75× 慢速</option><option value="1" selected>1× 原速</option><option value="1.25">1.25×</option></select></div>
           <div class="row"><label class="hint" for="loopCount">循环次数</label><select id="loopCount" aria-label="循环次数"><option value="3">3 次</option><option value="5">5 次</option><option value="0">持续循环</option></select></div>
           <div class="row"><label class="hint" for="prepSeconds">跟读准备</label><select id="prepSeconds" aria-label="跟读准备时间"><option value="2">2 秒</option><option value="3" selected>3 秒</option><option value="5">5 秒</option></select></div>
@@ -66,7 +70,7 @@
         <h2 class="page-title">找到想说的那一句</h2><div class="page-subtitle">读取视频文字记录，选择台词后回到练习。</div>
         <div class="row"><button class="primary" id="transcriptRead">读取台词</button><button id="transcriptImport">导入字幕</button></div>
         <div class="hint">自动展开文字记录；也可导入 SRT / VTT。</div><div id="transcriptEmpty" class="empty" style="margin-top:18px">还没有台词。点击上方按钮读取。</div><div class="list" id="list"></div>
-        <details class="fold"><summary>寻找更多视频</summary><div class="fold-content"><div class="row"><input id="query" placeholder="TED / Friends / 日常对话" aria-label="视频搜索"><button id="search">搜索</button></div><div class="hint">在 YouTube 打开搜索结果，优先选择有英文字幕的短视频。</div></div></details>
+        <details class="fold"><summary>寻找更多视频</summary><div class="fold-content"><div class="row"><input id="query" placeholder="对白 / 动漫 / 歌曲 / 歌词" aria-label="视频搜索"><button id="search">搜索</button></div><div class="hint">在 YouTube 打开搜索结果，优先选择有目标语言字幕或歌词的视频。</div></div></details>
       </section>
       <section id="page-recordings" role="tabpanel" aria-labelledby="tab-recordings" hidden>
         <div class="recording-heading"><h2 class="page-title">我的配音</h2><small id="historyCount">0 句</small></div>
@@ -200,7 +204,7 @@
   function status(text) { $('status').textContent = text; }
   function controls() {
     const busy = mode !== 'idle';
-    for (const id of ['activityMode','read','import','transcriptRead','transcriptImport','prepareBacking','karaokeScope','useBacking','backingVolume','prev','next','markStart','markEnd','original','speed','start','end','record','startEarlier','startLater','endEarlier','endLater','loop','loopCount','autoPractice','prepSeconds','autoNext']) $(id).disabled = busy;
+    for (const id of ['contentLanguage','captionLayout','activityMode','read','import','transcriptRead','transcriptImport','prepareBacking','karaokeScope','useBacking','backingVolume','prev','next','markStart','markEnd','original','speed','start','end','record','startEarlier','startLater','endEarlier','endLater','loop','loopCount','autoPractice','prepSeconds','autoNext']) $(id).disabled = busy;
     for(const id of ['karaokeScope','useBacking','backingVolume'])$(id).disabled=busy || !isSinging();
     updateBackingControls();
     $('stop').disabled = !busy; $('stop').hidden = !busy;
@@ -298,14 +302,14 @@
     if (restoring || !videoId) return;
     const start = Number($('start').value), end = Number($('end').value);
     if (!Number.isFinite(start) || !Number.isFinite(end) || start < 0 || end <= start) return;
-    const session = {videoId,cues:cues.map(c=>({...c})),index,start,end,speed:$('speed').value,showChinese:$('showChinese').checked,hideText:$('hideText').checked,followCaptions:$('followCaptions').checked,karaokeScope:$('karaokeScope').value,selectedTakeId:take?.id,updatedAt:Date.now()};
+    const session = {contentLanguage:$('contentLanguage').value,captionLayout:$('captionLayout').value,videoId,cues:cues.map(c=>({...c})),index,start,end,speed:$('speed').value,showChinese:$('showChinese').checked,hideText:$('hideText').checked,followCaptions:$('followCaptions').checked,karaokeScope:$('karaokeScope').value,selectedTakeId:take?.id,updatedAt:Date.now()};
     void storage.saveSession(session).catch(()=>{
       if (!progressWarning && session.videoId === videoId) { progressWarning=true; status('练习位置未能保存，请检查本地存储空间。录音仍可下载。'); }
     });
   }
   function recordingText(value) {
     const cue=cues.find(c=>c.key===value.cueKey);
-    return cue ? EchoPractice.splitCaption(cue.text).english || cue.text : value.label || '手动片段';
+    return cue ? captionText(cue) : value.label || '手动片段';
   }
   function recordingTime(value) {return `${Math.floor(value/60)}:${String(Math.floor(value%60)).padStart(2,'0')}`;}
   async function playRecording(value) {
@@ -373,6 +377,11 @@
       if(id!==videoId || token!==generation) return;
       savedBackings=backings;videoHistory=values;setSongTake(values.find(t=>t.kind==='song')); mode='idle';
       if(session) {
+        $('contentLanguage').value=EchoLanguages.validLanguage(session.contentLanguage)?session.contentLanguage:'auto';
+        // Older sessions intentionally used English/Chinese splitting. Keep
+        // that preference only when their text is confidently English.
+        const sample=(session.cues || []).slice(0,32).map(c=>c.text).join(' ');
+        $('captionLayout').value=['original','en-zh'].includes(session.captionLayout)?session.captionLayout:EchoLanguages.detect(sample)==='en'?'en-zh':'original';
         $('speed').value=['0.75','1','1.25'].includes(session.speed)?session.speed:'1';
         $('karaokeScope').value=session.karaokeScope==='clip'?'clip':'whole';
         $('showChinese').checked=!!session.showChinese; $('hideText').checked=!!session.hideText; $('followCaptions').checked=session.followCaptions!==false;
@@ -648,7 +657,7 @@
   }
   function closeWord() { wordRequest++; selectedWord = null; $('wordcard').hidden = true; window.speechSynthesis?.cancel(); }
   async function lookupWord(word) {
-    if (mode !== 'idle') return;
+    if (mode !== 'idle' || contentLanguage()!=='en') return;
     selectedWord = EchoDictionary.normalize(word);
     if (!selectedWord) return;
     const request = ++wordRequest;
@@ -680,7 +689,27 @@
     utterance.onerror = () => { if (selectedWord === utterance.text) $('phonetic').textContent = '朗读失败，请检查浏览器语音设置。'; };
     window.speechSynthesis.speak(utterance);
   };
-  function captionText(cue) {return cue ? EchoPractice.splitCaption(cue.text).english || cue.text : '';}
+  function contentLanguage() {
+    const sample=cues.slice(0,32).map(c=>c.sourceText ?? c.text).join(' ');
+    return EchoLanguages.resolve($('contentLanguage').value,sample);
+  }
+  function captionView(cue){return EchoLanguages.view(cue,contentLanguage(),$('captionLayout').value);}
+  function captionText(cue){return cue ? captionView(cue).primary : '';}
+  function updateLanguageInfo(){
+    const language=contentLanguage();
+    $('languageInfo').textContent=`${$('contentLanguage').value==='auto'?'文本建议（可手动更正）':'已选择'}：${EchoLanguages.languages[language]} · ${language==='en'?'支持英文点词查释义':'保留原文；该语言查词暂未接入'}`;
+  }
+  function renderCueList(){
+    $('list').replaceChildren();
+    cues.forEach((cue,i)=>{const button=document.createElement('button');button.className='cue';button.textContent=`${Math.floor(cue.start/60)}:${String(Math.floor(cue.start%60)).padStart(2,'0')}  ${captionText(cue)}`;button.onclick=()=>select(i);button.disabled=mode!=='idle';$('list').append(button);});
+    root.querySelectorAll('.cue').forEach((b,n)=>b.classList.toggle('active',n===index));
+  }
+  function languageChanged(){
+    updateLanguageInfo();updateCaption();renderCueList();renderHistory();
+    if(take)$('recordingText').textContent=recordingText(take);
+    saveProgress();
+  }
+  $('contentLanguage').onchange=languageChanged;$('captionLayout').onchange=languageChanged;
   function attachCaptionVideo(v) {
     if(v===captionVideo || typeof v?.addEventListener!=='function')return;
     detachCaptionVideo();captionVideo=v;
@@ -712,9 +741,9 @@
     if(hidden)$('caption').textContent='••• 听节奏，试着说出来';
     else {
       const raw=cue?.text || (isSinging()?'读取台词或导入字幕后，录唱时会自动翻句。':'标记片段后，点击开始配音。');
-      const text=cue ? EchoPractice.splitCaption(raw).english || '这句没有可分离的英文，请展开原文确认。' : raw;
+      const text=cue ? captionView(cue).primary : raw;
       for(const part of text.split(/([A-Za-z]+(?:['’‘-][A-Za-z]+)*)/)){
-        if(EchoDictionary.normalize(part)){
+        if(contentLanguage()==='en' && EchoDictionary.normalize(part)){
           const button=document.createElement('button');button.className='word';button.textContent=part;
           button.title='查看发音和释义';button.onclick=()=>void lookupWord(part);button.disabled=mode!=='idle';$('caption').append(button);
         }else $('caption').append(document.createTextNode(part));
@@ -725,10 +754,11 @@
     $('captionNext').textContent=hidden?'':captionText(cues[shownIndex+1]);
     $('captionPrevious').hidden=hidden || !cue;$('captionNext').hidden=hidden || !cue;
     $('captionPhase').textContent=hidden?'':phase==='upcoming'?'即将开始':phase==='active'?`当前台词 · ${shownIndex+1} / ${cues.length}`:phase==='ended'?'台词已结束':'';
-    const parts=EchoPractice.splitCaption(cue?.text || '');
-    $('translation').textContent=parts.chinese;
-    $('translation').hidden=hidden || !$('showChinese').checked || !parts.chinese;
-    $('rawDetails').hidden=hidden || !parts.chinese;$('rawCaption').textContent=hidden?'':parts.original;
+    const parts=captionView(cue);
+    $('translation').textContent=parts.reference;
+    $('referenceToggle').hidden=!parts.reference;
+    $('translation').hidden=hidden || !$('showChinese').checked || !parts.reference;
+    $('rawDetails').hidden=hidden || !parts.separated;$('rawCaption').textContent=hidden?'':parts.original;
     if(motion){
       if(outgoing){
         outgoing.removeAttribute('id');outgoing.setAttribute('aria-hidden','true');outgoing.inert=true;
@@ -744,7 +774,7 @@
     }
   }
   function updateCaption() {
-    captionSignature='';renderCaption(index);
+    updateLanguageInfo();captionSignature='';renderCaption(index);
     $('practiceSetup').hidden=cues.length>0;updateSummaries();
     $('position').textContent=index>=0 ? `${index+1} / ${cues.length}` : '手动片段';
     syncCaptions();
@@ -761,7 +791,7 @@
   function displayCues(next, preferredIndex = 0) {
     cues = next.map(c=>({...c,key:EchoStorage.cueKey(c)})); index = -1; $('list').replaceChildren();
     $('transcriptEmpty').hidden = next.length > 0;
-    cues.forEach((cue, i) => { const b = document.createElement('button'); b.className = 'cue'; b.textContent = `${Math.floor(cue.start / 60)}:${String(Math.floor(cue.start % 60)).padStart(2, '0')}  ${EchoPractice.splitCaption(cue.text).english || '查看原文'}`; b.onclick = () => select(i); $('list').append(b); });
+    renderCueList();
     if (cues.length && preferredIndex >= 0) select(Math.min(preferredIndex,cues.length-1)); else {updateCaption();chooseCurrentTake();saveProgress();}
   }
   function rememberBounds() {
@@ -837,11 +867,11 @@
       if (token === generation) { mode = 'idle'; controls(); }
     }
   });
-  $('search').onclick = () => { window.open(`https://www.youtube.com/results?search_query=${encodeURIComponent($('query').value || 'english conversation subtitles')}`, '_blank', 'noopener'); };
+  $('search').onclick = () => { window.open(`https://www.youtube.com/results?search_query=${encodeURIComponent($('query').value || ({'zh':'中文 歌词','ja':'日本語 字幕 歌詞','ko':'한국어 자막 가사','en':'english conversation subtitles'}[contentLanguage()] || 'subtitles lyrics'))}`, '_blank', 'noopener'); };
   chrome.runtime.onMessage.addListener(message => { if (message.type === 'echo-toggle') { const open = host.style.display === 'none'; host.style.display = open ? 'block' : 'none'; if (!open) stop(); } });
   document.addEventListener('yt-navigate-finish', () => {
     const id = currentId(); if (id === videoId) return;
-    stop();detachCaptionVideo();backingRestoreRequest++;restoringBacking=false;activity='speech';renderActivity();savedBackings=[];$('karaokeScope').value='whole';setSongTake(null);$('useBacking').checked=false;$('karaokeInfo').textContent='已切换视频，请为新片段生成伴奏。'; restoring=true; videoId=id; historyRequest++;videoHistory=[];deletedTake=null;$('undoDelete').hidden=true;setTake(null);displayCues([]); $('start').value = 0; $('end').value = 5; updateSummaries();
+    stop();detachCaptionVideo();backingRestoreRequest++;restoringBacking=false;activity='speech';$('contentLanguage').value='auto';$('captionLayout').value='original';renderActivity();savedBackings=[];$('karaokeScope').value='whole';setSongTake(null);$('useBacking').checked=false;$('karaokeInfo').textContent='已切换视频，请为新片段生成伴奏。'; restoring=true; videoId=id; historyRequest++;videoHistory=[];deletedTake=null;$('undoDelete').hidden=true;setTake(null);displayCues([]); $('start').value = 0; $('end').value = 5; updateSummaries();
     status('已切换视频，请重新选择台词或片段。'); if (id) void loadVideo(id); else restoring=false;
   });
   window.addEventListener('pagehide',()=>{saveProgress();stop();detachCaptionVideo();if(songUrl)URL.revokeObjectURL(songUrl);});

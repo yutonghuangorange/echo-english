@@ -13,7 +13,7 @@ async function mount(storage, overrides = {}) {
     constructor(){this.children=[];this.hidden=false;this.value='';this.style={};this.attrs={};this.classList={toggle:()=>{}};created.push(this);}
     set innerHTML(html){this.html=html;for(const match of html.matchAll(/\bid="([^"]+)"/g))nodes.set(match[1],new Element());
       nodes.get('followCaptions').checked=true;
-      for(const [id,value] of Object.entries({start:'0',end:'5',speed:'1',loopCount:'3',prepSeconds:'3',backingVolume:'0.65',karaokeScope:'whole',activityMode:'speech'}))nodes.get(id).value=value;}
+      for(const [id,value] of Object.entries({start:'0',end:'5',speed:'1',loopCount:'3',prepSeconds:'3',backingVolume:'0.65',karaokeScope:'whole',activityMode:'speech',contentLanguage:'auto',captionLayout:'original'}))nodes.get(id).value=value;}
     get innerHTML(){return this.html;}
     setAttribute(k,v){this.attrs[k]=v;} getAttribute(k){return this.attrs[k];} removeAttribute(k){delete this.attrs[k];if(k==='value')this.value=0;}
     append(...children){this.children.push(...children);} replaceChildren(...children){this.children=children;}
@@ -25,7 +25,7 @@ async function mount(storage, overrides = {}) {
   const doc={getElementById:()=>null,documentElement:new Element(),createElement:()=>new Element(),createTextNode:text=>({textContent:text}),addEventListener(){},querySelector:selector=>selector==='video.html5-main-video'?(overrides.video || {duration:60}):null};
   const context={document:doc,location:{href:'https://www.youtube.com/watch?v=video',pathname:'/watch'},indexedDB:{},URL,Blob,console,setTimeout,clearTimeout,cancelAnimationFrame(){},requestAnimationFrame(){},crypto:globalThis.crypto,
     window:{addEventListener(){},speechSynthesis:{cancel(){}}},chrome:{runtime:{onMessage:{addListener(){}}}},
-    EchoKaraoke:require('../extension/karaoke.js'),EchoStorage:{...require('../extension/storage.js'),createStorage:()=>storage},EchoPractice:require('../extension/practice.js'),EchoDictionary:require('../extension/dictionary.js'),EchoSubtitles:require('../extension/subtitles.js'),EchoAudioAnalysis:require('../extension/audio-analysis.js')};
+    EchoLanguages:require('../extension/languages.js'),EchoKaraoke:require('../extension/karaoke.js'),EchoStorage:{...require('../extension/storage.js'),createStorage:()=>storage},EchoPractice:require('../extension/practice.js'),EchoDictionary:require('../extension/dictionary.js'),EchoSubtitles:require('../extension/subtitles.js'),EchoAudioAnalysis:require('../extension/audio-analysis.js')};
   Object.assign(context,overrides.globals || {});
   if(context.chrome.runtime.sendMessage){
     const send=context.chrome.runtime.sendMessage;
@@ -357,5 +357,31 @@ test('older server-cached accompaniment is recovered without starting separation
   for(let i=0;i<20 && nodes.get('recordSong').disabled;i++)await new Promise(r=>setTimeout(r,2));
   assert.deepEqual(calls,['audio']);assert.equal(nodes.get('recordSong').disabled,false);
   assert.equal((await storage.listBackings('video')).length,1);
+  (await storage.ready).close();
+});
+
+for(const [language,text,nextText] of [['zh','明月几时有，我想与你一起唱','不知天上宫阙'],['ja','東京で君の名前を呼ぶよ','明日も会いたい'],['ko','오늘 밤 너와 함께 노래해','우리 다시 만나요']]){
+  test(`multilingual ${language} lyrics survive restoration, singing mode and caption following`,async()=>{
+    const storage=createStorage(new IDBFactory());const listeners=new Map();let time=0;
+    const cues=[{start:0,end:2,text},{start:2,end:4,text:nextText}];
+    await storage.saveSession({videoId:'video',index:0,start:0,end:2,speed:'1',contentLanguage:language,captionLayout:'original',cues});
+    const video={duration:4,paused:true,get currentTime(){return time;},addEventListener(name,fn){listeners.set(name,fn);},removeEventListener(name){listeners.delete(name);}};
+    const {nodes}=await mount(storage,{video});
+    const shown=()=>nodes.get('caption').children.map(n=>n.textContent).join('');
+    assert.equal(shown(),text);assert.equal(nodes.get('captionNext').textContent,nextText);
+    assert.match(nodes.get('list').children[0].textContent,new RegExp(text));
+    assert.equal(nodes.get('referenceToggle').hidden,true);assert.equal(nodes.get('translation').hidden,true);
+    nodes.get('activityMode').value='sing';nodes.get('activityMode').onchange();assert.equal(shown(),text);
+    time=2.5;video.paused=false;listeners.get('timeupdate')({type:'timeupdate'});assert.equal(shown(),nextText);
+    nodes.get('contentLanguage').value='auto';nodes.get('contentLanguage').onchange();
+    const saved=await storage.getSession('video');assert.equal(saved.contentLanguage,'auto');assert.equal(saved.captionLayout,'original');
+    (await storage.ready).close();
+  });
+}
+test('old Chinese sessions keep complete lyrics rather than enabling legacy English splitting',async()=>{
+  const storage=createStorage(new IDBFactory());const text='月亮代表我的心';
+  await storage.saveSession({videoId:'video',index:0,start:0,end:2,speed:'1',showChinese:true,cues:[{start:0,end:2,text}]});
+  const {nodes}=await mount(storage);assert.equal(nodes.get('captionLayout').value,'original');
+  assert.equal(nodes.get('caption').children.map(n=>n.textContent).join(''),text);
   (await storage.ready).close();
 });
