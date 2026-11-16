@@ -98,8 +98,8 @@
           <label class="hint">录唱监听音量 · <output id="backingVolumeValue" for="backingVolume">100%</output><input id="backingVolume" type="range" min="0" max="2" step="0.05" value="1" aria-label="录唱监听音量"></label><div class="hint">用于试听和录唱时的耳机伴奏；回听音量在底部单独调整。</div>
           <details class="fold" id="karaokeHelp"><summary>首次使用：如何启用伴奏？</summary><div class="fold-content hint">
             <p>只需安装一个 Echo 扩展。生成伴奏还需要这台电脑上的 Python、FFmpeg 和分离模型；普通配音、录音与回放无需这些组件。</p>
-            <p>① 在项目目录运行 <code>bash start-karaoke.sh</code>，自动安装依赖并启动服务；以后也用此命令启动。<br>② 保持终端开启，回到这里点击“重新检测”，再生成伴奏。首次下载模型及分离歌曲可能需要几分钟。</p>
-            <p>Linux 已验证；macOS 脚本尚待实机验证，缺少系统组件时需已有 Homebrew。暂不支持 Windows，也未提供扩展自动启动助手。</p>
+            <p>① macOS / Linux：在项目目录运行 <code>bash start-karaoke.sh</code>。Windows：按下方说明准备组件，再运行 <code>powershell -NoProfile -ExecutionPolicy Bypass -File .\\start-karaoke.ps1</code>。以后使用同一命令启动。<br>② 保持终端开启，回到这里点击“重新检测”，再生成伴奏。首次下载模型及分离歌曲可能需要几分钟。</p>
+            <p>Linux 已验证；macOS / Windows 已提供适配，尚待实机验证。macOS 缺少组件时需已有 Homebrew；Windows 需先准备 Python 3.10–3.12、FFmpeg 和 Node.js 22+ 或 Deno。</p>
             <a href="https://github.com/zexiangliu/echo-english/blob/master/karaoke/README.md" target="_blank" rel="noopener noreferrer">查看伴奏服务安装说明 ↗</a>
             <p>建议戴耳机录唱。分离结果可能残留原唱。</p>
           </div></details>

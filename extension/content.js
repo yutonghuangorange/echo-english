@@ -653,7 +653,7 @@
     try{
       result=await Promise.race([
         chrome.runtime.sendMessage({type:'echo-karaoke',action,...data}),
-        new Promise((_,reject)=>{timeout=setTimeout(()=>reject(Error('伴奏服务响应超时。请在项目根目录运行 bash start-karaoke.sh；若已启动，请重新加载扩展并刷新 YouTube 页面。')),action==='audio'?35000:12000);})
+        new Promise((_,reject)=>{timeout=setTimeout(()=>reject(Error('伴奏服务响应超时。请在项目根目录运行 bash start-karaoke.sh（Windows 使用 start-karaoke.ps1）；若已启动，请重新加载扩展并刷新 YouTube 页面。')),action==='audio'?35000:12000);})
       ]);
     }finally{clearTimeout(timeout);}
     if(!result || result.error)throw Error(result?.error || '伴奏服务未响应，请重新加载扩展后重试。');
@@ -762,11 +762,11 @@
     let r;
     try{r=selectedRange();}catch(error){karaokeIssue=error.message;controls();status(error.message);return;}
     if(serviceState==='online' && serviceMaxSeconds<r.end-r.start){
-      karaokeIssue='当前运行的是旧版伴奏服务。请在服务终端按 Ctrl+C，再运行 ./start-karaoke.sh，最后点击“重新检测”。';
+      karaokeIssue='当前运行的是旧版伴奏服务。请在服务终端按 Ctrl+C，再运行 ./start-karaoke.sh（Windows 使用 start-karaoke.ps1），最后点击“重新检测”。';
       $('karaokeHelp').open=true;controls();status('请重启旧版伴奏服务。');return;
     }
     if(serviceState==='offline'){
-      karaokeIssue='伴奏尚未开始生成：本机服务未连接。请在项目根目录运行 bash start-karaoke.sh（首次自动安装），保持终端开启，再点击“重新检测”。';
+      karaokeIssue='伴奏尚未开始生成：本机服务未连接。请在项目根目录运行 bash start-karaoke.sh（Windows 使用 start-karaoke.ps1，详见伴奏安装说明），保持终端开启，再点击“重新检测”。';
       $('karaokeHelp').open=true;controls();status(karaokeIssue);
       $('karaokeNotice').scrollIntoView?.({block:'nearest'});return;
     }

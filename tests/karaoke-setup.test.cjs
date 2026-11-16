@@ -5,8 +5,7 @@ const os=require('node:os');
 const path=require('node:path');
 const {spawnSync}=require('node:child_process');
 
-test('setup installs into an isolated environment, forwards arguments and reuses completed dependencies',()=>{
-  if(process.platform!=='linux' || process.arch!=='x64')return;
+test('setup installs into an isolated environment, forwards arguments and reuses completed dependencies', {skip:process.platform!=='linux' || process.arch!=='x64'},()=>{
   const dir=fs.mkdtempSync(path.join(os.tmpdir(),'echo-setup-'));
   try{
     fs.mkdirSync(path.join(dir,'karaoke'));fs.mkdirSync(path.join(dir,'bin'));
@@ -35,5 +34,18 @@ fi
     fs.rmSync(path.join(dir,'.venv/.echo-requirements'));fs.writeFileSync(log+'.missing-pip','');
     const repaired=run();assert.equal(repaired.status,0,repaired.stderr);
     assert.match(repaired.stdout,/修复未完成安装的 pip/);assert.equal(fs.existsSync(log+'.missing-pip'),false);
+    // Simulate both Homebrew layouts with keg-only Python absent from PATH.
+    const brew=path.join(dir,'Homebrew with spaces');
+    fs.mkdirSync(path.join(brew,'opt/python@3.12/bin'),{recursive:true});
+    fs.renameSync(path.join(dir,'bin/python3.12'),path.join(brew,'opt/python@3.12/bin/python3.12'));
+    fs.writeFileSync(path.join(dir,'bin/brew'),`#!/bin/bash\nprintf '%s\\n' '${brew}'\n`,{mode:0o755});
+    for(const arch of ['arm64','x86_64']){
+      fs.writeFileSync(path.join(dir,'bin/uname'),`#!/bin/bash\nif [[ "$1" == -s ]]; then echo Darwin;else echo ${arch};fi\n`,{mode:0o755});
+      fs.rmSync(path.join(dir,'.venv/.echo-requirements'));
+      fs.writeFileSync(log,'');
+      const mac=run();assert.equal(mac.status,0,mac.stderr);
+      const macInstall=fs.readFileSync(log,'utf8');
+      assert.match(macInstall,/install -r/);assert.doesNotMatch(macInstall,/download.pytorch.org/);
+    }
   }finally{fs.rmSync(dir,{recursive:true,force:true});}
 });

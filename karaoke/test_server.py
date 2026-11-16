@@ -2,6 +2,7 @@ import http.client
 import errno
 import io
 import json
+import subprocess
 from pathlib import Path
 import sys
 import tempfile
@@ -9,10 +10,10 @@ import threading
 import time
 import unittest
 from contextlib import redirect_stderr
-from unittest.mock import patch
+from unittest.mock import patch, Mock
 from http.server import ThreadingHTTPServer
 
-from server import Jobs, Cancelled, handler, validate_clip, separation_progress, ACTIVE_STATES, main
+from server import Jobs, Cancelled, handler, validate_clip, separation_progress, ACTIVE_STATES, main, process_options, stop_process
 
 CLIP = {"videoId": "jNQXAC9IVRw", "start": 0, "end": 5}
 
@@ -141,6 +142,42 @@ class Tests(unittest.TestCase):
         time.sleep(0.05)
         jobs.cancel(job["id"])
         self.assertEqual(wait_job(jobs, job["id"])["state"], "cancelled")
+
+    def test_windows_process_group_and_tree_termination(self):
+        process = Mock(pid=4321)
+        process.poll.return_value = None
+        with patch("server.sys.platform", "win32"), \
+                patch("server.subprocess.CREATE_NEW_PROCESS_GROUP", 512, create=True), \
+                patch("server.subprocess.run") as run:
+            self.assertEqual(process_options(), {"creationflags": 512})
+            stop_process(process)
+        run.assert_called_once_with(["taskkill", "/PID", "4321", "/T", "/F"],
+                                    stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL, timeout=10, check=False)
+        process.wait.assert_called_once_with(timeout=5)
+
+    def test_exited_process_needs_no_termination(self):
+        process = Mock()
+        process.poll.return_value = 0
+        with patch("server.subprocess.run") as run:
+            stop_process(process)
+        run.assert_not_called()
+
+    def test_shutdown_waits_for_worker_cleanup(self):
+        started = threading.Event()
+        cleaned = threading.Event()
+        def separate(job):
+            started.set()
+            try:
+                Jobs.command(job, [sys.executable, "-c", "import time;time.sleep(30)"], 40, "failed")
+            finally:
+                cleaned.set()
+        jobs = Jobs(self.temp.name, separate)
+        job = jobs.start(CLIP)
+        self.assertTrue(started.wait(2))
+        jobs.close()
+        self.assertTrue(cleaned.is_set())
+        self.assertFalse(jobs.worker.is_alive())
+        self.assertEqual(jobs.get(job["id"])["state"], "cancelled")
 
     def test_http_lifecycle_and_rejection_of_website_requests(self):
         def separate(job):

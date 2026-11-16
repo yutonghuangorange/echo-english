@@ -8,7 +8,7 @@ case "$system/$(uname -m)" in
   Linux/x86_64) node_platform=linux-x64 ;;
   Darwin/arm64) node_platform=darwin-arm64 ;;
   Darwin/x86_64) node_platform=darwin-x64 ;;
-  *) echo '此脚本支持 Linux x86_64、macOS Intel / Apple 芯片；暂不支持 Windows。' >&2; exit 1 ;;
+  *) echo '此脚本支持 Linux x86_64、macOS Intel / Apple 芯片；Windows 请使用 start-karaoke.ps1。' >&2; exit 1 ;;
 esac
 if [[ "${1:-}" == '--help' ]]; then
   echo '用法：bash start-karaoke.sh [服务参数]'
@@ -17,6 +17,12 @@ if [[ "${1:-}" == '--help' ]]; then
 fi
 echo 'Echo 伴奏服务：首次安装需要联网和约 1–2 GB 磁盘空间，模型在首次生成时下载。'
 echo 'Linux 已验证；macOS 安装路径尚待实机验证。Ctrl+C 可停止，稍后重新运行可继续。'
+if [[ "$system" == Darwin ]]; then
+  export PATH="/opt/homebrew/bin:/usr/local/bin:$PATH"
+  if command -v brew >/dev/null 2>&1; then
+    export PATH="$(brew --prefix)/opt/python@3.12/libexec/bin:$(brew --prefix)/opt/python@3.12/bin:$PATH"
+  fi
+fi
 
 find_python() {
   local candidate
@@ -47,6 +53,9 @@ fi
 if ! find_python; then echo '未找到 Python 3.10–3.12；请安装兼容版本后重试。' >&2;exit 1;fi
 
 if [[ ! -x "$project_dir/.venv/bin/python" ]]; then
+  if [[ -e "$project_dir/.venv/pyvenv.cfg" ]]; then
+    echo '现有 .venv 不适用于本机。请重命名该目录后重试；不要跨系统复制 Python 环境。' >&2;exit 1
+  fi
   echo '创建项目独立 Python 环境…'
   if ! "$python_bin" -m venv "$project_dir/.venv"; then
     # Ubuntu may have Python but no ensurepip; system pip can bootstrap the venv.
@@ -93,7 +102,7 @@ PY
 fi
 # The marker includes exact requirements; interrupted installs never count as ready.
 marker="$project_dir/.venv/.echo-requirements"
-if ! cmp -s "$project_dir/karaoke/requirements.txt" "$marker" || ! "$venv_python" -c 'import torch, torchaudio, demucs, yt_dlp' >/dev/null 2>&1; then
+if ! cmp -s "$project_dir/karaoke/requirements.txt" "$marker" || ! "$venv_python" -c 'import torch, torchaudio, soundfile, demucs, yt_dlp' >/dev/null 2>&1; then
   echo '安装伴奏依赖，下载较大，请稍候…'
   if ! "$venv_python" -m pip --version >/dev/null 2>&1; then
     echo '修复未完成安装的 pip 环境…'

@@ -22,6 +22,33 @@ MAX_SECONDS = 600
 ACTIVE_STATES = ("queued", "downloading", "converting", "separating", "encoding")
 
 
+def process_options():
+    # Each worker owns its descendants (yt-dlp may launch FFmpeg).
+    if sys.platform == "win32":
+        return {"creationflags": subprocess.CREATE_NEW_PROCESS_GROUP}
+    return {"start_new_session": True}
+
+
+def stop_process(proc):
+    if proc.poll() is not None:
+        return
+    if sys.platform == "win32":
+        # terminate()/kill() alone leave FFmpeg children running on Windows.
+        subprocess.run(["taskkill", "/PID", str(proc.pid), "/T", "/F"],
+                       stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL, timeout=10, check=False)
+        proc.wait(timeout=5)
+        return
+    try:
+        os.killpg(proc.pid, signal.SIGTERM)
+        try:
+            proc.wait(timeout=3)
+        except subprocess.TimeoutExpired:
+            os.killpg(proc.pid, signal.SIGKILL)
+            proc.wait()
+    except ProcessLookupError:
+        proc.wait()
+
+
 def separation_progress(log):
     # Match seconds-based Demucs bars, not the model download's byte-based bars.
     matches = list(re.finditer(r"(\d{1,3})%\|[^\r\n]*\|\s*[\d.]+/[\d.]+\s+\[[^\]<]*<([^,\]]+)", log))
@@ -59,6 +86,7 @@ class Jobs:
         self.cache.mkdir(parents=True, exist_ok=True)
         self.lock = threading.RLock()
         self.jobs = {}
+        self.worker = None
         self.runner = runner or self.separate
         self.restore()
 
@@ -120,8 +148,18 @@ class Jobs:
             job = dict(clip, id=job_id, key=key, state="queued", error=None, started=time.monotonic(), finished=None, createdAt=time.time(),
                        directory=directory, audio=directory / "accompaniment.mp3", cancel=threading.Event())
             self.jobs[job_id] = job
-            threading.Thread(target=self.run, args=(job,), daemon=True).start()
+            self.worker = threading.Thread(target=self.run, args=(job,))
+            self.worker.start()
             return self.public(job)
+
+    def close(self):
+        with self.lock:
+            for job in self.jobs.values():
+                job["cancel"].set()
+            worker = self.worker
+        # Let command() reap the process tree before the interpreter exits.
+        if worker is not None:
+            worker.join()
 
     @staticmethod
     def public(job):
@@ -179,7 +217,7 @@ class Jobs:
         env = dict(os.environ, OMP_NUM_THREADS="2", MKL_NUM_THREADS="2",
                    TORCH_HOME=str(Path(__file__).resolve().parent.parent / ".cache" / "torch"))
         with (job["directory"] / "worker.log").open("ab") as log:
-            proc = subprocess.Popen(args, stdout=log, stderr=log, env=env, start_new_session=True)
+            proc = subprocess.Popen(args, stdout=log, stderr=log, env=env, **process_options())
             deadline = time.monotonic() + timeout
             try:
                 while proc.poll() is None:
@@ -190,13 +228,7 @@ class Jobs:
                 if proc.returncode:
                     raise RuntimeError(failure + " 详细原因见本机 worker.log。")
             finally:
-                if proc.poll() is None:
-                    os.killpg(proc.pid, signal.SIGTERM)
-                    try:
-                        proc.wait(timeout=3)
-                    except subprocess.TimeoutExpired:
-                        os.killpg(proc.pid, signal.SIGKILL)
-                        proc.wait()
+                stop_process(proc)
 
     def separate(self, job):
         for package in ("yt_dlp", "demucs", "torch", "torchaudio"):
@@ -319,7 +351,7 @@ def main():
     except OSError as error:
         if error.errno != errno.EADDRINUSE:
             raise
-        print(f"端口 {PORT} 已被占用。若旧版伴奏服务仍在运行，请先在旧终端按 Ctrl+C，再运行 ./start-karaoke.sh。", file=sys.stderr)
+        print(f"端口 {PORT} 已被占用。请在旧终端按 Ctrl+C，再运行 ./start-karaoke.sh（Windows：start-karaoke.ps1）。", file=sys.stderr)
         return 1
     print(f"Echo 伴奏服务已启动：http://127.0.0.1:{PORT}（Ctrl+C 停止）", flush=True)
     try:
@@ -327,9 +359,8 @@ def main():
     except KeyboardInterrupt:
         pass
     finally:
-        for job in list(jobs.jobs.values()):
-            jobs.cancel(job["id"])
         server.server_close()
+        jobs.close()
 
 
 if __name__ == "__main__":
