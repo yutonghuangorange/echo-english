@@ -34,6 +34,8 @@ async function mount(storage, overrides = {}) {
     const api=context[name];
     context[name]={...api,create:options=>api.create({...options,env:context})};
   }
+  const karaoke=context.EchoKaraoke;
+  context.EchoKaraoke={...karaoke,followRecording:options=>karaoke.followRecording(options,context)};
   if(context.chrome.runtime.sendMessage){
     const send=context.chrome.runtime.sendMessage;
     context.chrome.runtime.sendMessage=message=>message.action==='health'?Promise.resolve(overrides.health ? overrides.health() : {service:'echo-karaoke',version:1,maxSeconds:600}):message.action==='cached'?Promise.resolve(overrides.cachedBackings || {backings:[]}):send(message);
@@ -231,6 +233,52 @@ test('song replay starts at audio opening and shows progress from the audio cloc
   assert.equal(sound.currentTime,1);assert.equal(video.currentTime,1);
   sound.onended();await replaying;assert.equal(nodes.get('transport').hidden,true);
   assert.equal(slider.disabled,true);assert.equal(slider.oninput,null);(await storage.ready).close();
+});
+
+test('dry singing replay adds backing, seeks both tracks, toggles vocals only and cleans up on stop',async()=>{
+  const storage=createStorage(new IDBFactory()),frames=new Map(),listeners=new Map();
+  let next=0,sound,position=0,disposed=0,pauses=0;
+  await storage.saveTake({id:'vocal',videoId:'video',cueKey:'song:manual',kind:'song',capture:'vocal',vocalOffset:0.2,start:0,end:10,speed:1,createdAt:1,blob:new Blob(['voice'])});
+  await storage.saveBacking({key:'music',videoId:'video',start:0,end:60,createdAt:1,blob:new Blob(['backing'])});
+  const video={duration:60,currentTime:0,muted:false,playbackRate:1,pause(){},async play(){listeners.get('playing')?.();},
+    addEventListener:(name,fn)=>listeners.set(name,fn),removeEventListener:name=>listeners.delete(name)};
+  class Audio{
+    constructor(){sound=this;this.currentTime=0;this.duration=10.2;this.paused=true;}
+    async play(){this.paused=false;}pause(){this.paused=true;}
+  }
+  const monitor={position:()=>position,async sync(value){position=value;},pause(){pauses++;},dispose(){disposed++;},setVolume(){}};
+  const {nodes}=await mount(storage,{video,globals:{Audio,
+    EchoKaraoke:{...require('../extension/karaoke.js'),async createMonitor(){return monitor;}},
+    requestAnimationFrame(fn){frames.set(++next,fn);return next;},cancelAnimationFrame:id=>frames.delete(id)}});
+  nodes.get('activityMode').value='sing';nodes.get('activityMode').onchange();
+  const replaying=nodes.get('songReplay').onclick();
+  for(let i=0;i<30 && !nodes.get('transportProgress').oninput;i++)await Promise.resolve();
+  assert.equal(nodes.get('replayMusicOption').hidden,false);assert.equal(nodes.get('replayWithBacking').disabled,false);
+  sound.currentTime=1.2;const [frame,tick]=frames.entries().next().value;frames.delete(frame);tick();await Promise.resolve();
+  assert.equal(position,1);
+  nodes.get('transportProgress').value='0.5';await nodes.get('transportProgress').oninput();
+  assert(Math.abs(position-4.9)<0.001);assert(Math.abs(video.currentTime-4.9)<0.001);
+  listeners.get('waiting')();assert.equal(sound.paused,true);assert(pauses>0);
+  listeners.get('playing')();await Promise.resolve();await Promise.resolve();assert.equal(sound.paused,false);
+  nodes.get('replayWithBacking').checked=false;nodes.get('replayWithBacking').onchange();
+  const paused=pauses;assert(paused>0);
+  nodes.get('replayWithBacking').checked=true;nodes.get('replayWithBacking').onchange();await Promise.resolve();
+  nodes.get('stop').onclick();await replaying;
+  assert.equal(disposed,1);assert.equal(nodes.get('replayMusicOption').hidden,true);assert.equal(frames.size,0);
+  (await storage.ready).close();
+});
+
+test('missing backing does not block dry singing replay and explains the fallback',async()=>{
+  const storage=createStorage(new IDBFactory());let sound;
+  await storage.saveTake({id:'vocal',videoId:'video',cueKey:'song:manual',kind:'song',capture:'vocal',start:0,end:5,speed:1,createdAt:1,blob:new Blob(['voice'])});
+  const video={duration:60,currentTime:0,muted:false,playbackRate:1,pause(){},async play(){},addEventListener(){},removeEventListener(){}};
+  class Audio{constructor(){sound=this;this.currentTime=0;}async play(){}pause(){}}
+  const {nodes}=await mount(storage,{video,globals:{Audio}});
+  nodes.get('activityMode').value='sing';nodes.get('activityMode').onchange();
+  const replaying=nodes.get('songReplay').onclick();
+  for(let i=0;i<20 && !nodes.get('transportProgress').oninput;i++)await Promise.resolve();
+  assert.equal(nodes.get('replayWithBacking').disabled,true);assert.match(nodes.get('status').textContent,/未找到对应伴奏/);
+  sound.onended();await replaying;(await storage.ready).close();
 });
 
 test('dry vocal downloads can be mixed per take or assembled as a full song without starting recording',async()=>{

@@ -11,7 +11,7 @@
 | `extension/transport.js` | 底部进度滑块、时间显示、跳转事件及其动画帧清理；通过回调读取媒体时钟 |
 | `extension/playback.js` | 当前媒体操作的终点检测、超时、可取消等待；替换任务时清理旧调度 |
 | `extension/practice.js` | 循环、自动跟读、录音连播顺序、字幕跟随等流程和纯函数 |
-| `extension/karaoke.js` | 伴奏覆盖范围、服务状态格式化、耳机监听与 Web Audio 音量 |
+| `extension/karaoke.js` | 伴奏覆盖范围、服务状态格式化、耳机监听、演唱回放伴奏同步与 Web Audio 音量 |
 | `extension/audio-export.js` | 分段取舍、时间轴对齐、人声与伴奏混合、WAV 导出 |
 | `extension/storage.js` | IndexedDB 迁移、练习会话、录音版本与伴奏缓存 |
 | `extension/subtitles.js`、`transcript.js` | 字幕文件解析、YouTube 文字记录读取 |
@@ -33,6 +33,7 @@
 - 唱歌麦克风请求关闭 `echoCancellation`、`noiseSuppression`、`autoGainControl`；普通配音保留回声消除及其他默认设置。此策略取决于唱歌模式，不取决于是否启用伴奏。
 - 唱歌只录麦克风，伴奏仅监听。唱歌先启动录音器再启动伴奏，普通配音保留原有启动顺序；修改这里需覆盖开头、缓冲、停止和导航场景。
 - `saveRecording()` 始终保存到开始录制时的视频，只有该视频仍打开时才更新界面。切换视频统一走 `resetVideo()`。
+- 独立人声演唱回放通过 `EchoKaraoke.followRecording()` 将伴奏绑定到录音时钟，扣除 `vocalOffset` 后定位，不修改人声播放位置。同步器负责伴奏漂移校正、缓冲、开关和清理；旧版混合录音不进入此流程。
 - 下载混合与分段合成在本机浏览器执行。旧版混合录音不能当作独立人声再次叠加伴奏。
 
 ## 验证

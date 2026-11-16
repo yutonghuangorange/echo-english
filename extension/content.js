@@ -22,6 +22,9 @@
   let savedBackings = [], activeKaraokeJob = null, recordMonitor = null, songTake = null, songUrl = null;
   let backingRestoreRequest=0, restoringBacking=false, karaokeIssue='';
   let backingOutput=null;
+  let replayMonitor=null;
+  $('replayWithBacking').checked=true;
+  $('replayWithBacking').onchange=()=>replayMonitor?.setEnabled($('replayWithBacking').checked);
   let serviceState='unknown',serviceCheck=null,serviceMaxSeconds=null;
   let wordRequest = 0, selectedWord = null, analysisRequest = 0;
   let videoId = currentId();
@@ -127,7 +130,7 @@
     $('songInfo').textContent=value ? `最近演唱 · ${Math.round((value.end-value.start)/value.speed)} 秒 · 已保留，可回听或重录` : '';
     $('songDownload').href=songUrl || '';
     $('songDownload').textContent=value?.withBacking?'↓ 旧版混合录音':'↓ 仅人声';
-    $('songReplay').textContent=value?.withBacking?'▷ 回听演唱':'▷ 回听人声';
+    $('songReplay').textContent='▷ 回听演唱';
     $('songMixDownload').hidden=!value || value.capture!=='vocal' || !!value.withBacking;
     $('songDownload').download=value ? `echo-song-${videoId}-${value.createdAt}.webm` : '';
     updateBackingControls();
@@ -153,7 +156,7 @@
     for(const id of ['captionSetup','linePractice','practiceSettings','clipSettings'])$(id).hidden=recording;
     for (const id of ['contentLanguage','captionLayout','activityMode','read','import','transcriptRead','transcriptImport','prepareBacking','karaokeScope','useBacking','backingVolume','prev','next','markStart','markEnd','original','speed','start','end','record','startEarlier','startLater','endEarlier','endLater','loop','loopCount','autoPractice','prepSeconds','autoNext']) $(id).disabled = busy;
     for(const id of ['karaokeScope','useBacking'])$(id).disabled=busy || !isSinging();
-    $('backingVolume').disabled=!isSinging() || !['idle','backing','recording'].includes(mode);
+    $('backingVolume').disabled=!isSinging() || !['idle','backing','recording','replay'].includes(mode);
     $('backingVolumeValue').textContent=`${Math.round(Number($('backingVolume').value)*100)}%`;
     $('prev').disabled=busy || index<=0;
     $('next').disabled=busy || index<0 || index>=cues.length-1;
@@ -185,6 +188,8 @@
   }
   function cancelPlayback() {
     transport.hide();
+    $('replayMusicOption').hidden=true;
+    replayMonitor?.dispose();replayMonitor=null;
     playback.cancel();
     if (audio) { audio.pause(); audio.src = ''; audio = null; }
     recordMonitor?.pause();
@@ -435,7 +440,7 @@
   $('backingVolume').oninput=()=>{
     const volume=Number($('backingVolume').value);
     $('backingVolumeValue').textContent=`${Math.round(volume*100)}%`;
-    backingOutput?.setVolume(volume);recordMonitor?.setVolume?.(volume);
+    backingOutput?.setVolume(volume);recordMonitor?.setVolume?.(volume);replayMonitor?.setVolume(volume);
   };
   $('backingVolume').onchange=saveProgress;
   $('karaokeScope').onchange=()=>{karaokeIssue='';controls();saveProgress();if(!restoringBacking)void restoreServerBacking();};
@@ -726,46 +731,77 @@
     if (token !== generation) return;
     audio = new Audio(t.url);
     const a = audio;
+    let accompaniment=null;
+    const drySong=t.kind==='song' && t.capture==='vocal' && !t.withBacking;
+    const vocalOffset=t.capture==='vocal'?(t.vocalOffset || 0):0;
+    const videoPosition=()=>Math.min(t.end,t.start+Math.max(0,(a.currentTime || 0)-vocalOffset)*t.speed);
     // The recording is the playback clock: never seek past its opening to catch
     // up with a video that started earlier or resumed from buffering.
     let started=false,buffering=false;
-    const onWaiting = () => {if(started){buffering=true;a.pause();}};
+    const onWaiting = () => {if(started){buffering=true;a.pause();accompaniment?.pause();}};
     const onPlaying = () => {
       if(audio!==a || !started || !buffering)return;
       buffering=false;
-      const position=Math.min(t.end,t.start+(a.currentTime || 0)*t.speed);
+      const position=videoPosition();
       if(Math.abs(v.currentTime-position)>0.15)v.currentTime=position;
-      void a.play().catch(()=>{if(audio===a){stop();status('录音无法播放，请重试或下载录音。');}});
+      void a.play().then(()=>accompaniment?.sync()).catch(()=>{if(audio===a){stop();status('录音无法播放，请重试或下载录音。');}});
     };
     v.addEventListener('waiting', onWaiting); v.addEventListener('playing', onPlaying);
     let ended=false,resolvePlayback;
     const playbackDone=new Promise(resolve=>{resolvePlayback=resolve;});
-    a.onended=()=>{ended=true;resolvePlayback();};
+    a.onended=()=>{ended=true;accompaniment?.pause();resolvePlayback();};
     try {
+      if(drySong) {
+        const required={start:t.start,end:t.capturedEnd ?? t.end};
+        const ready=savedBackings.find(b=>b.key===t.backingKey && EchoKaraoke.covers(b,videoId,required)) || backingFor(required);
+        $('replayWithBacking').disabled=!ready;
+        $('replayMusicOption').title=ready?'取消勾选可只听人声':'未找到对应伴奏，请重新生成后再回听。';
+        if(ready) {
+          try {
+            const monitor=await EchoKaraoke.createMonitor({blob:ready.blob,video:v,start:ready.start,speed:t.speed,volume:Number($('backingVolume').value)});
+            if(token!==generation){monitor.dispose();return;}
+            accompaniment=EchoKaraoke.followRecording({monitor,voice:a,take:t,enabled:$('replayWithBacking').checked,
+              onError:()=>{if(token===generation){$('replayWithBacking').disabled=true;status('伴奏无法播放，当前仅回听人声；可重新生成伴奏后再试。');}}});
+            replayMonitor=accompaniment;
+          } catch(error) {
+            if(token!==generation)return;
+            $('replayWithBacking').disabled=true;
+            status('伴奏无法加载，当前仅回听人声；可重新生成伴奏后再试。');
+          }
+        } else if($('replayWithBacking').checked)status('未找到对应伴奏，当前仅回听人声；可重新生成伴奏后再试。');
+      }
       a.preload='auto';
       await a.play();
+      if (token !== generation) return;
+      await accompaniment?.sync();
       if (token !== generation) return;
       const duration=()=>Number.isFinite(a.duration) && a.duration>0?a.duration:((t.capturedEnd ?? t.end)-t.start)/t.speed+(t.vocalOffset || 0);
       transport.show({label: '录音回放', position: () => a.currentTime, duration, seekTo: async elapsed => {
         a.currentTime=elapsed;
-        v.currentTime=Math.min(t.end,t.start+elapsed*t.speed);
+        v.currentTime=videoPosition();
+        await accompaniment?.sync();
+        if(token!==generation)return;
         playback.watchEnd(v,t.end,()=>v.pause());
         playback.timeout(resolvePlayback,Math.max(0,duration()-elapsed)*1000+15000);
         if(v.currentTime<t.end)await v.play();
       }});
+      $('replayMusicOption').hidden=!drySong;
       playback.onCancel(resolvePlayback);
       if(!ended){
         await v.play();
         if (token !== generation) return;
         started=true;
-        const position=Math.min(t.end,t.start+(a.currentTime || 0)*t.speed);
+        const position=videoPosition();
         if(!ended && Math.abs(v.currentTime-position)>0.15)v.currentTime=position;
         // A partially recorded take or delayed video must not cut off the file.
         playback.watchEnd(v, t.end, () => v.pause());
         playback.timeout(resolvePlayback, EchoPractice.playbackTimeout(t));
       }
       await playbackDone;
-    } finally { v.removeEventListener('waiting', onWaiting); v.removeEventListener('playing', onPlaying); }
+    } finally {
+      v.removeEventListener('waiting', onWaiting);v.removeEventListener('playing', onPlaying);
+      accompaniment?.dispose();if(replayMonitor===accompaniment)replayMonitor=null;
+    }
     if (token === generation) { if (keepBusy) { cancelPlayback(); restoreVideo(); mode = 'practice'; controls(); } else finish(); }
   }
   async function analyzeTake(value) {

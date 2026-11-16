@@ -50,6 +50,49 @@
         pause(){music.pause();},dispose:cleanup};
     }catch(error){cleanup();throw error;}
   }
-  const api={key,covers,progressText,blobFromBase64,createMonitor,createBackingOutput};
+  // Keep accompaniment on the recording's clock, never the video's clock.
+  // Raw vocals include microphone pre-roll; backing starts after vocalOffset.
+  function followRecording({monitor,voice,take,enabled=true,onError}, env=root) {
+    let disposed=false,playing=false,pending=false,buffering=false,frame=0,revision=0;
+    function pause() {
+      ++revision;pending=false;playing=false;monitor.pause();
+    }
+    async function sync(force=false) {
+      if(disposed)return;
+      const elapsed=(voice.currentTime || 0)-(take.vocalOffset || 0);
+      const position=take.start+elapsed*take.speed;
+      if(!enabled || voice.paused || voice.ended || buffering || elapsed<0 || position>=take.end) {
+        if(playing || pending)pause();
+        return;
+      }
+      if(!force && pending)return;
+      if(!force && playing && Math.abs(monitor.position()-position)<0.12)return;
+      const current=++revision;pending=true;playing=true;
+      try {await monitor.sync(position);}
+      catch(error) {
+        if(!disposed && current===revision){enabled=false;pause();onError(error);}
+      } finally {if(current===revision)pending=false;}
+    }
+    function tick() {
+      if(disposed)return;
+      void sync();frame=env.requestAnimationFrame(tick);
+    }
+    const waiting=()=>{buffering=true;pause();};
+    const resumed=()=>{buffering=false;void sync(true);};
+    voice.addEventListener?.('waiting',waiting);
+    voice.addEventListener?.('playing',resumed);
+    frame=env.requestAnimationFrame(tick);
+    return {
+      sync:()=>sync(true),pause,
+      setEnabled(value){enabled=!!value;if(enabled)void sync(true);else pause();},
+      setVolume:value=>monitor.setVolume(value),
+      dispose(){
+        if(disposed)return;disposed=true;env.cancelAnimationFrame(frame);pause();
+        voice.removeEventListener?.('waiting',waiting);voice.removeEventListener?.('playing',resumed);
+        monitor.dispose();
+      }
+    };
+  }
+  const api={key,covers,progressText,blobFromBase64,createMonitor,createBackingOutput,followRecording};
   if(typeof module!=='undefined')module.exports=api;else root.EchoKaraoke=api;
 })(globalThis);

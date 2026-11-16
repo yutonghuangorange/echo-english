@@ -27,7 +27,7 @@
         <select id="activityMode" aria-label="练习模式"><option value="speech" selected>说对白 · 配音跟读</option><option value="sing">唱歌曲 · 伴奏监听</option></select>
         <div id="singActions" hidden>
           <div class="row"><label class="hint" for="karaokeScope">录唱范围</label><select id="karaokeScope" aria-label="唱歌范围"><option value="whole" selected>整首歌曲</option><option value="clip">当前练习片段</option></select></div>
-          <div class="main-actions"><button id="songOriginal">▶ 听原曲</button><button id="songReplay" disabled>▷ 回听人声</button><button class="primary" id="recordSong">● 开始整首录唱</button></div>
+          <div class="main-actions"><button id="songOriginal">▶ 听原曲</button><button id="songReplay" disabled>▷ 回听演唱</button><button class="primary" id="recordSong">● 开始整首录唱</button></div>
           <div class="row"><span class="hint" id="songReadiness" role="status">先准备伴奏，再开始录唱</span><button id="openBacking">准备伴奏 →</button></div>
           <div id="karaokeNotice" role="alert" style="padding:10px 12px;border:1px solid #d8aa69;border-radius:10px;color:#ffe0ac;font-size:13px;overflow-wrap:anywhere" hidden></div>
           <p class="hint" id="karaokeInfo" role="status"></p>
@@ -116,6 +116,7 @@
     <div id="transport" hidden style="padding:8px 20px 0;flex-shrink:0;background:#111b24">
       <div style="display:flex;justify-content:space-between;font-size:11px;color:#9ab2c1"><span id="transportLabel"></span><span id="transportTime"></span></div>
       <input id="transportProgress" type="range" min="0" max="1" step="0.001" value="0" aria-label="播放进度，可点击或拖动跳转" style="display:block;width:100%;margin:6px 0;accent-color:#b3eedb" disabled>
+      <label id="replayMusicOption" class="check" style="padding-bottom:6px" hidden><input id="replayWithBacking" type="checkbox" checked>回听时播放伴奏</label>
     </div>
     <footer><div class="status" id="status" role="status">准备好了，从一句开始。</div><button id="stop" disabled hidden>■ 停止</button></footer>
     <button class="resize-handle" id="resizePanel" aria-label="调整面板大小" title="拖动左下角调整大小；双击或按 Home 恢复默认。方向键微调，Shift 加速。">⤢</button>

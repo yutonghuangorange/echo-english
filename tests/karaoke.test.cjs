@@ -108,3 +108,33 @@ test('progress labels separate stage progress from total time and avoid invented
   assert.match(progressText({state:'separating',progress:null}),/加载模型/);
   assert.match(progressText({state:'encoding',elapsedSeconds:80}),/压缩并保存/);
 });
+
+test('replay accompaniment follows dry vocals through pre-roll, seeking, buffering and mute',async()=>{
+  const {followRecording}=require('../extension/karaoke.js');
+  const frames=new Map(),listeners=new Map(),positions=[];let next=0,position=0,pauses=0,disposed=0;
+  const voice={currentTime:0,paused:false,ended:false,addEventListener:(name,fn)=>listeners.set(name,fn),removeEventListener:name=>listeners.delete(name)};
+  const monitor={position:()=>position,async sync(value){position=value;positions.push(value);},pause(){pauses++;},dispose(){disposed++;},setVolume(){}};
+  const follower=followRecording({voice,monitor,take:{start:30,end:40,speed:0.75,vocalOffset:0.25},onError:error=>{throw error;}},
+    {requestAnimationFrame(fn){frames.set(++next,fn);return next;},cancelAnimationFrame:id=>frames.delete(id)});
+  await follower.sync();assert.deepEqual(positions,[]);
+  voice.currentTime=1.25;await follower.sync();assert.equal(position,30.75);
+  voice.currentTime=0.75;await follower.sync();assert.equal(position,30.375);
+  assert.equal(voice.currentTime,0.75);
+  listeners.get('waiting')();const count=positions.length;
+  await follower.sync();assert.equal(positions.length,count);
+  listeners.get('playing')();await Promise.resolve();assert.equal(positions.length,count+1);
+  follower.setEnabled(false);voice.currentTime=3;await follower.sync();assert.equal(positions.length,count+1);
+  follower.setEnabled(true);await Promise.resolve();assert.equal(position,32.0625);
+  voice.paused=true;const tick=[...frames.values()][0];frames.clear();tick();assert(pauses>0);
+  follower.dispose();follower.dispose();tick();await follower.sync();
+  assert.equal(disposed,1);assert.equal(frames.size,0);assert.equal(listeners.size,0);
+});
+
+test('a late accompaniment failure after disposal cannot affect the next playback',async()=>{
+  const {followRecording}=require('../extension/karaoke.js');let reject,errors=0;
+  const follower=followRecording({voice:{currentTime:2,paused:false},take:{start:0,end:10,speed:1},
+    monitor:{position:()=>0,sync:()=>new Promise((_,fail)=>{reject=fail;}),pause(){},dispose(){}},onError:()=>errors++},
+    {requestAnimationFrame:()=>1,cancelAnimationFrame(){}});
+  const pending=follower.sync();follower.dispose();reject(Error('stale'));await pending;
+  assert.equal(errors,0);
+});
