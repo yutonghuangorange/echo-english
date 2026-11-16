@@ -896,7 +896,7 @@ test('practice library is separate, can resume a video, and requires confirmatio
 test('echo cancellation is remembered per activity and applied to microphone requests',async()=>{
   const storage=createStorage(new IDBFactory()),preferences=new Map(),requests=[];
   const localStorage={getItem:key=>preferences.get(key) || null,setItem:(key,value)=>preferences.set(key,value)};
-  const globals={window:{localStorage,addEventListener(){},speechSynthesis:{cancel(){}}},
+  const globals={MediaRecorder:class {static isTypeSupported(){return true;}},window:{localStorage,addEventListener(){},speechSynthesis:{cancel(){}}},
     navigator:{mediaDevices:{async getUserMedia(options){requests.push(options);throw Error('Microphone unavailable in fixture');}}}};
   const {nodes}=await mount(storage,{globals});
   const checkbox=nodes.get('echoCancellation');
@@ -923,7 +923,7 @@ test('echo cancellation is remembered per activity and applied to microphone req
 test('automatic and manual gain are independent per activity, preserve legacy echo preferences and reach recording',async()=>{
   const storage=createStorage(new IDBFactory()),preferences=new Map([['echo-microphone-v1',JSON.stringify({speech:false,sing:true})]]),requests=[];
   const localStorage={getItem:key=>preferences.get(key) || null,setItem:(key,value)=>preferences.set(key,value)};
-  const globals={window:{localStorage,addEventListener(){},speechSynthesis:{cancel(){}}},
+  const globals={MediaRecorder:class {static isTypeSupported(){return true;}},window:{localStorage,addEventListener(){},speechSynthesis:{cancel(){}}},
     navigator:{mediaDevices:{async getUserMedia(options){requests.push(options);throw Error('Fixture microphone');}}}};
   const {nodes}=await mount(storage,{globals});
   assert.equal(nodes.get('echoCancellation').checked,false);
@@ -1150,5 +1150,35 @@ test('fold preferences survive mode changes and remount without breaking setting
   const restored=await mount(storage,{globals});
   assert.equal(restored.nodes.get('practiceTools').open,true);
   assert.equal(restored.nodes.get('karaokeSettings').open,false);
+  (await storage.ready).close();
+});
+
+for(const quality of ['high','lossless'])test(`recording quality ${quality} persists, reaches the encoder and saves actual capture details`,async()=>{
+  const storage=createStorage(new IDBFactory()),video=leadInVideo(),preferences=new Map();let options;
+  const track={getSettings:()=>({sampleRate:48000,channelCount:1,echoCancellation:false,noiseSuppression:false,autoGainControl:false}),stop(){}};
+  class MediaRecorder{
+    static isTypeSupported(){return true;}
+    constructor(stream,opts){options=opts;this.state='inactive';this.mimeType=opts.mimeType;this.audioBitsPerSecond=opts.audioBitsPerSecond || 128000;}
+    start(){this.state='recording';}
+    stop(){this.state='inactive';this.ondataavailable({data:new Blob(['voice'])});queueMicrotask(()=>this.onstop());}
+  }
+  const globals={MediaRecorder,window:{localStorage:{getItem:key=>preferences.get(key) || null,setItem:(key,value)=>preferences.set(key,value)},addEventListener(){},speechSynthesis:{cancel(){}}},navigator:{mediaDevices:{async getUserMedia(){return {getTracks:()=>[track]};}}},requestAnimationFrame:fn=>setTimeout(fn,1),cancelAnimationFrame:clearTimeout};
+  const {nodes}=await mount(storage,{video,globals});
+  nodes.get('recordingQuality').value=quality;nodes.get('recordingQuality').onchange();
+  assert.equal(JSON.parse(preferences.get('echo-microphone-v1')).recordingQuality,quality);
+  await nodes.get('record').onclick();
+  assert.equal(options.mimeType,`audio/webm;codecs=${quality==='lossless'?'pcm':'opus'}`);
+  const [take]=await storage.listTakes('video');assert.equal(take.recordingInfo.microphone.sampleRate,48000);assert.equal(take.recordingInfo.quality,quality);
+  assert.match(nodes.get('recordingTechnical').textContent,/48 kHz/);
+  const restored=await mount(storage,{video,globals});assert.equal(restored.nodes.get('recordingQuality').value,quality);
+  (await storage.ready).close();
+});
+test('unsupported lossless recording stops before requesting microphone permission',async()=>{
+  const storage=createStorage(new IDBFactory());let requests=0;
+  class MediaRecorder{static isTypeSupported(type){return !type.includes('pcm');}}
+  const {nodes}=await mount(storage,{globals:{MediaRecorder,navigator:{mediaDevices:{async getUserMedia(){requests++;}}}}});
+  nodes.get('recordingQuality').value='lossless';nodes.get('recordingQuality').onchange();
+  assert.equal(nodes.get('losslessQuality').disabled,true);
+  await nodes.get('record').onclick();assert.equal(requests,0);assert.match(nodes.get('status').textContent,/不支持无损/);
   (await storage.ready).close();
 });

@@ -32,3 +32,20 @@ test('failed gain startup releases its graph and never silently records at the w
   const f=fixture(true);await assert.rejects(createInput('microphone',12,f.env),/0 dB/);
   assert.equal(f.closed,1);assert.equal(f.stopped,1);
 });
+
+test('recorder options request high bitrate Opus and require native PCM for lossless',()=>{
+  const api=require('../extension/microphone.js');
+  const Recorder={isTypeSupported:type=>['audio/webm;codecs=opus','audio/webm;codecs=pcm'].includes(type)};
+  assert.deepEqual(api.recordingOptions('high',Recorder),{mimeType:'audio/webm;codecs=opus',audioBitsPerSecond:256000});
+  assert.deepEqual(api.recordingOptions('lossless',Recorder),{mimeType:'audio/webm;codecs=pcm'});
+  assert.throws(()=>api.recordingOptions('lossless',{isTypeSupported:()=>false}),/不支持无损/);
+});
+test('recording diagnostics use actual track settings without leaking device identifiers or bogus PCM bitrate',()=>{
+  const api=require('../extension/microphone.js');
+  const microphone=api.captureSettings({getAudioTracks:()=>[{getSettings:()=>({deviceId:'private',sampleRate:48000,channelCount:1,echoCancellation:false,noiseSuppression:false,autoGainControl:true})}]});
+  assert.equal(microphone.deviceId,undefined);
+  const description=api.describeRecording({mimeType:'audio/webm;codecs=pcm',audioBitsPerSecond:128000,microphone});
+  assert.match(description,/无损 PCM/);assert.match(description,/48 kHz.*1 声道/);assert.match(description,/回声消除关.*降噪关.*自动增益开/);assert.doesNotMatch(description,/128 kbps/);
+  assert.match(api.describeRecording({mimeType:'audio/webm;codecs=opus',audioBitsPerSecond:256000}),/256 kbps/);
+  assert.match(api.describeRecording(),/旧录音/);assert.deepEqual(api.captureSettings({}),{});
+});

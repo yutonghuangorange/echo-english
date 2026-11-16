@@ -18,12 +18,14 @@
   });
   let activity = 'speech';
   let paragraphFirst=0,paragraphLast=1,assemblyChoices=[],assemblyContext=null;
+  let recordingQuality='high';
   const microphonePreferenceKey='echo-microphone-v1';
   const echoPreferences={speech:true,sing:false};
   const gainPreferences={speech:true,sing:false};
   const manualGainPreferences={speech:0,sing:0};
   try {
     const saved=JSON.parse(window.localStorage.getItem(microphonePreferenceKey));
+    if(saved?.recordingQuality==='lossless')recordingQuality='lossless';
     for(const key of ['speech','sing']){
       if(typeof saved?.[key]==='boolean')echoPreferences[key]=saved[key];
       if(typeof saved?.autoGainControl?.[key]==='boolean')gainPreferences[key]=saved.autoGainControl[key];
@@ -38,10 +40,16 @@
     return song?{echoCancellation,noiseSuppression:false,autoGainControl}:{echoCancellation,autoGainControl};
   }
   function saveMicrophonePreferences(){
-    try {window.localStorage.setItem(microphonePreferenceKey,JSON.stringify({...echoPreferences,autoGainControl:gainPreferences,manualGainDb:manualGainPreferences}));}
+    try {window.localStorage.setItem(microphonePreferenceKey,JSON.stringify({...echoPreferences,autoGainControl:gainPreferences,manualGainDb:manualGainPreferences,recordingQuality}));}
     catch {status('录音设置已调整，但无法保存；刷新后将恢复原来的设置。');}
   }
   function renderMicrophoneSettings(){
+    const losslessSupported=EchoMicrophone.supportsLossless(globalThis.MediaRecorder);
+    $('recordingQuality').value=recordingQuality;
+    // Keep a saved selection visible even on a browser without support; never
+    // silently save a compressed take that the user believes is lossless.
+    $('losslessQuality').disabled=!losslessSupported;
+    $('recordingQualityHint').textContent=recordingQuality==='lossless'?(losslessSupported?'无损 PCM 保留编码输入，文件明显更大；仍受麦克风和录音处理影响。原始下载为 WebM。':'当前浏览器不支持无损 PCM，请改选高品质压缩后录音。'):'Opus 编码目标 256 kbps，文件较小。仅对新录音生效；无损也无法修复麦克风或回声消除造成的失真。';
     $('echoCancellation').checked=echoPreferences[activity];
     $('autoGainControl').checked=gainPreferences[activity];
     $('manualGainRow').hidden=gainPreferences[activity];
@@ -49,6 +57,7 @@
     $('manualGainValue').textContent=`+${manualGainPreferences[activity]} dB`;
     updateSettingsSummaries();
   }
+  $('recordingQuality').onchange=()=>{if(mode==='idle'){recordingQuality=$('recordingQuality').value==='lossless'?'lossless':'high';saveMicrophonePreferences();}renderMicrophoneSettings();};
   for(const [id,preferences] of [['echoCancellation',echoPreferences],['autoGainControl',gainPreferences]]){
     $(id).onchange=()=>{
       if(mode==='idle'){preferences[activity]=$(id).checked;saveMicrophonePreferences();}
@@ -129,7 +138,7 @@
   $('reviewReplay').onclick = () => playRecording(take);
   $('openCaptionSetup').onclick=()=>showPage('transcript',true);
   function updateSettingsSummaries(){
-    $('speedSummary').textContent=`${$('speed').value}× · ${gainPreferences[activity]?'自动增益':`增益 +${manualGainPreferences[activity]} dB`}${echoPreferences[activity]?' · 消回声':''}`;
+    $('speedSummary').textContent=`${$('speed').value}× · ${gainPreferences[activity]?'自动增益':`增益 +${manualGainPreferences[activity]} dB`} · ${recordingQuality==='lossless'?'无损':'高品质'}`;
     const lead=$('leadInMode').value;
     $('practiceToolsState').textContent=`${lead==='seconds'?`前置 ${$('leadInSeconds').value} 秒`:lead==='previous'?'前置上一句':'前置关闭'} · ${$('loopCount').value==='0'?'持续循环':`循环 ${$('loopCount').value} 次`}`;
   }
@@ -351,7 +360,7 @@
     $('clipBounds').hidden=recording || (isSinging() && $('karaokeScope').value!=='clip');
     syncClipSelection();
     $('songReadinessRow').hidden=!isSinging() || recording;
-    for (const id of ['paragraphFirst','paragraphLast','echoCancellation','autoGainControl','manualGainDb','captionSource','refreshCaptionTracks','contentLanguage','captionLayout','activityMode','read','import','openCaptionSetup','openLanguageSettings','prepareBacking','karaokeScope','useBacking','backingVolume','prev','next','markStart','markEnd','original','speed','start','end','leadInMode','leadInSeconds','record','startEarlier','startLater','endEarlier','endLater','loop','loopCount','autoPractice','prepSeconds','autoNext']) $(id).disabled = busy;
+    for (const id of ['paragraphFirst','paragraphLast','recordingQuality','echoCancellation','autoGainControl','manualGainDb','captionSource','refreshCaptionTracks','contentLanguage','captionLayout','activityMode','read','import','openCaptionSetup','openLanguageSettings','prepareBacking','karaokeScope','useBacking','backingVolume','prev','next','markStart','markEnd','original','speed','start','end','leadInMode','leadInSeconds','record','startEarlier','startLater','endEarlier','endLater','loop','loopCount','autoPractice','prepSeconds','autoNext']) $(id).disabled = busy;
     if(isParagraph())for(const id of ['start','end','markStart','markEnd','startEarlier','startLater','endEarlier','endLater'])$(id).disabled=true;
     $('autoNext').disabled=busy || (isSinging() && $('karaokeScope').value!=='clip');
     $('loop').textContent=isSinging() && $('karaokeScope').value==='whole'?'↻ 循环听整首':'↻ 循环听选段';
@@ -486,6 +495,7 @@
     $('recordingEmpty').hidden = !!take || !!videoHistory.length; $('recordingContent').hidden = !take;
     $('historyInfo').textContent = take ? `${take.label || '手动片段'} · ${take.start.toFixed(1)}–${take.end.toFixed(1)} 秒 · ${take.speed}×${take.withBacking ? ' · 旧版混合录音' : take.capture==='vocal'?' · 独立人声':''}` : '';
     $('recordingText').textContent=take ? recordingText(take) : '';
+    $('recordingTechnical').textContent=take?EchoMicrophone.describeRecording(take.recordingInfo):'';
     $('reuseSongRange').hidden=!take;
     $('takeMixDownload').hidden=take?.kind!=='song' || take.capture!=='vocal' || !!take.withBacking;
     $('mixDownloadHint').hidden=$('takeMixDownload').hidden;
@@ -882,6 +892,8 @@
     const ready=usesBacking() ? backingFor(r) : null;
     if(usesBacking() && !ready)throw Error('请先为当前片段生成伴奏，或关闭「录唱时播放伴奏」。');
     deletedTake=null;$('undoDelete').hidden=true;
+    const recorderOptions=EchoMicrophone.recordingOptions(recordingQuality,globalThis.MediaRecorder);
+    const microphoneSettingsQuality=recordingQuality;
     mode = 'permission'; controls(); status('正在请求麦克风权限…');
     const microphoneAudio = microphoneConstraints(isSinging() || options.song);
     const mic = await navigator.mediaDevices.getUserMedia({audio: microphoneAudio, video: false});
@@ -894,8 +906,9 @@
     const monitor=ready ? await EchoKaraoke.createMonitor({blob:ready.blob,video:v,start:ready.start,speed:r.speed,volume:Number($('backingVolume').value)}) : null;
     if(token!==generation){monitor?.dispose();input.dispose();mic.getTracks().forEach(t=>t.stop());return;}
     recordMonitor=monitor;
-    const mimeType = ['audio/webm;codecs=opus', 'audio/webm'].find(t => MediaRecorder.isTypeSupported(t));
-    recorder = mimeType ? new MediaRecorder(input.stream, { mimeType }) : new MediaRecorder(input.stream);
+    recorder = new MediaRecorder(input.stream,recorderOptions);
+    if(microphoneSettingsQuality==='lossless' && !/codecs\s*=\s*["']?pcm\b/i.test(recorder.mimeType || ''))throw Error('浏览器未启用无损 PCM，已取消录音。请改选高品质压缩。');
+    const recordingInfo={quality:microphoneSettingsQuality,mimeType:recorder.mimeType || recorderOptions.mimeType || '',audioBitsPerSecond:recorder.audioBitsPerSecond || null,microphone:EchoMicrophone.captureSettings(mic),encodingInput:EchoMicrophone.captureSettings(input.stream)};
     const singingTake=options.song || isSinging();
     const recordedKey=singingTake ? `song:${options.song?EchoStorage.cueKey(null,r.start,r.end):currentCueKey()}` : currentCueKey();
     const recordedLabel=isParagraph()?`第 ${paragraphFirst+1}–${paragraphLast+1} 句 · 段落`:options.song ? (r.start===0 && Math.abs(r.end-v.duration)<0.01?'整首演唱':'片段演唱') : index>=0 ? `第 ${index+1} 句` : '手动片段';
@@ -929,7 +942,7 @@
       mic.getTracks().forEach(t => t.stop());
       const blob = new Blob(chunks, { type: currentRecorder.mimeType });
       if (!blob.size) { if (recorder === currentRecorder) { recorder = null; stream=null; if(id===videoId) {mode = 'idle'; controls();} } resolveRecording(false); return; }
-      const value = { id:crypto.randomUUID(),videoId:id,cueKey:recordedKey,label:recordedLabel,...r,blob,createdAt:Date.now(),capture:'vocal',inputGainDb:input.db,autoGainControl:microphoneAudio.autoGainControl,vocalOffset,...(capturedEnd>r.start?{capturedEnd}:{}),...(monitor?{backingKey:ready.key}:{}),...(singingTake?{kind:'song'}:{}) };
+      const value = { id:crypto.randomUUID(),videoId:id,cueKey:recordedKey,label:recordedLabel,...r,blob,createdAt:Date.now(),capture:'vocal',recordingInfo,inputGainDb:input.db,autoGainControl:microphoneAudio.autoGainControl,vocalOffset,...(capturedEnd>r.start?{capturedEnd}:{}),...(monitor?{backingKey:ready.key}:{}),...(singingTake?{kind:'song'}:{}) };
       if(recorder===currentRecorder){recorder=null;stream=null;}
       try {
         await saveRecording(value, {token, keepBusy: options.keepBusy, monitored: !!monitor});

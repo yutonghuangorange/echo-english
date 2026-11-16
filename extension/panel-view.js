@@ -105,6 +105,7 @@
         </div></details>
         <details class="fold" id="practiceSettings"><summary>速度与麦克风<span id="speedSummary">1×</span></summary><div class="fold-content">
           <div class="row"><label class="hint" for="speed">播放速度</label><select id="speed" aria-label="练习速度"><option value="0.75">0.75× 慢速</option><option value="1" selected>1× 原速</option><option value="1.25">1.25×</option></select></div>
+          <div class="row"><label class="hint" for="recordingQuality">录音音质</label><select id="recordingQuality" aria-describedby="recordingQualityHint"><option value="high">高品质压缩</option><option id="losslessQuality" value="lossless">无损 PCM</option></select></div><p class="hint" id="recordingQualityHint"></p>
           <label class="hint"><input id="echoCancellation" type="checkbox" aria-describedby="echoCancellationHint"> 录音时启用回声消除</label>
           <p class="hint" id="echoCancellationHint">外放时可尝试开启；戴耳机唱歌建议关闭，减少对人声的处理。</p>
           <label class="hint"><input id="autoGainControl" type="checkbox" aria-describedby="autoGainControlHint"> 录音时启用自动增益</label>
@@ -134,6 +135,7 @@
           <div class="version-toolbar"><div id="versionChoices" class="version-choices" role="group" aria-label="当前片段的录音版本"></div><button id="deleteTake" class="text-button danger" disabled>删除此版</button></div>
         <details class="fold" id="recordingDetails"><summary>下载与录音详情</summary><div class="fold-content">
           <div class="row"><a id="download">↓ 下载所选录音</a><button id="takeMixDownload" hidden>人声＋伴奏</button></div><p class="hint" id="mixDownloadHint">混合下载采用底部的回听音量比例，原始录音保持不变。</p>
+          <p class="hint" id="recordingTechnical" style="white-space:pre-line;overflow-wrap:anywhere"></p>
           <div id="analysis" hidden><canvas id="waveform" width="660" height="180" role="img" aria-label="录音音量波形，橙色表示低音量停顿"></canvas><div id="analysisText" class="analysis-text" role="status"></div><small>波形显示音量和停顿，不代表发音准确度。</small></div>
           <small>每个练习片段保留最近 3 次，演唱与配音分别保存。连播使用各片段最新版本。</small>
         </div></details>
