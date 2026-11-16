@@ -323,7 +323,7 @@
     updateLeadInSettings();
     const focused=root.activeElement;
     for(const id of ['openSongRecording','takeMixDownload','assembleSong'])$(id).disabled=busy;
-    const recording=mode==='recording';
+    const recording=mode==='recording' || mode==='lead-in';
     $('panel').setAttribute('aria-busy',String(['loading','reading','importing','exporting','saving','permission'].includes(mode)));
     $('practiceDock').hidden=currentPage!=='practice' || mode!=='idle';
     $('historyBrowser').hidden=!videoHistory.length;
@@ -362,7 +362,7 @@
     $('next').disabled=busy || index<0 || index>=cues.length-1;
     updateBackingControls();
     $('stop').disabled = !busy || mode==='saving'; $('stop').hidden = !busy;
-    $('stop').textContent=mode==='recording'?'■ 结束录音':mode==='saving'?'保存中…':'■ 停止';
+    $('stop').textContent=mode==='lead-in'?'■ 取消准备':mode==='recording'?'■ 结束录音':mode==='saving'?'保存中…':'■ 停止';
     $('reviewReplay').disabled = busy || !take;
     $('playAll').disabled = busy || !videoHistory.length;
     $('replay').disabled = busy || !(isSinging()?songTake:take);
@@ -902,6 +902,9 @@
     const currentRecorder = recorder, chunks = [];
     const clock=()=>globalThis.performance?.now?.() ?? Date.now();
     let meter=null;
+    const startMeter=()=>{
+      if(!meter){meter=EchoLiveMeter.start({stream:input.stream,container:$('liveMeter'),canvas:$('liveMeterCanvas'),value:$('liveMeterValue'),bar:$('liveMeterBar')});recordingMeter=meter;}
+    };
     let vocalOffset=0;
     let starting=true;
     let capturedEnd=r.start;
@@ -935,6 +938,7 @@
       }
     };
     saveVideo(v);v.playbackRate=r.speed;
+    if(leadInStart(r)<r.start)startMeter();
     const hadLeadIn=await playRecordingLeadIn(v,r,token);
     if(token!==generation)return false;
     v.muted=true;
@@ -946,7 +950,7 @@
     recorder.start(250);
     const captureStartedAt=clock();
     mode = 'recording'; controls();
-    meter=EchoLiveMeter.start({stream:input.stream,container:$('liveMeter'),canvas:$('liveMeterCanvas'),value:$('liveMeterValue'),bar:$('liveMeterBar')});recordingMeter=meter;
+    startMeter();
     status('录音已启动，正在准备同步播放…');
     v.addEventListener('waiting',onWaiting);v.addEventListener('playing',onPlaying);
     v.addEventListener('timeupdate',observePosition);

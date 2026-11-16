@@ -1017,7 +1017,13 @@ test('stopping during the lead-in cancels preparation, releases the mic and save
   const pending=nodes.get('record').onclick();
   for(let i=0;i<30 && !video.plays.length;i++)await new Promise(r=>setTimeout(r,2));
   assert.equal(video.plays.length,1);assert.match(nodes.get('status').textContent,/准备录音/);
-  assert.equal(nodes.get('leadInSeconds').disabled,true);nodes.get('stop').onclick();await pending;
+  assert.equal(nodes.get('leadInSeconds').disabled,true);
+  assert.equal(nodes.get('activityMode').hidden,true);assert.equal(nodes.get('clipBounds').hidden,true);
+  assert.equal(nodes.get('practiceTools').hidden,true);assert.equal(nodes.get('practiceSettings').hidden,true);
+  assert.equal(nodes.get('liveMeter').hidden,false);assert.equal(nodes.get('stop').textContent,'■ 取消准备');
+  assert.equal(starts,0); // Preparation shows the recording UI without recording context audio.
+  nodes.get('stop').onclick();await pending;
+  assert.equal(nodes.get('liveMeter').hidden,true);assert.equal(nodes.get('activityMode').hidden,false);
   assert.equal(starts,0);assert(stops>=1);assert.equal((await storage.listTakes('video')).length,0);
   assert.equal(video.muted,true);assert.equal(video.playbackRate,1.25);assert.equal(nodes.get('record').disabled,false);
   (await storage.ready).close();
