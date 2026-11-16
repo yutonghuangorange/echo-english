@@ -167,7 +167,7 @@ test('plain recording pauses for buffering and saves to its original video after
   const recording=nodes.get('record').onclick();
   for(let i=0;i<10 && instance?.state!=='recording';i++)await new Promise(r=>setTimeout(r,1));
   assert.equal(instance.state,'recording');
-  assert.equal(nodes.get('activityMode').hidden,true);assert.equal(nodes.get('linePractice').hidden,true);
+  assert.equal(nodes.get('activityMode').hidden,true);assert.equal(nodes.get('practiceDock').hidden,true);
   assert.equal(nodes.get('practiceDock').hidden,true);
   assert.equal(nodes.get('stop').textContent,'■ 结束录音');
   assert.equal(nodes.get('transport').hidden,false);
@@ -226,15 +226,15 @@ test('legacy service warns about restart before submitting a long song',async()=
 test('song mode exposes main recording and guides missing accompaniment without requesting a microphone',async()=>{
   const storage=createStorage(new IDBFactory());let micRequests=0;
   const {nodes}=await mount(storage,{globals:{navigator:{mediaDevices:{async getUserMedia(){micRequests++;throw Error('unexpected');}}}}});
-  assert.equal(nodes.get('singActions').hidden,true);assert.equal(nodes.get('linePractice').hidden,false);
+  assert.equal(nodes.get('singActions').hidden,true);assert.equal(nodes.get('practiceDock').hidden,false);
   nodes.get('activityMode').value='sing';nodes.get('activityMode').onchange();
-  assert.equal(nodes.get('singActions').hidden,false);assert.equal(nodes.get('linePractice').hidden,true);
+  assert.equal(nodes.get('singActions').hidden,false);assert.equal(nodes.get('practiceDock').hidden,false);
   assert.equal(nodes.get('practiceTools').open,false);assert.equal(nodes.get('practiceToolsSummary').hidden,false);
-  assert.equal(nodes.get('karaokeSettings').open,false);assert.equal(nodes.get('recordSong').disabled,false);
-  await nodes.get('recordSong').onclick();assert.equal(micRequests,0);assert.equal(nodes.get('karaokeSettings').open,true);
+  assert.equal(nodes.get('karaokeSettings').open,false);assert.equal(nodes.get('record').disabled,false);
+  await nodes.get('record').onclick();assert.equal(micRequests,0);assert.equal(nodes.get('karaokeSettings').open,true);
   nodes.get('activityMode').value='speech';nodes.get('activityMode').onchange();
   assert.equal(nodes.get('singActions').hidden,true);assert.equal(nodes.get('karaokeSettings').hidden,true);
-  assert.equal(nodes.get('linePractice').hidden,false);assert.equal(nodes.get('practiceToolsSummary').hidden,false);
+  assert.equal(nodes.get('practiceDock').hidden,false);assert.equal(nodes.get('practiceToolsSummary').hidden,false);
   (await storage.ready).close();
 });
 
@@ -286,7 +286,7 @@ test('song replay starts at audio opening and shows progress from the audio cloc
   }
   const {nodes}=await mount(storage,{video,globals:{Audio,requestAnimationFrame(fn){frames.set(++frameId,fn);return frameId;},cancelAnimationFrame(id){frames.delete(id);}}});
   nodes.get('activityMode').value='sing';nodes.get('activityMode').onchange();
-  const replaying=nodes.get('songReplay').onclick();
+  const replaying=nodes.get('replay').onclick();
   for(let i=0;i<10 && !calls.includes('video');i++)await Promise.resolve();
   await new Promise(resolve=>setTimeout(resolve,0));assert.deepEqual(calls.slice(0,2),['audio','video']);assert.deepEqual(audioSeeks,[]);
   assert.equal(video.currentTime,0);
@@ -322,7 +322,7 @@ test('dry singing replay adds backing, seeks both tracks, toggles vocals only an
     EchoKaraoke:{...require('../extension/karaoke.js'),async createMonitor(){return monitor;},async createAudioOutput(){return {setVolume(value){vocalGain=value;},dispose(){}};}},
     requestAnimationFrame(fn){frames.set(++next,fn);return next;},cancelAnimationFrame:id=>frames.delete(id)}});
   nodes.get('activityMode').value='sing';nodes.get('activityMode').onchange();
-  const replaying=nodes.get('songReplay').onclick();
+  const replaying=nodes.get('replay').onclick();
   for(let i=0;i<30 && !nodes.get('transportProgress').oninput;i++)await Promise.resolve();
   assert.equal(nodes.get('replayMusicOption').hidden,false);assert.equal(nodes.get('replayWithBacking').disabled,false);
   nodes.get('replayVocalVolume').value='1.5';nodes.get('replayVocalVolume').oninput();
@@ -351,7 +351,7 @@ test('missing backing does not block dry singing replay and explains the fallbac
   class Audio{constructor(){sound=this;this.currentTime=0;}async play(){}pause(){}}
   const {nodes}=await mount(storage,{video,globals:{Audio}});
   nodes.get('activityMode').value='sing';nodes.get('activityMode').onchange();
-  const replaying=nodes.get('songReplay').onclick();
+  const replaying=nodes.get('replay').onclick();
   for(let i=0;i<20 && !nodes.get('transportProgress').oninput;i++)await Promise.resolve();
   assert.equal(nodes.get('replayWithBacking').disabled,true);assert.match(nodes.get('status').textContent,/未找到对应伴奏/);
   sound.onended();await replaying;(await storage.ready).close();
@@ -392,16 +392,16 @@ test('legacy mixed songs remain downloadable but never offer extraction of a non
 test('selecting a lyric uses the main clip recording controls without a duplicate recording section',async()=>{
   const storage=createStorage(new IDBFactory());
   await storage.saveSession({videoId:'video',index:0,start:0,end:2,speed:'1',cues:[{start:0,end:2,text:'First line'},{start:2,end:4,text:'Second line'}]});
-  const {nodes}=await mount(storage);assert.equal(nodes.get('captionSetup').open,false);
+  const {nodes}=await mount(storage);assert.equal(nodes.get('captionSetup').hidden,true);
   nodes.get('activityMode').value='sing';nodes.get('activityMode').onchange();
   nodes.get('transcriptSearch').value='second';nodes.get('transcriptSearch').oninput();
   assert.equal(nodes.get('list').children.length,1);nodes.get('list').children[0].onclick();
   assert.equal(nodes.get('start').value,'2.00');
   assert.equal(nodes.get('position').textContent,'2 / 2');
-  assert.equal(nodes.get('linePractice').hidden,true);assert.equal(nodes.get('karaokeScope').value,'clip');
+  assert.equal(nodes.get('practiceDock').hidden,false);assert.equal(nodes.get('karaokeScope').value,'clip');
   assert.equal(nodes.get('singActions').hidden,false);assert.equal(nodes.get('practiceTools').open,false);
-  assert.match(nodes.get('songRangeInfo').textContent,/2.0–4.0/);
-  assert.match(nodes.get('recordSong').textContent,/开始片段录唱/);
+  assert.match(nodes.get('clipSummary').textContent,/2.0–4.0/);
+  assert.match(nodes.get('record').textContent,/开始片段录唱/);
   nodes.get('prev').onclick();assert.equal(nodes.get('start').value,'0.00');
   assert.equal(nodes.get('karaokeScope').value,'clip');
   nodes.get('transcriptSearch').value='no match';nodes.get('transcriptSearch').oninput();
@@ -474,10 +474,11 @@ test('recording timeline plays in one click, exposes versions directly and filte
   (await storage.ready).close();
 });
 
- test('practice page imports subtitles and reads video captions without switching tabs',async()=>{
+ test('subtitle preparation has one transcript entry and returns to practice after import',async()=>{
   const storage=createStorage(new IDBFactory());
   const {nodes}=await mount(storage,{globals:{EchoTranscript:{read:async()=>[{start:2,end:4,text:'Read from video'}]}}});
   assert.equal(nodes.get('page-practice').hidden,false);
+  nodes.get('openCaptionSetup').onclick();assert.equal(nodes.get('page-transcript').hidden,false);
   nodes.get('file').files=[{size:60,text:async()=> '1\n00:00:00,000 --> 00:00:01,000\nImported line\n'}];
   let opened=0;nodes.get('file').onclick=()=>{opened++;};
   nodes.get('import').onclick();assert.equal(opened,1);
@@ -509,7 +510,7 @@ test('clip-only accompaniment must be regenerated when boundaries exceed its ran
   nodes.get('end').value=6;nodes.get('end').onchange();
   assert.equal(nodes.get('previewBacking').disabled,true);
   await nodes.get('record').onclick();
-  assert.match(nodes.get('status').textContent,/当前片段生成伴奏/);
+  assert.match(nodes.get('status').textContent,/当前练习范围生成伴奏/);
   (await storage.ready).close();
 });
 
@@ -568,18 +569,18 @@ test('whole-song recording uses the full duration and offers replay, retry and d
     chrome:{runtime:{onMessage:{addListener(){}},async sendMessage(message){return message.action==='audio'?{audio:'UklGRg==',mime:'audio/wav'}:{id:'c'.repeat(32),state:'ready'};}}}}});
   nodes.get('activityMode').value='sing';nodes.get('activityMode').onchange();
   await nodes.get('prepareBacking').onclick();
-  await nodes.get('recordSong').onclick();
+  await nodes.get('record').onclick();
   for(let i=0;i<20 && !(await storage.listTakes('video')).length;i++)await new Promise(r=>setTimeout(r,2));
   const takes=await storage.listTakes('video');assert.equal(takes.length,1);
   assert.match(takes[0].cueKey,/^song:/);
   assert.equal(takes[0].kind,'song');assert.equal(takes[0].start,0);assert.equal(takes[0].end,180);
   assert.equal(nodes.get('end').value,1);assert.equal(nodes.get('songResult').hidden,false);
-  assert.equal(nodes.get('recordSong').textContent,'● 再录一次');assert.match(nodes.get('download').href,/^blob:/);
+  assert.equal(nodes.get('record').textContent,'● 再录一次');assert.match(nodes.get('download').href,/^blob:/);
   nodes.get('karaokeScope').value='clip';nodes.get('karaokeScope').onchange();
-  assert.equal(nodes.get('recordSong').textContent,'● 开始片段录唱');
+  assert.equal(nodes.get('record').textContent,'● 开始片段录唱');
   assert.equal(nodes.get('reuseSongRange').hidden,false);nodes.get('reuseSongRange').onclick();
   assert.equal(nodes.get('start').value,0);assert.equal(nodes.get('end').value,180);
-  assert.equal(nodes.get('recordSong').textContent,'● 再录一次');
+  assert.equal(nodes.get('record').textContent,'● 再录一次');
   assert.equal(takes[0].withBacking,undefined);assert.equal(takes[0].capture,'vocal');assert.equal(await takes[0].blob.text(),'mixed-audio');
   assert.deepEqual(events.filter(value=>['recorder-start','sync','video-play'].includes(value)),['recorder-start','sync','video-play']);
   assert(events.includes('dispose'));assert(events.includes('mic-stop'));assert.equal(video.muted,false);
@@ -594,15 +595,15 @@ test('default generation covers the whole song and reuses it for different sente
   const {nodes}=await mount(storage,{video:{duration:180,pause(){}},globals:{chrome:{runtime:{onMessage:{addListener(){}},async sendMessage(message){
     calls.push(message);return message.action==='audio'?{audio:'UklGRg==',mime:'audio/wav'}:{id:'d'.repeat(32),state:'ready'};
   }}}}});
-  assert.equal(nodes.get('karaokeScope').value,'whole');assert.equal(nodes.get('recordSong').disabled,true);
+  assert.equal(nodes.get('karaokeScope').value,'whole');assert.equal(nodes.get('record').disabled,false);
   nodes.get('activityMode').value='sing';nodes.get('activityMode').onchange();
   await nodes.get('prepareBacking').onclick();
   assert.equal(calls[0].start,0);assert.equal(calls[0].end,180);
   assert.equal(nodes.get('start').value,10);assert.equal(nodes.get('end').value,12);
-  assert.equal(nodes.get('recordSong').disabled,false);
+  assert.equal(nodes.get('record').disabled,false);
   nodes.get('start').value=30;nodes.get('end').value=40;nodes.get('end').onchange();
   nodes.get('karaokeScope').value='clip';nodes.get('karaokeScope').onchange();
-  assert.equal(nodes.get('recordSong').disabled,false);assert.equal(nodes.get('previewBacking').disabled,false);
+  assert.equal(nodes.get('record').disabled,false);assert.equal(nodes.get('previewBacking').disabled,false);
   assert.equal(nodes.get('prepareBacking').disabled,true);assert.equal(calls.length,2);
   (await storage.ready).close();
 });
@@ -613,7 +614,7 @@ test('long videos require choosing a clip rather than silently truncating a song
   nodes.get('activityMode').value='sing';nodes.get('activityMode').onchange();
   await nodes.get('prepareBacking').onclick();
   assert.equal(requests,0);assert.match(nodes.get('status').textContent,/超过 10 分钟/);
-  assert.equal(nodes.get('recordSong').disabled,false);
+  assert.equal(nodes.get('record').disabled,false);
   (await storage.ready).close();
 });
 
@@ -677,7 +678,7 @@ test('the main singing button records a selected clip without backing and disabl
   nodes.get('useBacking').onchange();
   nodes.get('karaokeScope').value='clip';nodes.get('karaokeScope').onchange();
   assert.match(nodes.get('songReadiness').textContent,/清唱/);
-  await nodes.get('recordSong').onclick();
+  await nodes.get('record').onclick();
   assert.deepEqual({...requested.audio},{echoCancellation:false,noiseSuppression:false,autoGainControl:false});
   assert.equal(requested.video,false);
   const takes=await storage.listTakes('video');assert.equal(takes.length,1);
@@ -709,7 +710,7 @@ test('generation displays live separation progress, encoding state and completio
   nodes=mounted.nodes;nodes.get('activityMode').value='sing';nodes.get('activityMode').onchange();
   await nodes.get('prepareBacking').onclick();
   assert.equal(polls,2);assert.equal(nodes.get('karaokeProgress').hidden,true);
-  assert.equal(nodes.get('recordSong').disabled,false);
+  assert.equal(nodes.get('record').disabled,false);
   (await storage.ready).close();
 });
 
@@ -754,7 +755,7 @@ test('generated accompaniment is restored after a page reload without contacting
   const {nodes}=await mount(reopened,{video:{duration:60},globals:{chrome:{runtime:{onMessage:{addListener(){}},async sendMessage(){requests++;throw Error('offline');}}}}});
   assert.equal(nodes.get('activityMode').value,'sing');assert.equal(nodes.get('karaokeSettings').hidden,false);
   assert.equal(nodes.get('useBacking').checked,true);
-  assert.equal(nodes.get('previewBacking').disabled,false);assert.equal(nodes.get('recordSong').disabled,false);
+  assert.equal(nodes.get('previewBacking').disabled,false);assert.equal(nodes.get('record').disabled,false);
   assert.equal(nodes.get('prepareBacking').disabled,true);assert.equal(requests,0);
   (await reopened.ready).close();
 });
@@ -765,7 +766,7 @@ test('older server-cached accompaniment is recovered without starting separation
     globals:{chrome:{runtime:{onMessage:{addListener(){}},async sendMessage(message){calls.push(message.action);return {audio:'UklGRg==',mime:'audio/wav'};}}}}});
   nodes.get('activityMode').value='sing';nodes.get('activityMode').onchange();
   for(let i=0;i<20 && nodes.get('previewBacking').disabled;i++)await new Promise(r=>setTimeout(r,2));
-  assert.deepEqual(calls,['audio']);assert.equal(nodes.get('recordSong').disabled,false);
+  assert.deepEqual(calls,['audio']);assert.equal(nodes.get('record').disabled,false);
   assert.equal((await storage.listBackings('video')).length,1);
   (await storage.ready).close();
 });
@@ -962,6 +963,7 @@ test('manual input gain reaches the saved vocal recording and meter, then releas
     requestAnimationFrame:fn=>setTimeout(fn,0),cancelAnimationFrame:clearTimeout}});
   nodes.get('activityMode').value='sing';nodes.get('activityMode').onchange();
   nodes.get('useBacking').checked=false;nodes.get('useBacking').onchange();
+  nodes.get('karaokeScope').value='clip';nodes.get('karaokeScope').onchange();
   nodes.get('start').value='0';nodes.get('end').value='1';
   nodes.get('manualGainDb').value='16';nodes.get('manualGainDb').oninput();
   await nodes.get('record').onclick();
@@ -1046,10 +1048,10 @@ test('paragraph mode restores, keeps multi-sentence bounds during browsing, reco
     requestAnimationFrame:fn=>setTimeout(fn,1),cancelAnimationFrame:clearTimeout}});
   assert.equal(nodes.get('karaokeScope').value,'paragraph');assert.equal(nodes.get('paragraphSelection').hidden,false);
   assert.equal(nodes.get('paragraphFirst').value,'1');assert.equal(nodes.get('paragraphLast').value,'3');
-  assert.match(nodes.get('recordSong').textContent,/开始段落录唱/);assert.match(nodes.get('songRangeInfo').textContent,/第 2–4 句/);
+  assert.match(nodes.get('record').textContent,/开始段落录唱/);assert.match(nodes.get('clipSummary').textContent,/第 2–4 句/);
   assert.equal(nodes.get('start').disabled,true);assert.equal(nodes.get('autoNext').disabled,true);
   nodes.get('next').onclick();assert.equal(Number(nodes.get('start').value),3);assert.equal(Number(nodes.get('end').value),11.8);
-  await nodes.get('recordSong').onclick();
+  await nodes.get('record').onclick();
   const [take]=await storage.listTakes('video');assert.equal(take.start,3);assert.equal(take.end,11.8);assert.equal(take.kind,'song');
   assert.match(take.label,/第 2–4 句/);assert.equal(await take.blob.text(),'whole-paragraph');
   assert.match(nodes.get('assemblyInfo').textContent,/已覆盖 8.8 \/ 30.0 秒/);
@@ -1058,5 +1060,30 @@ test('paragraph mode restores, keeps multi-sentence bounds during browsing, reco
   nodes.get('paragraphLast').value='2';nodes.get('paragraphLast').onchange();
   await new Promise(r=>setTimeout(r,5));const session=await storage.getSession('video');assert.equal(session.paragraphFirst,0);assert.equal(session.paragraphLast,2);assert.equal(session.end,8.8);
   const restored=(await mount(storage)).nodes;assert.equal(restored.get('karaokeScope').value,'paragraph');assert.equal(Number(restored.get('end').value),8.8);
+  (await storage.ready).close();
+});
+
+test('shared main controls and automatic practice use the same whole-song range and remember preparation',async()=>{
+  const storage=createStorage(new IDBFactory()),video=leadInVideo(),plays=[];
+  video.duration=30;video.play=async function(){plays.push(this.currentTime);this.currentTime=30;};
+  await storage.saveSession({videoId:'video',activity:'sing',useBacking:false,karaokeScope:'whole',cues:[{start:10,end:12,text:'A single line'}],index:0,start:10,end:12,speed:'1',prepSeconds:'0',loopCount:'5',autoNext:true});
+  class MediaRecorder{
+    static isTypeSupported(){return true;}
+    constructor(){this.state='inactive';this.mimeType='audio/webm';}
+    start(){this.state='recording';}
+    stop(){this.state='inactive';this.ondataavailable({data:new Blob(['full-song'])});queueMicrotask(()=>this.onstop());}
+  }
+  class Audio{constructor(){this.currentTime=0;this.duration=30;}pause(){}async play(){this.currentTime=30;queueMicrotask(()=>this.onended?.());}}
+  const {nodes}=await mount(storage,{video,globals:{MediaRecorder,Audio,
+    navigator:{mediaDevices:{async getUserMedia(){return {getTracks:()=>[{stop(){}}]};}}},
+    requestAnimationFrame:fn=>setTimeout(fn,1),cancelAnimationFrame:clearTimeout}});
+  assert.equal(nodes.get('prepSeconds').value,'0');assert.equal(nodes.get('loopCount').value,'5');
+  assert.equal(nodes.get('autoNext').disabled,true);assert.equal(nodes.get('clipBounds').hidden,true);
+  assert.match(nodes.get('clipSummary').textContent,/整首.*0.0–30.0/);
+  await nodes.get('autoPractice').onclick();
+  const [take]=await storage.listTakes('video');assert.equal(take.start,0);assert.equal(take.end,30);assert.equal(take.kind,'song');
+  assert.equal(plays[0],0);assert.equal(plays[1],0);assert.match(nodes.get('status').textContent,/自动跟读完成/);
+  nodes.get('prepSeconds').value='2';nodes.get('prepSeconds').onchange();await new Promise(r=>setTimeout(r,5));
+  assert.equal((await storage.getSession('video')).prepSeconds,'2');
   (await storage.ready).close();
 });

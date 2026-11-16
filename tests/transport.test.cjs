@@ -69,6 +69,6 @@ test('browser globals are available in manifest order with the unchanged panel c
   }
   assert.equal(typeof context.EchoTransport.create, 'function');
   assert.equal(typeof context.EchoPlayback.create, 'function');
-  assert.match(context.EchoPanelView.html, /id="recordSong"/);
+  assert.match(context.EchoPanelView.html, /id="record"/);
   assert.match(context.EchoPanelView.html, /id="transportProgress"/);
 });

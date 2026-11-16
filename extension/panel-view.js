@@ -14,7 +14,7 @@
     .word{display:inline;border:0;border-bottom:1px dotted #648a87;border-radius:0;padding:0 1px;background:transparent;font:inherit;color:inherit}.word:hover{background:#2d4647;color:#b3eedb}.word:disabled{opacity:1}.wordcard{background:#0e1821;border:1px solid #37505a;border-radius:12px;padding:12px;margin:12px 0}.wordcard p{font-size:13px;margin:8px 0}.wordcard .row{margin-top:0}canvas{width:100%;height:90px;background:#0e1821;border-radius:10px;margin:12px 0}.analysis-text{font-size:12px;color:#a3b7c6;white-space:pre-line;margin-bottom:12px}
     footer{border-top:1px solid #2b3946;background:#111b24;padding:12px 20px;display:flex;align-items:center;gap:10px;flex-shrink:0}.status{font-size:11px;color:#9ab2c1;flex:1;line-height:1.6;max-height:70px;overflow:auto}#stop{background:#643640;border-color:#88505a;color:#ffe2e6;font-size:12px;padding:8px 12px;flex-shrink:0}
     .history-row{display:block;width:100%;text-align:left;padding:10px 12px;margin:6px 0;font-size:12px;background:#192734}.history-row[aria-pressed="true"]{border-color:#8cc7b3;background:#263e3c}.history-row small{display:block;margin-top:4px}.history-actions{display:flex;justify-content:space-between;margin:12px 0}.history-actions button{font-size:12px;padding:6px 10px;background:transparent}.history-list{max-height:220px;overflow:auto}#historyInfo{font-size:12px;color:#90a4b6;margin-bottom:10px}
-    .recording-heading{display:flex;align-items:center;justify-content:space-between;gap:8px}.recording-heading .page-title{margin:0}.selected-recording{background:#192734;border:1px solid #355348;border-radius:12px;padding:14px;margin:16px 0}.selected-recording #historyInfo{margin:5px 0;font-size:12px}.selected-recording #recordingText{font-size:14px;line-height:1.6;display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical;overflow:hidden}.version-choices{display:flex;gap:6px;flex-wrap:wrap}.version-choice{font-size:11px;padding:5px 9px;border-radius:20px;background:transparent;color:#94adbc}.version-choice[aria-pressed="true"]{background:#b3eedb;color:#163b32;border-color:#b3eedb}.recording-search{font-size:12px;margin:10px 0 4px}.recording-timeline{margin-top:8px}.history-item{display:flex;align-items:center;gap:6px}.history-item .history-row{flex:1;min-width:0}.history-delete{flex-shrink:0;font-size:12px;padding:8px;color:#ffb4ad;background:transparent}.recording-timeline .history-row{position:relative;padding-left:32px;border-color:transparent}.recording-timeline .history-row::before{content:'▷';position:absolute;left:11px;top:12px;color:#8fbdaf}.recording-timeline .history-row[aria-pressed="true"]{border-color:#8cc7b3}.recording-timeline .history-row small{white-space:nowrap;overflow:hidden;text-overflow:ellipsis}.recording-timeline .history-row:disabled{opacity:.65}
+    .recording-heading{display:flex;align-items:center;justify-content:space-between;gap:8px}.recording-heading .page-title{margin:0}.selected-recording{background:#192734;border:1px solid #355348;border-radius:12px;padding:14px;margin:16px 0}.selected-recording #historyInfo{margin:5px 0;font-size:12px}.selected-recording #recordingText{font-size:14px;line-height:1.6;display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical;overflow:hidden}.version-choices{display:flex;gap:6px;flex-wrap:wrap}.version-choice{font-size:11px;padding:5px 9px;border-radius:20px;background:transparent;color:#94adbc}.version-choice[aria-pressed="true"]{background:#b3eedb;color:#163b32;border-color:#b3eedb}.recording-search{font-size:12px;margin:10px 0 4px}.recording-timeline{margin-top:8px}.history-item{display:flex;align-items:center;gap:6px}.history-item .history-row{flex:1;min-width:0}.recording-timeline .history-row{position:relative;padding-left:32px;border-color:transparent}.recording-timeline .history-row::before{content:'▷';position:absolute;left:11px;top:12px;color:#8fbdaf}.recording-timeline .history-row[aria-pressed="true"]{border-color:#8cc7b3}.recording-timeline .history-row small{white-space:nowrap;overflow:hidden;text-overflow:ellipsis}.recording-timeline .history-row:disabled{opacity:.65}
     .caption-stage{position:relative}.caption-context{font-size:14px;line-height:1.5;color:#c3d4df;opacity:.65;min-height:22px;max-height:44px;overflow:hidden;display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical;transition:opacity .2s}.caption[data-phase="upcoming"]{color:#c4d9df}.caption[data-phase="ended"]{opacity:.65}.caption-phase{font-size:11px;color:#8fbdae;min-height:17px;margin-top:5px}
     #transcriptSearch{margin-top:14px}#refreshCaptionTracks{flex:0 0 auto}
     input[type="range"]{padding:0;border:0;border-radius:0;background:transparent;accent-color:#b3eedb;cursor:pointer}input[type="range"]:disabled{cursor:default}input[type="range"]:focus-visible{outline:2px solid #b3eedb;outline-offset:3px}
@@ -29,14 +29,16 @@
     .main-actions{grid-template-columns:repeat(2,minmax(0,1fr))}.main-actions button{min-width:0;font-size:13px}
     .recording-heading{flex-wrap:wrap}.compact{font-size:11px;padding:7px 9px}.recording-heading .compact{margin-left:auto}
     .selected-recording{padding:12px;margin:12px 0}.selected-recording .row{margin:9px 0}.selected-recording .eyebrow{font-size:10px}.selected-recording .fold{margin-top:8px;padding-top:8px}
-    .history-actions:has(>button[hidden]:only-child){display:none}.history-delete{opacity:0}.history-item:hover .history-delete,.history-item:focus-within .history-delete{opacity:1}
+    .history-actions:has(>button[hidden]:only-child){display:none}
     .danger{color:#ffb4ad;background:transparent}.text-button{font-size:11px;padding:4px 8px;background:transparent;color:#b3eedb}
     .readiness-row{margin:4px 0 10px}.readiness-row #openBacking{flex:0 0 auto}.cue-nav{gap:6px;flex-wrap:wrap}.cue-nav>span:last-child{margin-left:auto}.caption-phase:empty{display:none}
-    #songRangeInfo{display:block;margin-bottom:8px}#songResult .fold{margin-top:8px;padding-top:8px}
+    #songResult .fold{margin-top:8px;padding-top:8px}
+    .history-delete{flex-shrink:0;font-size:11px;padding:7px;color:#ffb4ad;background:transparent;opacity:0}.history-item:hover .history-delete,.history-item:focus-within .history-delete{opacity:1}@media(hover:none){.history-delete{opacity:1}}
+    .version-toolbar{display:flex;align-items:center;gap:8px;justify-content:space-between}.version-toolbar #deleteTake{flex-shrink:0}.version-toolbar .version-choices{flex:1}.row>label.hint{flex:0 0 82px}.row>label:has(input[type="number"]){flex-direction:column;align-items:stretch;gap:4px}
     .micro{display:grid;grid-template-columns:repeat(2,minmax(0,1fr))}.fold>summary{gap:8px;align-items:center;min-height:24px}
     .fold>summary::after{flex-shrink:0}.fold>summary>span{margin-left:auto;text-align:right}
     input:focus-visible,select:focus-visible{outline:2px solid #b3eedb;outline-offset:2px}
-    @media(hover:none){.history-delete{opacity:1}}
+
     @media(max-height:600px){header{padding:12px 18px 8px}.pages{padding:12px 18px}.practice-dock{padding:8px 18px}.cue-card{padding:12px}.caption{font-size:19px;padding:8px 0;min-height:44px}footer{padding-top:8px;padding-bottom:8px}}
     @media(prefers-reduced-motion:reduce){.caption-context{transition:none}}
     .panel{position:relative}.pages{flex:1 1 auto}.resize-handle{position:absolute;left:2px;bottom:2px;width:24px;height:24px;padding:0;border:0;border-radius:0 0 0 16px;background:transparent;color:#8199aa;cursor:nesw-resize;touch-action:none;user-select:none;font-size:16px}.resize-handle:hover{background:#2f4152;color:#b3eedb}footer{padding-left:30px}
@@ -46,11 +48,20 @@
     <div class="pages">
       <section id="page-practice" role="tabpanel" aria-labelledby="tab-practice">
         <select id="activityMode" aria-label="练习模式"><option value="speech" selected>说对白 · 配音跟读</option><option value="sing">唱歌曲 · 伴奏监听</option></select>
+        <details class="fold" id="clipSettings"><summary>练习范围<span id="clipSummary">0.0–5.0 秒</span></summary><div class="fold-content">
         <div id="singActions" hidden>
-          <div class="row"><label class="hint" for="karaokeScope">录唱范围</label><select id="karaokeScope" aria-label="唱歌范围"><option value="whole" selected>整首歌曲</option><option value="clip">当前片段</option><option id="paragraphScopeOption" value="paragraph">段落（多句）</option></select></div><small id="songRangeInfo"></small>
+          <div class="row"><label class="hint" for="karaokeScope">录唱范围</label><select id="karaokeScope" aria-label="唱歌范围"><option value="whole" selected>整首歌曲</option><option value="clip">当前片段</option><option id="paragraphScopeOption" value="paragraph">段落（多句）</option></select></div>
           <div id="paragraphSelection" hidden><div class="row"><label class="hint" for="paragraphFirst">起句</label><select id="paragraphFirst" aria-label="段落起句"></select></div><div class="row"><label class="hint" for="paragraphLast">止句</label><select id="paragraphLast" aria-label="段落止句"></select></div><p class="hint">连续录下所选多句及句间间隔。段落边界由起止句决定，微调时间可切换「当前片段」。</p></div>
-          <div class="row readiness-row"><span class="hint" id="songReadiness">先准备伴奏，再开始录唱</span><button id="openBacking" class="text-button">准备伴奏 →</button></div>
+
         </div>
+
+          <div id="clipBounds">
+          <div class="row"><label><small>起点</small><input id="start" aria-label="片段起点（秒）" type="number" min="0" step="0.1" value="0"></label><label><small>终点</small><input id="end" aria-label="片段终点（秒）" type="number" min="0" step="0.1" value="5"></label></div>
+          <div class="row micro"><button id="startEarlier">起点 −0.2s</button><button id="startLater">起点 +0.2s</button><button id="endEarlier">终点 −0.2s</button><button id="endLater">终点 +0.2s</button></div>
+          <div class="row"><button id="markStart">此刻设为起点</button><button id="markEnd">此刻设为终点</button></div><p class="hint">配音时原声静音；每段最长 10 分钟。</p>
+          </div>
+        </div></details>
+          <div class="row readiness-row" id="songReadinessRow" hidden><span class="hint" id="songReadiness">先准备伴奏，再开始录唱</span><button id="openBacking" class="text-button">准备伴奏 →</button></div>
         <div class="cue-card"><div class="cue-nav"><span class="eyebrow" id="cueHeading">当前台词</span><button id="openTranscript" class="text-button">选句</button><span><button id="prev" aria-label="上一句">‹</button><span aria-label="当前练习句">练习 <span id="position">手动片段</span></span><button id="next" aria-label="下一句">›</button></span></div>
           <div id="captionPrevious" class="caption-context" aria-label="上一句" hidden></div><div id="captionPhase" class="caption-phase"></div>
           <div class="caption-stage"><div class="caption" id="caption">从一句台词开始，听见自己的进步。</div></div><div id="translation" hidden></div>
@@ -64,19 +75,19 @@
           <progress id="karaokeProgress" max="100" aria-label="去原唱阶段进度" style="width:100%;accent-color:#b3eedb" hidden></progress>
           <div id="songResult" class="row" hidden><small id="songInfo"></small><button id="openSongRecording" class="text-button">版本与下载 →</button></div>
         </div>
-        <details class="fold" id="captionSetup" open><summary id="captionSetupTitle">准备字幕 · 读取或导入</summary><div class="fold-content">
-        <div class="row"><button id="read">读取台词</button><button id="import">导入字幕</button><input id="file" type="file" accept=".srt,.vtt" hidden></div>
-        <div id="practiceSetup" class="hint">直接读取视频台词，或导入 SRT / VTT 字幕后开始练习。也可在下方标记片段。</div>
-        </div></details>
+        <div id="captionSetup" class="setup"><span id="practiceSetup">先读取或导入字幕，也可直接设置练习范围。</span><button id="openCaptionSetup">准备字幕 →</button></div>
         <div id="wordcard" class="wordcard" hidden><div class="row"><strong id="wordTitle"></strong><button id="speakWord">▶ 朗读</button><button id="closeWord" aria-label="关闭词卡">×</button></div><small id="phonetic"></small><div id="definitions" role="status"></div><small>释义：Free Dictionary API · 查询时仅发送所选单词</small></div>
-        <details class="fold" id="practiceTools"><summary id="practiceToolsSummary">循环与自动练习</summary>
+        <details class="fold" id="practiceTools"><summary id="practiceToolsSummary">准备与自动练习</summary>
+          <div class="fold-content">          <div class="row"><label class="hint" for="leadInMode">前置播放</label><select id="leadInMode" aria-describedby="leadInHint"><option value="none">关闭</option><option value="seconds">前 N 秒</option><option id="previousLeadIn" value="previous">上一句</option></select></div>
+          <div id="leadInSecondsRow" class="row" hidden><label class="hint" for="leadInSeconds">前置时长（秒）</label><input id="leadInSeconds" type="number" min="0" max="30" step="1" value="3" aria-describedby="leadInHint"></div><p class="hint" id="leadInHint">先播放片段前的原声作准备，不录入准备段。</p>
+</div>
           <div class="secondary-actions"><button id="loop">↻ 单句循环</button><button id="autoPractice">▶ 自动跟读</button></div>
           <div class="fold-content">          <div class="row"><label class="hint" for="loopCount">循环次数</label><select id="loopCount" aria-label="循环次数"><option value="3">3 次</option><option value="5">5 次</option><option value="0">持续循环</option></select></div>
-          <div class="row"><label class="hint" for="prepSeconds">准备时间</label><select id="prepSeconds" aria-label="跟读准备时间"><option value="2">2 秒</option><option value="3" selected>3 秒</option><option value="5">5 秒</option></select></div>
+          <div class="row"><label class="hint" for="prepSeconds">自动练习停顿</label><select id="prepSeconds" aria-label="自动练习停顿"><option value="0">不停顿</option><option value="2">2 秒</option><option value="3" selected>3 秒</option><option value="5">5 秒</option></select></div>
           <label class="check"><input type="checkbox" id="autoNext">回放结束后自动练下一句</label><p class="hint" id="practiceFlowHint">自动跟读：原声 → 准备 → 配音 → 回放。</p>
 </div>
         </details>
-        <details class="fold" id="karaokeSettings" hidden><summary>录唱设置</summary><div class="fold-content">
+        <details class="fold" id="karaokeSettings" hidden><summary>伴奏设置</summary><div class="fold-content">
           <p class="hint">按上方录唱范围生成，最长 10 分钟。准备好后回到主区录唱。</p>
           <label class="check"><input id="useBacking" type="checkbox">录唱时播放伴奏（仅录人声）</label>
           <div class="row"><span class="hint" id="karaokeService" role="status">伴奏服务 · 尚未检测</span><button id="checkKaraoke">重新检测</button></div>
@@ -90,7 +101,7 @@
             <p>建议戴耳机录唱。分离结果可能残留原唱。</p>
           </div></details>
         </div></details>
-        <details class="fold" id="practiceSettings"><summary>播放与录音设置<span id="speedSummary">1×</span></summary><div class="fold-content">
+        <details class="fold" id="practiceSettings"><summary>速度与麦克风<span id="speedSummary">1×</span></summary><div class="fold-content">
           <div class="row"><label class="hint" for="speed">播放速度</label><select id="speed" aria-label="练习速度"><option value="0.75">0.75× 慢速</option><option value="1" selected>1× 原速</option><option value="1.25">1.25×</option></select></div>
           <label class="hint"><input id="echoCancellation" type="checkbox" aria-describedby="echoCancellationHint"> 录音时启用回声消除</label>
           <p class="hint" id="echoCancellationHint">外放时可尝试开启；戴耳机唱歌建议关闭，减少对人声的处理。</p>
@@ -98,17 +109,10 @@
           <p class="hint" id="autoGainControlHint">人声偏小时可尝试开启；唱歌可能出现音量起伏。两项设置按配音、唱歌分别记忆，下次录音生效。</p>
           <div id="manualGainRow"><div class="row"><label class="hint" for="manualGainDb">手动录音增益</label><output class="hint" id="manualGainValue" for="manualGainDb">+0 dB</output></div><input id="manualGainDb" type="range" min="0" max="24" step="1" value="0" aria-describedby="manualGainHint" style="width:100%"><p class="hint" id="manualGainHint">固定放大人声，回听与下载均生效。默认不放大；可从 +6 dB 试起，留意录音音量的过载提示。只影响新录音，也会放大底噪。</p></div>
         </div></details>
-        <details class="fold" id="clipSettings"><summary>片段与边界<span id="clipSummary">0.0–5.0 秒</span></summary><div class="fold-content">
-          <div class="row"><label><small>起点</small><input id="start" aria-label="片段起点（秒）" type="number" min="0" step="0.1" value="0"></label><label><small>终点</small><input id="end" aria-label="片段终点（秒）" type="number" min="0" step="0.1" value="5"></label></div>
-          <div class="row"><label class="hint" for="leadInMode">前置播放</label><select id="leadInMode" aria-describedby="leadInHint"><option value="none">关闭</option><option value="seconds">前 N 秒</option><option id="previousLeadIn" value="previous">上一句</option></select></div>
-          <div id="leadInSecondsRow" class="row" hidden><label class="hint" for="leadInSeconds">前置时长（秒）</label><input id="leadInSeconds" type="number" min="0" max="30" step="1" value="3" aria-describedby="leadInHint"></div><p class="hint" id="leadInHint">先播放片段前的原声作准备，不录入准备段。</p>
-          <div class="row micro"><button id="startEarlier">起点 −0.2s</button><button id="startLater">起点 +0.2s</button><button id="endEarlier">终点 −0.2s</button><button id="endLater">终点 +0.2s</button></div>
-          <div class="row"><button id="markStart">此刻设为起点</button><button id="markEnd">此刻设为终点</button></div><p class="hint">配音时原声静音；每段最长 10 分钟。</p>
-        </div></details>
       </section>
       <section id="page-transcript" role="tabpanel" aria-labelledby="tab-transcript" hidden>
         <h2 class="page-title" id="transcriptTitle">找到想练的那一句</h2><div class="page-subtitle" id="transcriptSubtitle">点选一句，回到练习。可搜索台词或导入字幕。</div>
-        <div class="row"><button class="primary" id="transcriptRead">读取台词</button><button id="transcriptImport">导入字幕</button></div>
+        <div class="row"><button class="primary" id="read">读取台词</button><button id="import">导入字幕</button><input id="file" type="file" accept=".srt,.vtt" hidden></div>
         <div class="hint">读取所选字幕；可在下方切换语言，或导入 SRT / VTT。</div>        <details class="fold" id="captionSettings"><summary>语言与字幕显示</summary><div class="fold-content">
           <label class="hint" for="captionSource">字幕来源</label><div class="row"><select id="captionSource" aria-label="字幕来源"><option value="auto">跟随 YouTube 当前字幕</option></select><button id="refreshCaptionTracks" class="compact">刷新语言</button></div><p id="captionSourceInfo" class="hint">读取时自动查找字幕。可刷新语言后手动选择，选择后立即加载。</p>
           <div class="row"><label class="hint" for="contentLanguage">内容语言</label><select id="contentLanguage" aria-label="内容语言"><option value="auto" selected>自动建议</option><option value="en">英语</option><option value="zh">中文</option><option value="ja">日语</option><option value="ko">韩语</option><option value="und">其他 / 不确定</option></select></div>
@@ -125,11 +129,11 @@
         <div id="recordingContent" class="selected-recording" hidden>
           <div class="recording-heading"><div class="eyebrow">当前录音</div><button id="reuseSongRange" class="text-button" hidden>练习此段 →</button></div><div id="historyInfo"></div><div id="recordingText"></div>
           <div class="row"><button id="reviewReplay">▷ 回放录音</button><button id="compare">⇄ 对比原声</button></div>
-          <div id="versionChoices" class="version-choices" role="group" aria-label="当前句的录音版本"></div>
+          <div class="version-toolbar"><div id="versionChoices" class="version-choices" role="group" aria-label="当前片段的录音版本"></div><button id="deleteTake" class="text-button danger" disabled>删除此版</button></div>
         <details class="fold" id="recordingDetails"><summary>下载与录音详情</summary><div class="fold-content">
           <div class="row"><a id="download">↓ 下载所选录音</a><button id="takeMixDownload" hidden>人声＋伴奏</button></div><p class="hint" id="mixDownloadHint">混合下载采用底部的回听音量比例，原始录音保持不变。</p>
           <div id="analysis" hidden><canvas id="waveform" width="660" height="180" role="img" aria-label="录音音量波形，橙色表示低音量停顿"></canvas><div id="analysisText" class="analysis-text" role="status"></div><small>波形显示音量和停顿，不代表发音准确度。</small></div>
-          <small>每个练习片段保留最近 3 次，演唱与配音分别保存。连播使用各片段最新版本。</small><div class="history-actions"><button id="deleteTake" class="danger" disabled>删除所选版本</button></div>
+          <small>每个练习片段保留最近 3 次，演唱与配音分别保存。连播使用各片段最新版本。</small>
         </div></details>
         </div>
         <details class="fold" id="songAssembly" hidden><summary>分段合成整首</summary><div class="fold-content">
@@ -145,10 +149,7 @@
       </section>
     </div>
     <div id="practiceDock" class="practice-dock">
-      <div id="songControls" hidden><div class="main-actions"><button id="songOriginal">▶ 听原曲</button><button id="songReplay" disabled>▷ 回听最近演唱</button><button class="primary" id="recordSong">● 开始整首录唱</button></div></div>
-  <div id="linePractice">
-  <div class="main-actions"><button id="original">▶ 听原声</button><button id="replay" disabled>▷ 我的配音</button><button class="primary" id="record">● 开始配音</button></div>
-  </div>
+      <div class="main-actions"><button id="original">▶ 听原声</button><button id="replay" disabled>▷ 回听录音</button><button class="primary" id="record">● 开始配音</button></div>
     </div>
     <div id="liveMeter" class="live-meter" hidden><div class="meter-heading"><span>麦克风 · 实时音量</span><output id="liveMeterValue">正在检测…</output></div><canvas id="liveMeterCanvas" width="640" height="64" aria-hidden="true"></canvas><div class="meter-track" role="meter" aria-label="麦克风实时音量，单位 dBFS" aria-valuemin="-60" aria-valuemax="0" aria-valuenow="-60"><div id="liveMeterBar" class="meter-fill"></div></div></div>
     <div id="transport" hidden style="padding:8px 20px 0;flex-shrink:0;background:#111b24">
