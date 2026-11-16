@@ -1,7 +1,21 @@
 const {test}=require('node:test');
 const assert=require('node:assert/strict');
-const {plan,render}=require('../extension/audio-export.js');
+const {filename,plan,render}=require('../extension/audio-export.js');
 const voice=(id,start,end,createdAt=1,extra={})=>({id,start,end,createdAt,cueKey:id,kind:'song',capture:'vocal',speed:1,blob:new Blob([id]),...extra});
+
+test('download names preserve multilingual titles and identify range and audio type',()=>{
+  assert.equal(filename({title:'晴天 / ライブ: 노래?',start:50,end:65.2,kind:'vocals'}),'晴天 ライブ 노래_00m50.0s-01m05.2s_人声.webm');
+  assert.equal(filename({title:'Song',start:0,end:180,kind:'mixed',assembled:true,extension:'wav'}),'Song_00m00.0s-03m00.0s_整首合成_人声+伴奏.wav');
+  assert.match(filename({videoId:'abc123',start:0,end:5,kind:'dubbing'}),/^YouTube-abc123_.*_配音.webm$/);
+});
+
+test('download names avoid invalid Windows characters and excessive UTF-8 filename lengths',()=>{
+  const name=filename({title:' .<>:"/\\|?*\x00\n歌曲😀'.repeat(100),start:0,end:600,kind:'mixed',assembled:true,extension:'wav'});
+  assert.doesNotMatch(name,/[<>:"/\\|?*\x00-\x1f]/);
+  assert.ok(Buffer.byteLength(name,'utf8')<255);
+  assert.doesNotMatch(name,/\uFFFD/);
+  assert.match(filename({title:'...',videoId:'abc'}),/^YouTube-abc_/);
+});
 
 test('assembly keeps gaps and lets the newest recording replace overlapping ranges',()=>{
   const result=plan([voice('a',0,3),voice('b',2,4,2),voice('c',6,8)],10);

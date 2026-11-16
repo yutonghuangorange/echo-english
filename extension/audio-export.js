@@ -1,4 +1,16 @@
 (function(root){
+  function filename({title,videoId,start,end,kind='recording',assembled=false,extension='webm'}){
+    const clean=value=>String(value || '').normalize('NFC').replace(/[<>:"/\\|?*\u0000-\u001f\u007f]/g,' ').replace(/\s+/g,' ').replace(/^[. ]+|[. ]+$/g,'');
+    let name=clean(title) || clean(`YouTube-${videoId || '录音'}`);
+    // Bound UTF-8 bytes as well as characters for macOS/Linux file systems.
+    let bytes=0,short='';const encoder=new TextEncoder();
+    for(const character of name){const size=encoder.encode(character).length;if(bytes+size>160)break;short+=character;bytes+=size;}
+    name=short.trim().replace(/[. ]+$/g,'');
+    const time=value=>{const tenths=Math.round(Math.max(0,value)*10),minutes=Math.floor(tenths/600),seconds=((tenths%600)/10).toFixed(1).padStart(4,'0');return `${String(minutes).padStart(2,'0')}m${seconds}s`;};
+    const range=Number.isFinite(start) && Number.isFinite(end)?`_${time(start)}-${time(end)}`:'';
+    const type=({vocals:'人声',mixed:'人声+伴奏',dubbing:'配音',recording:'录音'})[kind] || '录音';
+    return `${name}${range}${assembled?'_整首合成':''}_${type}.${extension==='wav'?'wav':'webm'}`;
+  }
   function plan(takes,duration){
     if(!Number.isFinite(duration) || duration<=0 || duration>600)throw Error('合成范围需在 10 分钟内。');
     const latest=new Map();
@@ -88,5 +100,5 @@
       return {blob:new Blob([bytes],{type:'audio/wav'}),gaps:timeline.gaps};
     }finally{await context.close().catch(()=>{});}
   }
-  const api={plan,selectionPlan,render};if(typeof module!=='undefined')module.exports=api;else root.EchoAudioExport=api;
+  const api={filename,plan,selectionPlan,render};if(typeof module!=='undefined')module.exports=api;else root.EchoAudioExport=api;
 })(globalThis);

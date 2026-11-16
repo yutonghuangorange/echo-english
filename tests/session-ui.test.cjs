@@ -33,6 +33,7 @@ async function mount(storage, overrides = {}) {
   root.querySelector=()=>({scrollTop:0});root.querySelectorAll=selector=>created.filter(n=>n.className===selector.slice(1));
   const events=new Map();
   const doc={getElementById:()=>null,documentElement:new Element(),createElement:()=>new Element(),createTextNode:text=>({textContent:text}),addEventListener(name,fn){events.set(name,fn);},querySelector:selector=>selector==='video.html5-main-video'?(overrides.video || {duration:60}):null};
+  doc.title=overrides.title || '';
   const context={document:doc,location:{href:'https://www.youtube.com/watch?v=video',pathname:'/watch'},indexedDB:{},URL,Blob,console,setTimeout,clearTimeout,cancelAnimationFrame(){},requestAnimationFrame(){},crypto:globalThis.crypto,
     window:{addEventListener(){},speechSynthesis:{cancel(){}}},chrome:{runtime:{onMessage:{addListener(){}}}},
     EchoCaptionTracks:require('../extension/caption-tracks.js'),EchoPanelView:require('../extension/panel-view.js'),EchoTransport:require('../extension/transport.js'),EchoPlayback:require('../extension/playback.js'),
@@ -53,8 +54,21 @@ async function mount(storage, overrides = {}) {
   }
   vm.runInNewContext(fs.readFileSync('extension/content.js','utf8'),context);
   for(let i=0;i<20 && nodes.get('read').disabled;i++)await new Promise(r=>setTimeout(r,2));
-  return {nodes,root,events,downloads};
+  return {nodes,root,events,downloads,document:doc};
 }
+test('raw recording downloads use the video title and refresh it when YouTube loads it late',async()=>{
+  const storage=createStorage(new IDBFactory());
+  await storage.saveTake({id:'voice',videoId:'video',cueKey:'manual:5:10',start:5,end:10,speed:1,createdAt:1,blob:new Blob(['voice'])});
+  const {nodes,document}=await mount(storage,{title:'原视频标题 - YouTube'});
+  nodes.get('tab-recordings').onclick();
+  const link=nodes.get('download'),url=link.href;
+  assert.equal(link.download,'原视频标题_00m05.0s-00m10.0s_配音.webm');
+  document.title='正式标题: 中文字幕 - YouTube';link.onclick();
+  assert.equal(link.download,'正式标题 中文字幕_00m05.0s-00m10.0s_配音.webm');
+  assert.equal(link.href,url);
+  (await storage.ready).close();
+});
+
 test('empty pages hide irrelevant recording controls and keep the practice dock on the practice tab',async()=>{
   const storage=createStorage(new IDBFactory());
   const {nodes}=await mount(storage);
@@ -368,7 +382,7 @@ test('dry vocal downloads can be mixed per take or assembled as a full song with
   const storage=createStorage(new IDBFactory()),exports=[];
   await storage.saveTake({id:'vocal',kind:'song',capture:'vocal',videoId:'video',cueKey:'song:manual',start:5,end:10,speed:1,createdAt:1,blob:new Blob(['voice'])});
   await storage.saveBacking({key:'backing',videoId:'video',start:0,end:20,createdAt:1,blob:new Blob(['music'])});
-  const {nodes,downloads}=await mount(storage,{video:{duration:20},globals:{setTimeout:(fn,ms)=>setTimeout(fn,ms===30000?0:ms),
+  const {nodes,downloads}=await mount(storage,{title:'我的歌曲 / 现场版 - YouTube',video:{duration:20},globals:{setTimeout:(fn,ms)=>setTimeout(fn,ms===30000?0:ms),
     EchoAudioExport:{...require('../extension/audio-export.js'),async render(options){exports.push(options);return {blob:new Blob(['wave']),gaps:[]};}}}});
   nodes.get('activityMode').value='sing';nodes.get('activityMode').onchange();
   nodes.get('openSongRecording').onclick();assert.equal(nodes.get('recordingDetails').open,true);
@@ -380,7 +394,9 @@ test('dry vocal downloads can be mixed per take or assembled as a full song with
   assert.equal(exports[1].origin,0);assert.equal(exports[1].duration,20);assert.equal(exports[1].backing,null);
   nodes.get('assemblyType').value='mixed';nodes.get('assemblyType').onchange();await nodes.get('assemblyDownload').onclick();
   assert.equal(exports[2].backing.key,'backing');assert.equal(downloads.length,3);nodes.get('closeAssembly').onclick();
-  assert.match(downloads[0].download,/vocal-and-backing.wav$/);assert.match(downloads[1].download,/vocals.wav$/);
+  assert.equal(downloads[0].download,'我的歌曲 现场版_00m05.0s-00m10.0s_人声+伴奏.wav');
+  assert.equal(downloads[1].download,'我的歌曲 现场版_00m00.0s-00m20.0s_整首合成_人声.wav');
+  assert.equal(downloads[2].download,'我的歌曲 现场版_00m00.0s-00m20.0s_整首合成_人声+伴奏.wav');
   (await storage.ready).close();
 });
 

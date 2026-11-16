@@ -85,6 +85,7 @@
   let serviceState='unknown',serviceCheck=null,serviceMaxSeconds=null;
   let wordRequest = 0, selectedWord = null, analysisRequest = 0;
   let videoId = currentId();
+  let savedTitle = '';
   const storage = EchoStorage.createStorage();
   const library=EchoLibrary.attach({view:root,storage,doc:document,onChange:async()=>{
     const id=videoId;if(!id)return;
@@ -103,7 +104,7 @@
       if(options.withMusic && !backing)throw Error('请先生成覆盖试听或下载范围的伴奏；混合整首需整首伴奏。');
       return EchoAudioExport.render({takes:context.takes,selection:options.selection,duration:options.duration,origin:options.origin,backing,...context.mix,active});
     },
-    onDownload:blob=>{if(assemblyContext?.id===videoId)downloadAudio(blob,`echo-${videoId}-selected-${$('assemblyType').value==='mixed'?'mixed':'vocals'}.wav`);}
+    onDownload:blob=>{if(assemblyContext?.id===videoId)downloadAudio(blob,EchoAudioExport.filename({title:assemblyContext.title,videoId,start:0,end:assemblyContext.duration,assembled:true,kind:$('assemblyType').value==='mixed'?'mixed':'vocals',extension:'wav'}));}
   });
   $('openLibrary').onclick=()=>{if(mode!=='idle')return;saveProgress();return library.open();};
   let videoHistory = [], historyRequest = 0, restoring = true, progressWarning = false, deletedTake = null;
@@ -502,18 +503,30 @@
     $('takeMixDownload').hidden=take?.kind!=='song' || take.capture!=='vocal' || !!take.withBacking;
     $('mixDownloadHint').hidden=$('takeMixDownload').hidden;
     $('download').textContent=take?.withBacking?'↓ 旧版混合录音':take?.capture==='vocal'?'↓ 下载人声':'↓ 下载所选录音';
-    if (take) { $('download').href = take.url; $('download').download = `echo-${videoId}-${take.start.toFixed(1)}.webm`; }
+    if (take) { $('download').href = take.url; $('download').download = takeFilename(take); }
     controls();
     analysisRequest++;
     $('analysis').hidden=!take;
     if($('recordingDetails').open)void analyzeTake(take);
   }
   function currentCueKey() { return selectionState().value?.key || null; }
+  function currentVideoTitle(){
+    const page=document.querySelector('ytd-watch-flexy[video-id]');
+    const matches=!page || page.getAttribute('video-id')===videoId;
+    const title=(matches?(document.querySelector('ytd-watch-metadata h1')?.textContent || document.title || ''):'').replace(/\s*[-–]\s*YouTube\s*$/,'').trim();
+    if(title && title!=='YouTube')return title;
+    return savedTitle===videoId?'':savedTitle;
+  }
+  function takeFilename(value){
+    return EchoAudioExport.filename({title:currentVideoTitle(),videoId,start:value.start,end:value.end,kind:value.withBacking?'mixed':value.capture==='vocal'?'vocals':value.kind==='song'?'recording':'dubbing'});
+  }
+  // Refresh at click time too: YouTube can finish loading its title after restore.
+  $('download').onclick=()=>{if(take)$('download').download=takeFilename(take);};
   function saveProgress() {
     if (restoring || !videoId) return;
     const start = Number($('start').value), end = Number($('end').value);
     if (!Number.isFinite(start) || !Number.isFinite(end) || start < 0 || end <= start) return;
-    const title=(document.querySelector('ytd-watch-metadata h1')?.textContent || document.title || '').replace(/\s*[-–]\s*YouTube\s*$/,'').trim();
+    const title=currentVideoTitle();
     scopePreferences[activity]=$('practiceScope').value;
     const session = {title:title || videoId,scopes:{...scopePreferences},assemblyChoices,loopCount:$('loopCount').value,prepSeconds:$('prepSeconds').value,autoNext:$('autoNext').checked,leadInMode:$('leadInMode').value,leadInSeconds:EchoPractice.leadInSeconds($('leadInSeconds').value),activity,paragraphFirst,paragraphLast,useBacking:$('useBacking').checked,captionSource,captionSourceName,loadedCaptionSource,replayVocalVolume:replayMix().vocal,replayBackingVolume:replayMix().backing,replayWithBacking:$('replayWithBacking').checked,backingVolume:Number($('backingVolume').value),contentLanguage:$('contentLanguage').value,captionLayout:$('captionLayout').value,videoId,cues:cues.map(c=>({...c})),index,start,end,speed:$('speed').value,showChinese:$('showChinese').checked,hideText:$('hideText').checked,followCaptions:$('followCaptions').checked,selectedTakeId:take?.id,updatedAt:Date.now()};
     void storage.saveSession(session).catch(()=>{
@@ -593,6 +606,7 @@
     try {
       const [session,values,backings]=await Promise.all([storage.getSession(id),storage.listTakes(id),storage.listBackings(id)]);
       if(id!==videoId || token!==generation) return;
+      savedTitle=session?.title || '';
       savedBackings=backings;videoHistory=values;setSongTake(values.find(t=>t.kind==='song')); mode='idle';
       if(session) {
         assemblyChoices=Array.isArray(session.assemblyChoices)?session.assemblyChoices:[];
@@ -729,13 +743,13 @@
     const backing=withMusic?backingFor({start:origin,end:origin+duration}):null;
     if(withMusic && !backing)throw Error('缺少覆盖下载范围的伴奏，请先生成整首伴奏，再导出。独立人声仍可直接下载。');
     EchoAudioExport.plan(takes.map(t=>({...t,start:t.start-origin,end:t.end-origin,...(Number.isFinite(t.capturedEnd)?{capturedEnd:t.capturedEnd-origin}:{})})),duration);
-    const token=++generation,id=videoId;
+    const token=++generation,id=videoId,title=currentVideoTitle();
     const {vocal:vocalVolume,backing:volume}=replayMix();
     mode='exporting';controls();status('正在本机合成 WAV，可点击停止取消…');
     try{
       const result=await EchoAudioExport.render({takes,duration,origin,backing,volume,vocalVolume,active:()=>token===generation && id===videoId});
       if(token!==generation || id!==videoId)return;
-      downloadAudio(result.blob,`echo-${id}-${origin.toFixed(1)}-${withMusic?'vocal-and-backing':'vocals'}.wav`);
+      downloadAudio(result.blob,EchoAudioExport.filename({title,videoId:id,start:origin,end:origin+duration,kind:withMusic?'mixed':'vocals',extension:'wav'}));
       status(result.gaps.length?'已下载合成音频，未录制的人声位置保留空白。':'合成完成，已开始下载。');
     }finally{if(token===generation){mode='idle';controls();}}
   }
@@ -750,7 +764,7 @@
     if(mode!=='idle')return;
     const sourceVideo=video(),duration=sourceVideo.duration;sourceVideo.pause?.();EchoAssembly.preview(videoHistory,duration,assemblyChoices,EchoAudioExport);
     const {vocal:vocalVolume,backing:volume}=replayMix();
-    assemblyContext={id:videoId,token:++generation,takes:[...videoHistory],mix:{vocalVolume,volume}};
+    assemblyContext={id:videoId,title:currentVideoTitle(),duration,token:++generation,takes:[...videoHistory],mix:{vocalVolume,volume}};
     try{assembly.open({takes:assemblyContext.takes,duration,choices:assemblyChoices,withMusic:$('assemblyType').value==='mixed'});mode='assembly';controls();}
     catch(error){assemblyContext=null;throw error;}
   });
@@ -1413,6 +1427,7 @@
     $('karaokeInfo').textContent = '已切换视频，请为新片段生成伴奏。';
     restoring = true;
     videoId = id;
+    savedTitle = '';
     historyRequest++;
     videoHistory = [];
     deletedTake = null;
