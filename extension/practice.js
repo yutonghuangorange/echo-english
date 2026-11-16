@@ -50,12 +50,7 @@
     }
     return Math.max(0,start-leadInSeconds(seconds));
   }
-  function paragraphRange(cues,first,last){
-    if(!Number.isInteger(first) || !Number.isInteger(last) || first<0 || last>=cues.length || last<=first)throw Error('请选择至少两句连续歌词作为段落。');
-    const start=cues[first].start,end=Math.max(...cues.slice(first,last+1).map(c=>c.end));
-    if(!Number.isFinite(start) || !Number.isFinite(end) || end<=start)throw Error('所选段落缺少有效时间轴，请重新读取或导入字幕。');
-    return {start,end};
-  }
+  const {paragraphRange} = typeof module !== 'undefined' ? require('./selection.js') : root.EchoSelection;
   function playbackTimeout(range) {return Math.ceil((range.end-range.start)/range.speed*1000)+15000;}
   function recordingQueue(takes) {
     const latest=new Map();

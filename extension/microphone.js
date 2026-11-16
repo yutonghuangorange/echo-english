@@ -24,6 +24,7 @@
       dispose();throw Error('无法启用手动录音增益，请将增益设为 0 dB 后重试。',{cause:error});
     }
   }
+  function isLossless(mimeType) { return /codecs\s*=\s*["']?pcm\b/i.test(mimeType || ''); }
   function supportsLossless(Recorder=root.MediaRecorder){
     return !!Recorder?.isTypeSupported?.('audio/webm;codecs=pcm');
   }
@@ -48,7 +49,7 @@
   }
   function describeRecording(info){
     if(!info)return '旧录音未保存采集参数，无法确认当时的码率和麦克风处理设置。';
-    const pcm=/codecs\s*=\s*["']?pcm\b/i.test(info.mimeType || '');
+    const pcm=isLossless(info.mimeType);
     const parts=[pcm?'无损 PCM · WebM':`压缩录音 · ${info.mimeType || '格式未知'}`];
     // MediaRecorder reports an Opus encoding target, not the measured file bitrate.
     // Its PCM audioBitsPerSecond can be a meaningless default: never show it as PCM's rate.
@@ -61,6 +62,6 @@
     parts.push(processing.join(' · '));
     return parts.join('\n');
   }
-  const api={clampDb,createInput,supportsLossless,recordingOptions,captureSettings,describeRecording};
+  const api={clampDb,createInput,isLossless,supportsLossless,recordingOptions,captureSettings,describeRecording};
   if(typeof module!=='undefined')module.exports=api;else root.EchoMicrophone=api;
 })(globalThis);

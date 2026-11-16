@@ -138,3 +138,18 @@ test('a late accompaniment failure after disposal cannot affect the next playbac
   const pending=follower.sync();follower.dispose();reject(Error('stale'));await pending;
   assert.equal(errors,0);
 });
+
+test('a failed audio context resume clears monitor load handlers, timer, URL and context',async()=>{
+  const timers=new Map();let music,closed=0,revoked=0;
+  class AudioContext{destination={};createMediaElementSource(){return {connect(){}};}createGain(){return {connect(){},gain:{value:1}};}async resume(){throw Error('audio device unavailable');}async close(){closed++;}}
+  class Audio{constructor(){music=this;}load(){}pause(){}removeAttribute(){}}
+  await assert.rejects(createMonitor({blob:new Blob(),video:{currentTime:0},start:0,speed:1},{AudioContext,Audio,URL:{createObjectURL:()=> 'blob:failed',revokeObjectURL(){revoked++;}},setTimeout(fn){timers.set(1,fn);return 1;},clearTimeout(id){timers.delete(id);}}),/audio device/);
+  assert.equal(timers.size,0);assert.equal(music.oncanplay,null);assert.equal(music.onerror,null);assert.equal(closed,1);assert.equal(revoked,1);
+});
+
+test('failed replay audio startup does not reroute the element away from HTML audio fallback',async()=>{
+  let attached=0,closed=0;
+  class AudioContext{async resume(){throw Error('device unavailable');}createMediaElementSource(){attached++;}async close(){closed++;}}
+  await assert.rejects(require('../extension/karaoke.js').createAudioOutput({},1,{AudioContext}),/device unavailable/);
+  assert.equal(attached,0);assert.equal(closed,1);
+});

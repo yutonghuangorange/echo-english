@@ -50,7 +50,7 @@
       <section id="page-practice" role="tabpanel" aria-labelledby="tab-practice">
         <select id="activityMode" aria-label="练习模式"><option value="speech" selected>说对白 · 配音跟读</option><option value="sing">唱歌曲 · 伴奏监听</option></select>
         <div id="scopeControls">
-          <div class="row"><label class="hint" id="practiceScopeLabel" for="karaokeScope">配音范围</label><select id="karaokeScope" aria-label="练习范围"><option id="wholeScopeOption" value="whole">整段视频</option><option value="clip" selected>当前片段</option><option id="paragraphScopeOption" value="paragraph">段落（多句）</option></select></div>
+          <div class="row"><label class="hint" id="practiceScopeLabel" for="practiceScope">配音范围</label><select id="practiceScope" aria-label="练习范围"><option id="wholeScopeOption" value="whole">整段视频</option><option value="clip" selected>当前片段</option><option id="paragraphScopeOption" value="paragraph">段落（多句）</option></select></div>
           <p class="hint" id="wholeScopeHint" hidden>从视频开头连续录制，最长 10 分钟。</p>
           <div id="paragraphSelection" hidden><div class="row"><label class="hint" for="paragraphFirst">起句</label><select id="paragraphFirst" aria-label="段落起句"></select></div><div class="row"><label class="hint" for="paragraphLast">止句</label><select id="paragraphLast" aria-label="段落止句"></select></div><p class="hint">连续录下所选多句及句间间隔，最长 10 分钟。段落边界由起止句决定，微调时间可切换「当前片段」。</p></div>
 

@@ -56,3 +56,17 @@ test('a completion callback can start the next operation without being cancelled
   playback.cancel(); playback.cancel();
   assert.equal(completed, 1);
 });
+
+test('cancelled seeks immediately remove their event listener and watchdog',async()=>{
+  const env=clock(),playback=create({env}),listeners=new Map();
+  const media={currentTime:0,pause(){},addEventListener(name,fn){listeners.set(name,fn);},removeEventListener(name,fn){if(listeners.get(name)===fn)listeners.delete(name);}};
+  const waiting=playback.seek(media,4);assert.equal(listeners.size,1);assert.equal(env.timers.size,1);
+  const stale=listeners.get('seeked');playback.cancel();assert.equal(await waiting,false);
+  assert.equal(listeners.size,0);assert.equal(env.timers.size,0);stale();
+  const next=playback.seek(media,6);listeners.get('seeked')();assert.equal(await next,true);assert.equal(env.timers.size,0);
+});
+test('seek failures and timeouts clean up before reporting the error',async()=>{
+  const env=clock(),playback=create({env}),listeners=new Map();
+  const media={currentTime:0,pause(){},addEventListener(name,fn){listeners.set(name,fn);},removeEventListener(name){listeners.delete(name);}};
+  const waiting=playback.seek(media,8);const [id,timer]=[...env.timers.entries()][0];env.timers.delete(id);timer.fn();await assert.rejects(waiting,/定位超时/);assert.equal(listeners.size,0);assert.equal(env.timers.size,0);
+});

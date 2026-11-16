@@ -1,8 +1,6 @@
 (function(root) {
   const MAX_TAKES = 3;
-  function cueKey(cue, start, end) {
-    return cue ? (cue.key || `cue:${Number(cue.start).toFixed(3)}:${cue.text}`) : `manual:${Number(start).toFixed(2)}:${Number(end).toFixed(2)}`;
-  }
+  const {cueKey} = typeof module !== 'undefined' ? require('./selection.js') : root.EchoSelection;
   function createStorage(factory = root.indexedDB, name = 'echo-dubbing-v1') {
     const ready = new Promise((resolve,reject) => {
       const request = factory.open(name,4);

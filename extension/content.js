@@ -9,7 +9,7 @@
   const $ = id => root.getElementById(id);
   EchoPanelSize.attach({panel:$('panel'),host,handle:$('resizePanel'),moveHandle:$('movePanel'),env:window});
   let cues = [], index = -1, take = null, mode = 'idle', generation = 0;
-  let recorder = null, stream = null, audio = null, savedVideo = null, recordingMeter = null, recordingInput = null;
+  let recordingSession = null, audio = null, savedVideo = null;
   const playback = EchoPlayback.create();
   const transport = EchoTransport.create({
     container: $('transport'), slider: $('transportProgress'),
@@ -74,7 +74,7 @@
   const captionClient=EchoCaptionTracks.createClient();
   let captionVideo = null, captionSignature = '', captionGhost = null;
   const captionEvents = ['timeupdate','seeking','seeked','play','pause','ended'];
-  let savedBackings = [], activeKaraokeJob = null, recordMonitor = null, songTake = null;
+  let savedBackings = [], activeKaraokeJob = null, songTake = null;
   let backingRestoreRequest=0, restoringBacking=false, karaokeIssue='';
   let backingOutput=null;
   let replayMonitor=null, replayVoiceOutput=null, replayTake=null, replayBackingReady=false, replayVoiceMax=2;
@@ -145,16 +145,17 @@
   }
   function updateSummaries() {
     updateSettingsSummaries();
-    let r={start:Number($('start').value),end:Number($('end').value)};try{r=selectedRange();}catch{}
-    const label=$('karaokeScope').value==='whole'?(isSinging()?'整首 · ':'整段 · '):isParagraph()?`第 ${paragraphFirst+1}–${paragraphLast+1} 句 · `:'';
-    $('clipSummary').textContent = `${label}${r.start.toFixed(1)}–${r.end.toFixed(1)} 秒`;
+    const selection=selectionState();
+    const r=selection.value?.range;
+    const label=$('practiceScope').value==='whole'?(isSinging()?'整首 · ':'整段 · '):isParagraph()?`第 ${paragraphFirst+1}–${paragraphLast+1} 句 · `:'';
+    $('clipSummary').textContent = r?`${label}${r.start.toFixed(1)}–${r.end.toFixed(1)} 秒`:selection.error.message;
     updateBackingControls();
   }
   function isSinging() {return activity==='sing';}
   function usesBacking() {return isSinging() && $('useBacking').checked;}
   function renderActivity() {
     $('activityMode').value=activity;
-    $('karaokeScope').value=scopePreferences[activity];
+    $('practiceScope').value=scopePreferences[activity];
     $('practiceScopeLabel').textContent=isSinging()?'录唱范围':'配音范围';
     $('wholeScopeOption').textContent=isSinging()?'整首歌曲':'整段视频';
     renderMicrophoneSettings();
@@ -164,24 +165,19 @@
     $('practiceTools').className='fold';
     $('transcriptTitle').textContent=singing?'选择想练的一句歌词':'找到想练的那一句';
     $('transcriptSubtitle').textContent=singing?'点选歌词，主录唱区会切到对应片段。':'点选一句，回到练习。可搜索台词或导入字幕。';
-    $('loop').textContent=singing?'↻ 循环听当前片段':'↻ 单句循环';
-    $('autoPractice').textContent=singing?'▶ 自动练当前片段':'▶ 自动跟读';
     $('cueHeading').textContent=singing?'当前歌词':'当前台词';
     $('practiceFlowHint').textContent=singing?'自动练唱：原曲 → 准备 → 录唱 → 回听。':'自动跟读：原声 → 准备 → 配音 → 回放。';
-    $('record').textContent=singing?'● 录这一句':'● 开始配音';
-    $('original').textContent=singing?'▶ 听原曲':'▶ 听原声';
-    $('replay').textContent=singing?'▷ 回听最近演唱':'▷ 回听录音';
     $('tab-transcript').textContent=singing?'歌词':'台词';
     if(!isSinging())$('useBacking').checked=false;
     updateCaption();
   }
   $('activityMode').onchange=()=>{
-    if(mode==='idle'){scopePreferences[activity]=$('karaokeScope').value;activity=$('activityMode').value==='sing'?'sing':'speech';$('useBacking').checked=isSinging();karaokeIssue='';}
+    if(mode==='idle'){scopePreferences[activity]=$('practiceScope').value;activity=$('activityMode').value==='sing'?'sing':'speech';$('useBacking').checked=isSinging();karaokeIssue='';}
     renderActivity();syncParagraphBounds();chooseCurrentTake();updateSummaries();controls();saveProgress();
     if(isSinging()){void checkKaraokeService();void restoreServerBacking();}
   };
   function backingFor(r) {return savedBackings.find(value=>EchoKaraoke.covers(value,videoId,r)) || null;}
-  function isParagraph(){return $('karaokeScope').value==='paragraph';}
+  function isParagraph(){return $('practiceScope').value==='paragraph';}
   function cueOptionLabel(cue,i){return `第 ${i+1} 句 · ${recordingTime(cue.start)} · ${captionText(cue).slice(0,50)}`;}
   function syncClipSelection(){
     const cue=cues[index],start=Number($('start').value),end=Number($('end').value);
@@ -224,27 +220,24 @@
     renderParagraphOptions();syncParagraphBounds();index=paragraphFirst;karaokeIssue='';
     updateCaption();chooseCurrentTake();controls();saveProgress();if(isSinging())void restoreServerBacking();
   };
-  function selectedRange() {
-    if(isParagraph()){EchoPractice.paragraphRange(cues,paragraphFirst,paragraphLast);syncParagraphBounds();return range();}
-    if($('karaokeScope').value==='clip')return range();
-    const v=video();
-    if(v.duration>600)throw Error('视频超过 10 分钟，请选择「当前片段」或「段落（多句）」。');
-    if(v.duration<=0)throw Error('请等待视频加载。');
-    return {start:0,end:v.duration,speed:Number($('speed').value)};
+  function selectionInput(duration=document.querySelector('video.html5-main-video')?.duration) {
+    return {activity,scope:$('practiceScope').value,start:Number($('start').value),end:Number($('end').value),speed:Number($('speed').value),duration,cues,index,first:paragraphFirst,last:paragraphLast};
   }
+  function selectionState() {
+    try { return {value:EchoSelection.resolve(selectionInput()),error:null}; }
+    catch(error) { return {value:null,error}; }
+  }
+  function selectedRange() { return EchoSelection.resolve(selectionInput(video().duration)).range; }
   function updateBackingControls() {
     if(!isSinging()){
       for(const id of ['previewBacking','prepareBacking'])$(id).disabled=true;
       return;
     }
-    const busy=mode!=='idle', whole=$('karaokeScope').value==='whole',paragraph=isParagraph();
-    let target=null,error='';try{target=selectedRange();}catch(e){error=e.message;}
+    const busy=mode!=='idle', whole=$('practiceScope').value==='whole',paragraph=isParagraph();
+    const selection=selectionState(),target=selection.value?.range,error=selection.error?.message || '';
     const ready=target && backingFor(target);
 
     $('previewBacking').disabled=busy || !ready;
-    // A missing prerequisite should lead to preparation instead of a dead button.
-    $('record').disabled=busy;
-    $('original').disabled=busy;
     $('songReadiness').textContent=!usesBacking()?'清唱 · 不播放伴奏':ready?'伴奏已就绪':mode==='separating'?'正在准备伴奏…':restoringBacking?'正在查找已有伴奏…':'尚未准备伴奏';
     $('openBacking').textContent=ready?'调整伴奏':'准备伴奏 →';
     $('backingSummary').textContent=!usesBacking()?'清唱':ready?`已就绪 · 监听 ${Math.round(Number($('backingVolume').value)*100)}%`:mode==='separating'?'生成中…':'未生成';
@@ -252,9 +245,6 @@
     $('karaokeNotice').hidden=!karaokeIssue;
     $('karaokeNotice').textContent=karaokeIssue;
     $('prepareBacking').textContent=mode==='separating'?'正在生成伴奏…':ready?'伴奏已就绪':whole?'生成整首伴奏':paragraph?'生成段落伴奏':'生成片段伴奏';
-    const recorded=target && videoHistory.some(t=>t.kind==='song' && Math.abs(t.start-target.start)<0.01 && Math.abs(t.end-target.end)<0.01 && t.speed===target.speed);
-    $('record').textContent=recorded?'● 再录一次':whole?'● 开始整首录唱':paragraph?'● 开始段落录唱':'● 开始片段录唱';
-    $('record').title='使用当前范围和速度录唱，保留之前的版本。';
     if(busy)return;
     if(restoringBacking)$('karaokeInfo').textContent='正在查找已生成的伴奏…';
     else if(error)$('karaokeInfo').textContent=error;
@@ -330,7 +320,20 @@
     return v;
   }
   function status(text) { $('status').textContent = text; }
+  function renderPracticeActions() {
+    const singing=isSinging(),scope=$('practiceScope').value,whole=scope==='whole',paragraph=scope==='paragraph';
+    const range=selectionState().value?.range;
+    const recorded=range && videoHistory.some(t=>(t.kind==='song')===singing && Math.abs(t.start-range.start)<0.01 && Math.abs(t.end-range.end)<0.01 && t.speed===range.speed);
+    $('record').textContent=singing?(recorded?'● 再录一次':whole?'● 开始整首录唱':paragraph?'● 开始段落录唱':'● 开始片段录唱')
+      :whole?'● 开始整段配音':paragraph?'● 开始段落配音':'● 开始配音';
+    $('record').title='使用当前范围和速度录音，保留之前的版本。';
+    $('original').textContent=singing?'▶ 听原曲':'▶ 听原声';
+    $('replay').textContent=singing?'▷ 回听最近演唱':'▷ 回听录音';
+    $('loop').textContent=whole?(singing?'↻ 循环听整首':'↻ 循环听整段'):'↻ 循环听选段';
+    $('autoPractice').textContent=paragraph?'▶ 自动练当前段落':whole?(singing?'▶ 自动练整首':'▶ 自动练整段'):singing?'▶ 自动练当前片段':'▶ 自动跟读';
+  }
   function controls() {
+    renderPracticeActions();
     const busy = mode !== 'idle';
     $('openLibrary').disabled=busy;
     updateLeadInSettings();
@@ -354,22 +357,19 @@
     }
     $('activityMode').hidden=recording;
     $('scopeControls').hidden=recording;
-    $('wholeScopeHint').hidden=$('karaokeScope').value!=='whole';
+    $('wholeScopeHint').hidden=$('practiceScope').value!=='whole';
     $('paragraphSelection').hidden=!isParagraph();$('paragraphScopeOption').disabled=cues.length<2;
-    $('autoPractice').textContent=isParagraph()?'▶ 自动练当前段落':$('karaokeScope').value==='whole'?(isSinging()?'▶ 自动练整首':'▶ 自动练整段'):isSinging()?'▶ 自动练当前片段':'▶ 自动跟读';
     $('singDetails').hidden=!isSinging() || recording;
     $('karaokeSettings').hidden=!isSinging() || recording;
     for(const id of ['practiceTools','practiceSettings'])$(id).hidden=recording;
     $('captionSetup').hidden=recording || cues.length>0;
     $('clipSettings').hidden=recording;
-    $('clipBounds').hidden=recording || $('karaokeScope').value!=='clip';
+    $('clipBounds').hidden=recording || $('practiceScope').value!=='clip';
     syncClipSelection();
     $('songReadinessRow').hidden=!isSinging() || recording;
-    for (const id of ['paragraphFirst','paragraphLast','recordingQuality','echoCancellation','autoGainControl','manualGainDb','captionSource','refreshCaptionTracks','contentLanguage','captionLayout','activityMode','read','import','openCaptionSetup','openLanguageSettings','prepareBacking','karaokeScope','useBacking','backingVolume','prev','next','markStart','markEnd','original','speed','start','end','leadInMode','leadInSeconds','record','startEarlier','startLater','endEarlier','endLater','loop','loopCount','autoPractice','prepSeconds','autoNext']) $(id).disabled = busy;
+    for (const id of ['paragraphFirst','paragraphLast','recordingQuality','echoCancellation','autoGainControl','manualGainDb','captionSource','refreshCaptionTracks','contentLanguage','captionLayout','activityMode','read','import','openCaptionSetup','openLanguageSettings','prepareBacking','practiceScope','useBacking','backingVolume','prev','next','markStart','markEnd','original','speed','start','end','leadInMode','leadInSeconds','record','startEarlier','startLater','endEarlier','endLater','loop','loopCount','autoPractice','prepSeconds','autoNext']) $(id).disabled = busy;
     if(isParagraph())for(const id of ['start','end','markStart','markEnd','startEarlier','startLater','endEarlier','endLater'])$(id).disabled=true;
-    $('autoNext').disabled=busy || $('karaokeScope').value!=='clip';
-    $('loop').textContent=$('karaokeScope').value==='whole'?(isSinging()?'↻ 循环听整首':'↻ 循环听整段'):'↻ 循环听选段';
-    if(!isSinging())$('record').textContent=$('karaokeScope').value==='whole'?'● 开始整段配音':isParagraph()?'● 开始段落配音':'● 开始配音';
+    $('autoNext').disabled=busy || $('practiceScope').value!=='clip';
     $('useBacking').disabled=busy || !isSinging();
     $('backingVolume').disabled=!isSinging() || !['idle','backing','recording'].includes(mode);
     $('backingVolumeValue').textContent=`${Math.round(Number($('backingVolume').value)*100)}%`;
@@ -398,24 +398,17 @@
       if(currentPage==='practice' && (!focused || focused.id==='stop') && !target.disabled)target.focus();
     }
   }
-  function range() {
-    const start = Number($('start').value), end = Number($('end').value), v = video();
-    if (!Number.isFinite(start) || !Number.isFinite(end) || start < 0 || end <= start || end > v.duration + 0.1) throw Error('请设置有效起止时间，终点需在视频时长内。');
-    if (end - start > 600) throw Error('每个练习片段最长 10 分钟，请缩短片段。');
-    return { start, end, speed: Number($('speed').value) };
-  }
   function saveVideo(v) { savedVideo = { v, muted: v.muted, rate: v.playbackRate }; }
   function restoreVideo() {
     if (savedVideo) { const { v, muted, rate } = savedVideo; v.pause(); v.muted = muted; v.playbackRate = rate; savedVideo = null; }
   }
   function cancelPlayback() {
-    recordingMeter?.dispose();recordingMeter=null;
+    recordingSession?.pauseFeedback();
     transport.hide();
     replayMonitor?.dispose();replayMonitor=null;
     replayVoiceOutput?.dispose();replayVoiceOutput=null;replayTake=null;replayBackingReady=false;
     playback.cancel();
     if (audio) { audio.pause(); audio.src = ''; audio = null; }
-    recordMonitor?.pause();
   }
   function finish() { cancelPlayback(); restoreVideo(); mode = 'idle'; controls(); }
   function stop() {
@@ -425,29 +418,33 @@
     if (mode === 'reading') status('已停止读取台词。');
     if (mode === 'separating') {karaokeIssue='已停止生成伴奏，可重新生成。';status('已停止生成伴奏。');$('karaokeInfo').textContent='已停止，可重新生成本段伴奏。';$('karaokeProgress').hidden=true;}
     if(activeKaraokeJob){void karaokeRequest('cancel',{jobId:activeKaraokeJob}).catch(()=>{});activeKaraokeJob=null;}
-    if(!['idle','reading','separating'].includes(previous))status(recorder && recorder.state!=='inactive'?'录音已结束，正在保存…':'已停止。');
+    if(!['idle','reading','separating'].includes(previous))status(recordingSession && recordingSession.state!=='inactive'?'录音已结束，正在保存…':'已停止。');
     generation++;
     cancelPlayback(); restoreVideo();
-    if (recorder && recorder.state !== 'inactive') { mode = 'saving'; recorder.stop(); }
-    else { recordMonitor?.dispose();recordMonitor=null;recordingInput?.dispose();recordingInput=null;recorder=null;stream?.getTracks().forEach(t => t.stop()); stream = null; mode = 'idle'; }
+    const capturing=recordingSession && recordingSession.state!=='inactive';
+    mode=capturing?'saving':'idle';
+    recordingSession?.stop();
     controls();
   }
-  function guarded(fn) { return async () => { const before = generation; try { await fn(); } catch (e) { if (generation > before + 1) return; stop(); status(e.message || String(e)); } }; }
+  function guarded(fn) {
+    return async () => {
+      const report=error=>{stop();status(error.message || String(error));};
+      let task;
+      try { task=fn(); } catch(error) { report(error);return; }
+      // Actions establish their generation before their first await. Capture
+      // that owner directly; never infer ownership from how many increments ran.
+      const token=generation;
+      try { await task; } catch(error) { if(token===generation)report(error); }
+    };
+  }
   function showVideoTransport(label,v,r,seekTo=null) {
     transport.show({label, position: () => (v.currentTime-r.start)/r.speed,
       duration: () => (r.end-r.start)/r.speed, seekTo});
   }
   async function seek(v, at, token, force=false) {
-    v.pause();
-    if (token !== generation) throw Error('操作已停止。');
-    if (!force && Math.abs(v.currentTime - at) < 0.03 && !v.seeking) return;
-    await new Promise((resolve, reject) => {
-      const timeout = setTimeout(() => { cleanup(); reject(Error('视频定位超时，请重试。')); }, 10000);
-      function cleanup() { clearTimeout(timeout); v.removeEventListener('seeked', done); }
-      function done() { cleanup(); resolve(); }
-      v.addEventListener('seeked', done); v.currentTime = at;
-    });
-    if (token !== generation) throw Error('操作已停止。');
+    if(token!==generation)throw Error('操作已停止。');
+    const completed=await playback.seek(v,at,{force});
+    if(!completed || token!==generation)throw Error('操作已停止。');
   }
   function leadInStart(r){return EchoPractice.leadInStart(r.start,$('leadInSeconds').value,{mode:$('leadInMode').value,cues});}
   async function playRecordingLeadIn(v,r,token){
@@ -511,20 +508,14 @@
     $('analysis').hidden=!take;
     if($('recordingDetails').open)void analyzeTake(take);
   }
-  function currentCueKey() {
-    if($('karaokeScope').value!=='clip'){
-      let r={start:Number($('start').value),end:Number($('end').value)};try{r=selectedRange();}catch{}
-      return EchoStorage.cueKey(null,r.start,r.end);
-    }
-    return EchoStorage.cueKey(cues[index], Number($('start').value), Number($('end').value));
-  }
+  function currentCueKey() { return selectionState().value?.key || null; }
   function saveProgress() {
     if (restoring || !videoId) return;
     const start = Number($('start').value), end = Number($('end').value);
     if (!Number.isFinite(start) || !Number.isFinite(end) || start < 0 || end <= start) return;
     const title=(document.querySelector('ytd-watch-metadata h1')?.textContent || document.title || '').replace(/\s*[-–]\s*YouTube\s*$/,'').trim();
-    scopePreferences[activity]=$('karaokeScope').value;
-    const session = {title:title || videoId,speechScope:scopePreferences.speech,assemblyChoices,loopCount:$('loopCount').value,prepSeconds:$('prepSeconds').value,autoNext:$('autoNext').checked,leadInMode:$('leadInMode').value,leadInSeconds:EchoPractice.leadInSeconds($('leadInSeconds').value),activity,paragraphFirst,paragraphLast,useBacking:$('useBacking').checked,captionSource,captionSourceName,loadedCaptionSource,replayVocalVolume:replayMix().vocal,replayBackingVolume:replayMix().backing,replayWithBacking:$('replayWithBacking').checked,backingVolume:Number($('backingVolume').value),contentLanguage:$('contentLanguage').value,captionLayout:$('captionLayout').value,videoId,cues:cues.map(c=>({...c})),index,start,end,speed:$('speed').value,showChinese:$('showChinese').checked,hideText:$('hideText').checked,followCaptions:$('followCaptions').checked,karaokeScope:scopePreferences.sing,selectedTakeId:take?.id,updatedAt:Date.now()};
+    scopePreferences[activity]=$('practiceScope').value;
+    const session = {title:title || videoId,scopes:{...scopePreferences},assemblyChoices,loopCount:$('loopCount').value,prepSeconds:$('prepSeconds').value,autoNext:$('autoNext').checked,leadInMode:$('leadInMode').value,leadInSeconds:EchoPractice.leadInSeconds($('leadInSeconds').value),activity,paragraphFirst,paragraphLast,useBacking:$('useBacking').checked,captionSource,captionSourceName,loadedCaptionSource,replayVocalVolume:replayMix().vocal,replayBackingVolume:replayMix().backing,replayWithBacking:$('replayWithBacking').checked,backingVolume:Number($('backingVolume').value),contentLanguage:$('contentLanguage').value,captionLayout:$('captionLayout').value,videoId,cues:cues.map(c=>({...c})),index,start,end,speed:$('speed').value,showChinese:$('showChinese').checked,hideText:$('hideText').checked,followCaptions:$('followCaptions').checked,selectedTakeId:take?.id,updatedAt:Date.now()};
     void storage.saveSession(session).catch(()=>{
       if (!progressWarning && session.videoId === videoId) { progressWarning=true; status('练习位置未能保存，请检查本地存储空间。录音仍可下载。'); }
     });
@@ -586,7 +577,7 @@
     controls();
   }
   function chooseCurrentTake(preferredId) {
-    const key=isSinging()?`song:${currentCueKey()}`:currentCueKey();
+    const key=currentCueKey();
     const matching=videoHistory.filter(t=>t.cueKey===key);
     const value=videoHistory.find(t=>t.id===preferredId) || matching[0];
     setTake(value || null); renderHistory();
@@ -605,8 +596,7 @@
       savedBackings=backings;videoHistory=values;setSongTake(values.find(t=>t.kind==='song')); mode='idle';
       if(session) {
         assemblyChoices=Array.isArray(session.assemblyChoices)?session.assemblyChoices:[];
-        const validScope=value=>['whole','clip','paragraph'].includes(value);
-        scopePreferences={speech:validScope(session.speechScope)?session.speechScope:'clip',sing:validScope(session.karaokeScope)?session.karaokeScope:'whole'};
+        scopePreferences=EchoSelection.restoreScopes(session);
         if(['speech','sing'].includes(session.activity)){activity=session.activity;$('useBacking').checked=activity==='sing' && session.useBacking!==false;renderActivity();}
         captionSource=typeof session.captionSource==='string'?session.captionSource:'auto';captionSourceName=session.captionSourceName || '';loadedCaptionSource=session.loadedCaptionSource || '';renderCaptionSources();
         $('contentLanguage').value=EchoLanguages.validLanguage(session.contentLanguage)?session.contentLanguage:'auto';
@@ -620,7 +610,7 @@
         $('leadInSeconds').value=session.leadInSeconds===undefined?3:EchoPractice.leadInSeconds(session.leadInSeconds);
         $('leadInMode').value=['none','seconds','previous'].includes(session.leadInMode)?session.leadInMode:EchoPractice.leadInSeconds(session.leadInSeconds)>0?'seconds':'none';
         paragraphFirst=Number.isInteger(session.paragraphFirst)?session.paragraphFirst:0;paragraphLast=Number.isInteger(session.paragraphLast)?session.paragraphLast:1;
-        $('karaokeScope').value=scopePreferences[activity];
+        $('practiceScope').value=scopePreferences[activity];
         $('backingVolume').value=Number.isFinite(session.backingVolume)?Math.max(0,Math.min(2,session.backingVolume)):1;
         $('replayVocalVolume').value=clampGain(session.replayVocalVolume);
         $('replayBackingVolume').value=clampGain(session.replayBackingVolume);
@@ -713,11 +703,11 @@
     const volume=Number($('backingVolume').value);
     $('backingVolumeValue').textContent=`${Math.round(volume*100)}%`;
     updateBackingControls();
-    backingOutput?.setVolume(volume);recordMonitor?.setVolume?.(volume);
+    backingOutput?.setVolume(volume);recordingSession?.setVolume(volume);
   };
   $('backingVolume').onchange=saveProgress;
   $('useBacking').onchange=()=>{controls();saveProgress();};
-  $('karaokeScope').onchange=()=>{scopePreferences[activity]=$('karaokeScope').value;karaokeIssue='';if(isParagraph()){renderParagraphOptions();syncParagraphBounds();index=paragraphFirst;updateCaption();}chooseCurrentTake();updateSummaries();controls();saveProgress();if(isSinging() && !restoringBacking)void restoreServerBacking();};
+  $('practiceScope').onchange=()=>{scopePreferences[activity]=$('practiceScope').value;karaokeIssue='';if(isParagraph()){renderParagraphOptions();syncParagraphBounds();index=paragraphFirst;updateCaption();}chooseCurrentTake();updateSummaries();controls();saveProgress();if(isSinging() && !restoringBacking)void restoreServerBacking();};
   $('openBacking').onclick=()=>{
     $('karaokeSettings').open=true;
     $('karaokeSettings').scrollIntoView?.({block:'nearest'});
@@ -838,7 +828,7 @@
       try {
         output=await EchoKaraoke.createBackingOutput(a,Number($('backingVolume').value));
         if(token!==generation)return;
-        backingOutput=output;
+        backingOutput=output;output.setVolume(Number($('backingVolume').value));
         status('正在试听去原唱伴奏…');await v.play();if(token!==generation)return;sync();
         await new Promise(resolve=>{
           playback.onCancel(resolve);a.onended=resolve;
@@ -873,9 +863,9 @@
   });
   // Persist to the captured video even if YouTube navigated while recording.
   // UI updates are restricted to the video that is still open.
-  async function saveRecording(value, {token, keepBusy, monitored}) {
+  async function saveRecording(value, {token, keepBusy, monitored, ownsUI}) {
     const id = value.videoId;
-    if (id === videoId) {
+    if (ownsUI()) {
       if (value.kind === 'song') setSongTake(value);
       setTake(value);
       mode = keepBusy && token === generation ? 'practice' : 'idle';
@@ -885,9 +875,10 @@
     }
     try {
       await storage.saveTake(value);
-      if (id !== videoId) return;
+      if (!ownsUI()) return;
+      const request=++historyRequest;
       const values = await storage.listTakes(id);
-      if (id !== videoId) return;
+      if (!ownsUI() || request!==historyRequest) return;
       videoHistory = values;
       renderHistory();
       if (token === generation || (take?.id === value.id && mode === 'idle')) {
@@ -897,112 +888,76 @@
       if (videoId === id && take?.id === value.id) status('录音已完成，但保存失败，请下载备份。');
     }
   }
-  async function record(options = {}) {
+  async function record({token = ++generation, keepBusy = false} = {}) {
     closeWord();
-    const r = options.range || selectedRange(), v = video(), id = videoId, token = options.token ?? ++generation;
-    const ready=usesBacking() ? backingFor(r) : null;
+    const v=video(),selection=EchoSelection.resolve(selectionInput(v.duration));
+    const r=selection.range,id=videoId,singingTake=isSinging();
+    const ready=usesBacking()?backingFor(r):null;
     if(usesBacking() && !ready)throw Error('请先为当前片段生成伴奏，或关闭「录唱时播放伴奏」。');
     deletedTake=null;$('undoDelete').hidden=true;
-    const recorderOptions=EchoMicrophone.recordingOptions(recordingQuality,globalThis.MediaRecorder);
-    const microphoneSettingsQuality=recordingQuality;
-    mode = 'permission'; controls(); status('正在请求麦克风权限…');
-    const microphoneAudio = microphoneConstraints(isSinging() || options.song);
-    const mic = await navigator.mediaDevices.getUserMedia({audio: microphoneAudio, video: false});
-    if (token !== generation) { mic.getTracks().forEach(t => t.stop()); return; }
-    stream = mic;
-    const gainKey=isSinging() || options.song?'sing':'speech';
-    const input=await EchoMicrophone.createInput(mic,gainPreferences[gainKey]?0:manualGainPreferences[gainKey]);
-    if(token!==generation){input.dispose();mic.getTracks().forEach(t=>t.stop());return;}
-    recordingInput=input;
-    const monitor=ready ? await EchoKaraoke.createMonitor({blob:ready.blob,video:v,start:ready.start,speed:r.speed,volume:Number($('backingVolume').value)}) : null;
-    if(token!==generation){monitor?.dispose();input.dispose();mic.getTracks().forEach(t=>t.stop());return;}
-    recordMonitor=monitor;
-    recorder = new MediaRecorder(input.stream,recorderOptions);
-    if(microphoneSettingsQuality==='lossless' && !/codecs\s*=\s*["']?pcm\b/i.test(recorder.mimeType || ''))throw Error('浏览器未启用无损 PCM，已取消录音。请改选高品质压缩。');
-    const recordingInfo={quality:microphoneSettingsQuality,mimeType:recorder.mimeType || recorderOptions.mimeType || '',audioBitsPerSecond:recorder.audioBitsPerSecond || null,microphone:EchoMicrophone.captureSettings(mic),encodingInput:EchoMicrophone.captureSettings(input.stream)};
-    const singingTake=options.song || isSinging();
-    const recordedKey=singingTake ? `song:${options.song?EchoStorage.cueKey(null,r.start,r.end):currentCueKey()}` : currentCueKey();
-    const recordedLabel=$('karaokeScope').value==='whole'?(singingTake?'整首演唱':'整段配音'):isParagraph()?`第 ${paragraphFirst+1}–${paragraphLast+1} 句 · 段落`:options.song ? (r.start===0 && Math.abs(r.end-v.duration)<0.01?'整首演唱':'片段演唱') : index>=0 ? `第 ${index+1} 句` : '手动片段';
-    const currentRecorder = recorder, chunks = [];
-    const clock=()=>globalThis.performance?.now?.() ?? Date.now();
-    let meter=null;
-    const startMeter=()=>{
-      if(!meter){meter=EchoLiveMeter.start({stream:input.stream,container:$('liveMeter'),canvas:$('liveMeterCanvas'),value:$('liveMeterValue'),bar:$('liveMeterBar')});recordingMeter=meter;}
-    };
-    let vocalOffset=0;
-    let starting=true;
-    let capturedEnd=r.start;
+    const gainKey=singingTake?'sing':'speech',constraints=microphoneConstraints(singingTake);
+    const active=()=>token===generation && id===videoId;
+    let starting=true,vocalOffset=0,capturedEnd=r.start;
     const observePosition=()=>{if(Number.isFinite(v.currentTime))capturedEnd=Math.max(capturedEnd,Math.min(r.end,v.currentTime));};
-    const onWaiting=()=>{monitor?.pause();if(currentRecorder.state==='recording'){currentRecorder.pause();meter?.setPaused(true);}};
+    const onWaiting=()=>session.pause();
     const onPlaying=()=>{
-      if(starting || token!==generation || !['recording','paused'].includes(currentRecorder.state))return;
-      void Promise.resolve(monitor?.sync()).then(()=>{if(token===generation && currentRecorder.state==='paused'){currentRecorder.resume();meter?.setPaused(false);}})
-        .catch(()=>{if(token===generation){stop();status('伴奏播放失败，录音已停止，请重新生成伴奏。');}});
+      if(starting || !active() || !['recording','paused'].includes(session.state))return;
+      void Promise.resolve(session.monitor?.sync()).then(()=>{if(active())session.resume();})
+        .catch(()=>{if(active()){stop();status('伴奏播放失败，录音已停止，请重新生成伴奏。');}});
     };
-    let resolveRecording;
-    const completed = new Promise(resolve => { resolveRecording = resolve; });
-    recorder.ondataavailable = e => { if (e.data.size) chunks.push(e.data); };
-    recorder.onerror = () => { stop(); status('录音失败，请检查麦克风后重试。'); };
-    recorder.onstop = async () => {
-      meter?.dispose();if(recordingMeter===meter)recordingMeter=null;
-      if(id===videoId)observePosition();
-      v.removeEventListener('timeupdate',observePosition);
-      v.removeEventListener('waiting',onWaiting);v.removeEventListener('playing',onPlaying);
-      monitor?.dispose();if(recordMonitor===monitor)recordMonitor=null;
-      input.dispose();if(recordingInput===input)recordingInput=null;
-      mic.getTracks().forEach(t => t.stop());
-      const blob = new Blob(chunks, { type: currentRecorder.mimeType });
-      if (!blob.size) { if (recorder === currentRecorder) { recorder = null; stream=null; if(id===videoId) {mode = 'idle'; controls();} } resolveRecording(false); return; }
-      const value = { id:crypto.randomUUID(),videoId:id,cueKey:recordedKey,label:recordedLabel,...r,blob,createdAt:Date.now(),capture:'vocal',recordingInfo,inputGainDb:input.db,autoGainControl:microphoneAudio.autoGainControl,vocalOffset,...(capturedEnd>r.start?{capturedEnd}:{}),...(monitor?{backingKey:ready.key}:{}),...(singingTake?{kind:'song'}:{}) };
-      if(recorder===currentRecorder){recorder=null;stream=null;}
-      try {
-        await saveRecording(value, {token, keepBusy: options.keepBusy, monitored: !!monitor});
-      } finally {
-        resolveRecording(true);
+    const session=EchoRecording.create({constraints,quality:recordingQuality,gainDb:gainPreferences[gainKey]?0:manualGainPreferences[gainKey],active,
+      microphone:EchoMicrophone,env:globalThis,
+      createMonitor:ready?()=>EchoKaraoke.createMonitor({blob:ready.blob,video:v,start:ready.start,speed:r.speed,volume:Number($('backingVolume').value)}):null,
+      createMeter:input=>EchoLiveMeter.start({stream:input,container:$('liveMeter'),canvas:$('liveMeterCanvas'),value:$('liveMeterValue'),bar:$('liveMeterBar')}),
+      onError:error=>{if(recordingSession===session && id===videoId){stop();status(error.message);}},
+      onComplete:async result=>{
+        v.removeEventListener('timeupdate',observePosition);
+        v.removeEventListener('waiting',onWaiting);v.removeEventListener('playing',onPlaying);
+        const ownsUI=()=>recordingSession===session && id===videoId;
+        try {
+          if(!result){if(ownsUI() && mode==='saving'){mode='idle';controls();}return;}
+          if(id===videoId)observePosition();
+          const value={id:crypto.randomUUID(),videoId:id,cueKey:selection.key,label:selection.label,...r,...result,createdAt:Date.now(),capture:'vocal',
+            autoGainControl:constraints.autoGainControl,vocalOffset,...(capturedEnd>r.start?{capturedEnd}:{}),...(ready?{backingKey:ready.key}:{}),...(singingTake?{kind:'song'}:{})};
+          await saveRecording(value,{token,keepBusy,monitored:!!ready,ownsUI});
+        } finally {if(recordingSession===session)recordingSession=null;}
       }
-    };
+    });
+    recordingSession=session;
+    mode='permission';controls();status('正在请求麦克风权限…');
+    if(!await session.prepare())return false;
+    if(!active())return false;
     saveVideo(v);v.playbackRate=r.speed;
-    if(leadInStart(r)<r.start)startMeter();
+    if(leadInStart(r)<r.start)session.startMeter();
     const hadLeadIn=await playRecordingLeadIn(v,r,token);
-    if(token!==generation)return false;
+    if(!active())return false;
     v.muted=true;
-    await seek(v, r.start, token, hadLeadIn);
-    if (token !== generation) { mic.getTracks().forEach(t => t.stop()); return; }
-    // Capture dry vocals before starting the singing monitor. Ordinary dubbing
-    // retains its existing video-first startup when no lead-in is requested.
-    if(!monitor && !hadLeadIn){await v.play();if(token!==generation)return;}
-    recorder.start(250);
-    const captureStartedAt=clock();
-    mode = 'recording'; controls();
-    startMeter();
+    await seek(v,r.start,token,hadLeadIn);
+    if(!active())return false;
+    // Every mode starts capture before playback; startup latency must not
+    // consume the selected range. The offset records any microphone pre-roll.
+    if(!session.start())return false;
+    const clock=()=>globalThis.performance?.now?.() ?? Date.now(),captureStartedAt=clock();
+    mode='recording';controls();session.startMeter();
     status('录音已启动，正在准备同步播放…');
-    v.addEventListener('waiting',onWaiting);v.addEventListener('playing',onPlaying);
-    v.addEventListener('timeupdate',observePosition);
-    if(monitor){
-      await monitor.sync(r.start);
-      vocalOffset=Math.max(0,(clock()-captureStartedAt)/1000-((monitor.position?.() ?? r.start)-r.start)/r.speed);
+    v.addEventListener('waiting',onWaiting);v.addEventListener('playing',onPlaying);v.addEventListener('timeupdate',observePosition);
+    if(ready){
+      await session.monitor.sync(r.start);
+      vocalOffset=Math.max(0,(clock()-captureStartedAt)/1000-((session.monitor.position?.() ?? r.start)-r.start)/r.speed);
     }
-    if(token!==generation)return completed;
-    if(monitor || hadLeadIn)await v.play();
-    if(token!==generation)return completed;
+    if(!active())return session.completed;
+    await v.play();
+    if(!active())return session.completed;
+    if(!ready)vocalOffset=Math.max(0,(clock()-captureStartedAt)/1000-(v.currentTime-r.start)/r.speed);
     starting=false;
-    if(currentRecorder.state==='paused'){
-      await monitor?.resume?.();
-      if(token!==generation)return completed;
-      currentRecorder.resume();meter?.setPaused(false);
-    }
-    const position=monitor?.position?.();
+    if(session.state==='paused'){await session.monitor?.resume?.();if(!active())return session.completed;session.resume();}
+    const position=session.monitor?.position?.();
     if(Number.isFinite(position) && Math.abs(v.currentTime-position)>0.15)v.currentTime=position;
-    status(monitor?'● 正在录制人声，伴奏仅在耳机播放…':singingTake?'● 正在录制清唱人声…':'● 正在配音，视频原声已静音…');
+    status(ready?'● 正在录制人声，伴奏仅在耳机播放…':singingTake?'● 正在录制清唱人声…':'● 正在配音，视频原声已静音…');
     showVideoTransport('录音',v,r);
-    const endRecording = () => {
-      if (token !== generation) return;
-      cancelPlayback(); restoreVideo(); mode = 'saving'; controls();
-      if (currentRecorder.state !== 'inactive') currentRecorder.stop();
-    };
-    playback.watchEnd(v, r.end, endRecording);
-    playback.timeout(endRecording, EchoPractice.playbackTimeout(r));
-    return completed;
+    const endRecording=()=>{if(!active())return;cancelPlayback();restoreVideo();mode='saving';controls();session.stop();};
+    playback.watchEnd(v,r.end,endRecording);playback.timeout(endRecording,EchoPractice.playbackTimeout(r));
+    return session.completed;
   }
   async function replay(token, keepBusy = false) {
     closeWord();
@@ -1272,7 +1227,7 @@
   function select(i, fromList=false) {
     if (mode !== 'idle' || !cues[i]) return;
     index = i; if(isParagraph())syncParagraphBounds();else{$('start').value = cues[i].start.toFixed(2); $('end').value = cues[i].end.toFixed(2);}
-    if(fromList && !isParagraph()){$('karaokeScope').value='clip';karaokeIssue='';}
+    if(fromList && !isParagraph()){$('practiceScope').value='clip';karaokeIssue='';}
     updateCaption(); chooseCurrentTake();updateSummaries();saveProgress();showPage('practice');renderCueList();
     if(fromList){$('record').focus();}
   }
@@ -1310,7 +1265,7 @@
     if (token === generation) { finish(); status('循环播放完成。'); }
   });
   $('autoPractice').onclick = guarded(async () => {
-    selectedRange(); const token = ++generation, autoNext = $('karaokeScope').value==='clip' && $('autoNext').checked, seconds = Number($('prepSeconds').value);
+    selectedRange(); const token = ++generation, autoNext = $('practiceScope').value==='clip' && $('autoNext').checked, seconds = Number($('prepSeconds').value);
     closeWord(); mode = 'practice'; controls(); status('首次练习：正在检查麦克风权限…');
     // Obtain permission before the listening/preparation stages so its dialog
     // cannot consume the learner's preparation time. Release immediately.
@@ -1320,7 +1275,7 @@
     await EchoPractice.runPractice({active:()=>token === generation,
       listen:async()=>{ status(`自动跟读 · 听原声${index >= 0 ? ' · 第 '+(index+1)+' 句' : ''}`); await original(selectedRange(),token); },
       prepare:async()=>{ for(let n=seconds;n>0 && token===generation;n--) { status(`准备配音 · ${n} 秒`); await pauseBetween(1000,token); } },
-      record:()=>record({range:selectedRange(),song:isSinging(),token,keepBusy:true}),
+      record:()=>record({token,keepBusy:true}),
       replay:async()=>{ status('自动跟读 · 回放你的配音'); await replay(token,true); },
       advance:()=>{ if (!autoNext || index < 0 || index+1 >= cues.length || (usesBacking() && !backingFor(cues[index+1]))) return false; mode='idle'; select(index+1); mode='practice'; controls(); return true; }
     });
@@ -1346,7 +1301,7 @@
     if(!isSinging())return record();
     let r;try{r=selectedRange();}catch(error){karaokeIssue=error.message;controls();$('clipSettings').open=true;status('请先调整练习范围。');return;}
     if(usesBacking() && !backingFor(r)){$('openBacking').click();status('请先为当前练习范围生成伴奏，再开始录唱。');return;}
-    return record({range:r,song:true});
+    return record();
   }); $('stop').onclick = stop;
   $('replay').onclick = guarded(async () => { if(isSinging())return songTake && playRecording(songTake);const token = ++generation; mode = 'replay'; controls(); status('正在随画面播放你的配音…'); await replay(token); });
   $('compare').onclick = guarded(async () => { if (!take) return; const token = ++generation; mode = 'compare'; controls(); status('对比 1/2：原声'); await original(take, token, false); if (token !== generation) return; status('对比 2/2：你的配音'); await replay(token); });
@@ -1435,6 +1390,7 @@
   function resetVideo(id) {
     library.close(true);
     stop();
+    recordingSession=null;
     detachCaptionVideo();
     backingRestoreRequest++;
     restoringBacking = false;
@@ -1449,7 +1405,7 @@
     savedBackings = [];
     $('loopCount').value='3';$('prepSeconds').value='3';$('autoNext').checked=false;
     $('leadInMode').value='none';$('leadInSeconds').value=3;
-    $('karaokeScope').value = 'clip';
+    $('practiceScope').value = 'clip';
     $('backingVolume').value = 1;
     $('replayVocalVolume').value=1;$('replayBackingVolume').value=1;$('replayWithBacking').checked=true;replayVoiceMax=2;
     setSongTake(null);
@@ -1483,12 +1439,10 @@
   for(const id of ['clipSettings','practiceTools','practiceSettings','karaokeSettings','captionSettings','recordingDetails','mixControls']){
     const fold=$(id);
     fold.open=typeof foldPreferences[id]==='boolean'?foldPreferences[id]:id==='karaokeSettings';
-    const onToggle=fold.ontoggle;
-    fold.ontoggle=event=>{
-      onToggle?.call(fold,event);
+    fold.addEventListener('toggle',()=>{
       foldPreferences[id]=fold.open;
       try{window.localStorage.setItem(foldPreferenceKey,JSON.stringify(foldPreferences));}catch{}
-    };
+    });
   }
   renderClipOptions();attachCaptionVideo(document.querySelector('video.html5-main-video'));renderActivity();controls(); if(videoId) void loadVideo(videoId); else restoring=false;
 })();

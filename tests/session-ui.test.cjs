@@ -7,14 +7,21 @@ const {createStorage,cueKey}=require('../extension/storage.js');
 
 // Lightweight content-script DOM harness: run actual UI handlers against a real
 // IndexedDB implementation, without requesting microphone or YouTube access.
+async function waitUntil(predicate, message='condition did not become ready') {
+  const deadline=Date.now()+1000;
+  while(!predicate()) {if(Date.now()>deadline)throw Error(message);await new Promise(resolve=>setTimeout(resolve,1));}
+}
 async function mount(storage, overrides = {}) {
   const nodes=new Map(),created=[],downloads=[];
   class Element {
     constructor(){this.children=[];this.hidden=false;this.value='';this.style={};this.attrs={};this.dataset={};this.classList={toggle:()=>{}};created.push(this);}
     set innerHTML(html){this.html=html;for(const match of html.matchAll(/\bid="([^"]+)"/g))nodes.set(match[1],new Element());
       nodes.get('followCaptions').checked=true;
-      for(const [id,value] of Object.entries({start:'0',end:'5',speed:'1',loopCount:'3',prepSeconds:'3',backingVolume:'1',karaokeScope:'whole',assemblyType:'vocal',activityMode:'speech',contentLanguage:'auto',captionLayout:'original'}))nodes.get(id).value=value;}
+      for(const [id,value] of Object.entries({start:'0',end:'5',speed:'1',loopCount:'3',prepSeconds:'3',backingVolume:'1',practiceScope:'clip',assemblyType:'vocal',activityMode:'speech',contentLanguage:'auto',captionLayout:'original'}))nodes.get(id).value=value;}
     get innerHTML(){return this.html;}
+    addEventListener(type,fn){(this.listeners ||= new Map()).set(type,fn);}
+    removeEventListener(type,fn){if(this.listeners?.get(type)===fn)this.listeners.delete(type);}
+    dispatchEvent(event){this['on'+event.type]?.(event);this.listeners?.get(event.type)?.(event);}
     setAttribute(k,v){this.attrs[k]=v;} getAttribute(k){return this.attrs[k];} removeAttribute(k){delete this.attrs[k];if(k==='value')this.value=0;}
     append(...children){this.children.push(...children);} replaceChildren(...children){this.children=children;}
     attachShadow(){return root;} focus(){} getContext(){return {clearRect(){},fillRect(){},beginPath(){},moveTo(){},lineTo(){},stroke(){}};}
@@ -29,7 +36,7 @@ async function mount(storage, overrides = {}) {
   const context={document:doc,location:{href:'https://www.youtube.com/watch?v=video',pathname:'/watch'},indexedDB:{},URL,Blob,console,setTimeout,clearTimeout,cancelAnimationFrame(){},requestAnimationFrame(){},crypto:globalThis.crypto,
     window:{addEventListener(){},speechSynthesis:{cancel(){}}},chrome:{runtime:{onMessage:{addListener(){}}}},
     EchoCaptionTracks:require('../extension/caption-tracks.js'),EchoPanelView:require('../extension/panel-view.js'),EchoTransport:require('../extension/transport.js'),EchoPlayback:require('../extension/playback.js'),
-    EchoAudioExport:require('../extension/audio-export.js'),EchoAssembly:require('../extension/assembly.js'),EchoPanelSize:require('../extension/panel-size.js'),EchoLanguages:require('../extension/languages.js'),EchoKaraoke:require('../extension/karaoke.js'),EchoStorage:{...require('../extension/storage.js'),createStorage:()=>storage},EchoPractice:require('../extension/practice.js'),EchoDictionary:require('../extension/dictionary.js'),EchoSubtitles:require('../extension/subtitles.js'),EchoLibrary:require('../extension/library.js'),EchoLiveMeter:require('../extension/live-meter.js'),EchoMicrophone:require('../extension/microphone.js'),EchoAudioAnalysis:require('../extension/audio-analysis.js')};
+    EchoAudioExport:require('../extension/audio-export.js'),EchoAssembly:require('../extension/assembly.js'),EchoPanelSize:require('../extension/panel-size.js'),EchoLanguages:require('../extension/languages.js'),EchoKaraoke:require('../extension/karaoke.js'),EchoStorage:{...require('../extension/storage.js'),createStorage:()=>storage},EchoSelection:require('../extension/selection.js'),EchoPractice:require('../extension/practice.js'),EchoDictionary:require('../extension/dictionary.js'),EchoSubtitles:require('../extension/subtitles.js'),EchoLibrary:require('../extension/library.js'),EchoLiveMeter:require('../extension/live-meter.js'),EchoRecording:require('../extension/recording.js'),EchoMicrophone:require('../extension/microphone.js'),EchoAudioAnalysis:require('../extension/audio-analysis.js')};
   Object.assign(context,overrides.globals || {});
   // Existing UI fixtures provide a caption transport; integration fixtures can
   // pass the real page-context client to verify fetch rather than messaging.
@@ -246,7 +253,7 @@ test('volume remains adjustable during accompaniment preview and saves the chose
   const {nodes}=await mount(storage,{video,globals:{Audio,EchoKaraoke:{...require('../extension/karaoke.js'),async createBackingOutput(){return {setVolume(value){gain=value;},dispose(){}};}}}});
   nodes.get('activityMode').value='sing';nodes.get('activityMode').onchange();
   const playing=nodes.get('previewBacking').onclick();
-  for(let i=0;i<5;i++)await Promise.resolve();
+  for(let i=0;i<30 && !nodes.get('transportProgress').oninput;i++)await new Promise(r=>setTimeout(r,1));
   assert.equal(nodes.get('backingVolume').disabled,false);
   nodes.get('backingVolume').value='1.5';nodes.get('backingVolume').oninput();
   assert.equal(gain,1.5);assert.equal(nodes.get('backingVolumeValue').textContent,'150%');
@@ -398,7 +405,7 @@ test('selecting a lyric uses the main clip recording controls without a duplicat
   assert.equal(nodes.get('list').children.length,1);nodes.get('list').children[0].onclick();
   assert.equal(nodes.get('start').value,'2.00');
   assert.equal(nodes.get('position').textContent,'2 / 2');
-  assert.equal(nodes.get('practiceDock').hidden,false);assert.equal(nodes.get('karaokeScope').value,'clip');
+  assert.equal(nodes.get('practiceDock').hidden,false);assert.equal(nodes.get('practiceScope').value,'clip');
   assert.equal(nodes.get('scopeControls').hidden,false);assert.equal(nodes.get('practiceTools').open,false);
   assert.match(nodes.get('clipSummary').textContent,/2.0–4.0/);
   assert.match(nodes.get('record').textContent,/开始片段录唱/);
@@ -407,7 +414,7 @@ test('selecting a lyric uses the main clip recording controls without a duplicat
   await nodes.get('startLater').onclick();assert.equal(nodes.get('clipCue').value,'');
   nodes.get('clipCue').value='1';nodes.get('clipCue').onchange();assert.equal(nodes.get('start').value,'2.00');
   nodes.get('prev').onclick();assert.equal(nodes.get('start').value,'0.00');
-  assert.equal(nodes.get('karaokeScope').value,'clip');
+  assert.equal(nodes.get('practiceScope').value,'clip');
   nodes.get('transcriptSearch').value='no match';nodes.get('transcriptSearch').oninput();
   assert.equal(nodes.get('transcriptNoMatches').hidden,false);assert.equal(nodes.get('list').children.length,0);
   (await storage.ready).close();
@@ -506,7 +513,7 @@ test('clip-only accompaniment must be regenerated when boundaries exceed its ran
   }}}}});
   assert.equal(nodes.get('previewBacking').disabled,true);
   nodes.get('activityMode').value='sing';nodes.get('activityMode').onchange();
-  nodes.get('karaokeScope').value='clip';nodes.get('karaokeScope').onchange();
+  nodes.get('practiceScope').value='clip';nodes.get('practiceScope').onchange();
   await nodes.get('prepareBacking').onclick();
   assert.equal(nodes.get('useBacking').checked,true);assert.equal(nodes.get('previewBacking').disabled,false);
   assert.deepEqual(calls.map(c=>c.action),['start','audio']);
@@ -580,7 +587,7 @@ test('whole-song recording uses the full duration and offers replay, retry and d
   assert.equal(takes[0].kind,'song');assert.equal(takes[0].start,0);assert.equal(takes[0].end,180);
   assert.equal(nodes.get('end').value,1);assert.equal(nodes.get('songResult').hidden,false);
   assert.equal(nodes.get('record').textContent,'● 再录一次');assert.match(nodes.get('download').href,/^blob:/);
-  nodes.get('karaokeScope').value='clip';nodes.get('karaokeScope').onchange();
+  nodes.get('practiceScope').value='clip';nodes.get('practiceScope').onchange();
   assert.equal(nodes.get('record').textContent,'● 开始片段录唱');
   nodes.get('tab-recordings').onclick();
   assert.equal(nodes.get('reuseSongRange').hidden,false);nodes.get('reuseSongRange').onclick();
@@ -600,15 +607,15 @@ test('default generation covers the whole song and reuses it for different sente
   const {nodes}=await mount(storage,{video:{duration:180,pause(){}},globals:{chrome:{runtime:{onMessage:{addListener(){}},async sendMessage(message){
     calls.push(message);return message.action==='audio'?{audio:'UklGRg==',mime:'audio/wav'}:{id:'d'.repeat(32),state:'ready'};
   }}}}});
-  assert.equal(nodes.get('karaokeScope').value,'clip');assert.equal(nodes.get('record').disabled,false);
+  assert.equal(nodes.get('practiceScope').value,'clip');assert.equal(nodes.get('record').disabled,false);
   nodes.get('activityMode').value='sing';nodes.get('activityMode').onchange();
-  assert.equal(nodes.get('karaokeScope').value,'whole');
+  assert.equal(nodes.get('practiceScope').value,'whole');
   await nodes.get('prepareBacking').onclick();
   assert.equal(calls[0].start,0);assert.equal(calls[0].end,180);
   assert.equal(nodes.get('start').value,10);assert.equal(nodes.get('end').value,12);
   assert.equal(nodes.get('record').disabled,false);
   nodes.get('start').value=30;nodes.get('end').value=40;nodes.get('end').onchange();
-  nodes.get('karaokeScope').value='clip';nodes.get('karaokeScope').onchange();
+  nodes.get('practiceScope').value='clip';nodes.get('practiceScope').onchange();
   assert.equal(nodes.get('record').disabled,false);assert.equal(nodes.get('previewBacking').disabled,false);
   assert.equal(nodes.get('prepareBacking').disabled,true);assert.equal(calls.length,2);
   (await storage.ready).close();
@@ -682,7 +689,7 @@ test('the main singing button records a selected clip without backing and disabl
   nodes.get('activityMode').value='sing';nodes.get('activityMode').onchange();
   nodes.get('useBacking').checked=false;
   nodes.get('useBacking').onchange();
-  nodes.get('karaokeScope').value='clip';nodes.get('karaokeScope').onchange();
+  nodes.get('practiceScope').value='clip';nodes.get('practiceScope').onchange();
   assert.match(nodes.get('songReadiness').textContent,/清唱/);
   await nodes.get('record').onclick();
   assert.deepEqual({...requested.audio},{echoCancellation:false,noiseSuppression:false,autoGainControl:false});
@@ -969,7 +976,7 @@ test('manual input gain reaches the saved vocal recording and meter, then releas
     requestAnimationFrame:fn=>setTimeout(fn,0),cancelAnimationFrame:clearTimeout}});
   nodes.get('activityMode').value='sing';nodes.get('activityMode').onchange();
   nodes.get('useBacking').checked=false;nodes.get('useBacking').onchange();
-  nodes.get('karaokeScope').value='clip';nodes.get('karaokeScope').onchange();
+  nodes.get('practiceScope').value='clip';nodes.get('practiceScope').onchange();
   nodes.get('start').value='0';nodes.get('end').value='1';
   nodes.get('manualGainDb').value='16';nodes.get('manualGainDb').oninput();
   await nodes.get('record').onclick();
@@ -1058,7 +1065,7 @@ test('paragraph mode restores, keeps multi-sentence bounds during browsing, reco
   const {nodes}=await mount(storage,{video,globals:{MediaRecorder,
     navigator:{mediaDevices:{async getUserMedia(){return {getTracks:()=>[{stop(){}}]};}}},
     requestAnimationFrame:fn=>setTimeout(fn,1),cancelAnimationFrame:clearTimeout}});
-  assert.equal(nodes.get('karaokeScope').value,'paragraph');assert.equal(nodes.get('paragraphSelection').hidden,false);
+  assert.equal(nodes.get('practiceScope').value,'paragraph');assert.equal(nodes.get('paragraphSelection').hidden,false);
   assert.equal(nodes.get('paragraphFirst').value,'1');assert.equal(nodes.get('paragraphLast').value,'3');
   assert.match(nodes.get('record').textContent,/开始段落录唱/);assert.match(nodes.get('clipSummary').textContent,/第 2–4 句/);
   assert.equal(nodes.get('start').disabled,true);assert.equal(nodes.get('autoNext').disabled,true);
@@ -1071,7 +1078,7 @@ test('paragraph mode restores, keeps multi-sentence bounds during browsing, reco
   nodes.get('paragraphFirst').value='0';nodes.get('paragraphFirst').onchange();
   nodes.get('paragraphLast').value='2';nodes.get('paragraphLast').onchange();
   await new Promise(r=>setTimeout(r,5));const session=await storage.getSession('video');assert.equal(session.paragraphFirst,0);assert.equal(session.paragraphLast,2);assert.equal(session.end,8.8);
-  const restored=(await mount(storage)).nodes;assert.equal(restored.get('karaokeScope').value,'paragraph');assert.equal(Number(restored.get('end').value),8.8);
+  const restored=(await mount(storage)).nodes;assert.equal(restored.get('practiceScope').value,'paragraph');assert.equal(Number(restored.get('end').value),8.8);
   (await storage.ready).close();
 });
 
@@ -1140,8 +1147,8 @@ test('fold preferences survive mode changes and remount without breaking setting
   const localStorage={getItem:key=>preferences.get(key) || null,setItem:(key,value)=>preferences.set(key,value)};
   const globals={window:{localStorage,addEventListener(){},speechSynthesis:{cancel(){}}}};
   const {nodes}=await mount(storage,{globals});
-  nodes.get('practiceTools').open=true;nodes.get('practiceTools').ontoggle();
-  nodes.get('karaokeSettings').open=false;nodes.get('karaokeSettings').ontoggle();
+  nodes.get('practiceTools').open=true;nodes.get('practiceTools').dispatchEvent({type:'toggle'});
+  nodes.get('karaokeSettings').open=false;nodes.get('karaokeSettings').dispatchEvent({type:'toggle'});
   nodes.get('activityMode').value='sing';nodes.get('activityMode').onchange();
   assert.equal(nodes.get('practiceTools').open,true);assert.equal(nodes.get('karaokeSettings').open,false);
   nodes.get('leadInMode').value='seconds';nodes.get('leadInMode').onchange();
@@ -1194,8 +1201,8 @@ for(const [scope,start,end] of [['whole',0,12],['paragraph',4,10],['clip',4,6]])
   const globals={MediaRecorder,navigator:{mediaDevices:{async getUserMedia(){return {getTracks:()=>[{stop(){}}]};}}},requestAnimationFrame:fn=>setTimeout(fn,1),cancelAnimationFrame:clearTimeout,
     EchoPractice:{...require('../extension/practice.js'),async runPractice({listen,record,advance}){await listen();await record();advances+=Number(advance());}}};
   const {nodes}=await mount(storage,{video,globals});
-  assert.equal(nodes.get('scopeControls').hidden,false);assert.equal(nodes.get('karaokeScope').disabled,false);
-  assert.equal(nodes.get('karaokeScope').value,scope);assert.equal(nodes.get('clipBounds').hidden,scope!=='clip');
+  assert.equal(nodes.get('scopeControls').hidden,false);assert.equal(nodes.get('practiceScope').disabled,false);
+  assert.equal(nodes.get('practiceScope').value,scope);assert.equal(nodes.get('clipBounds').hidden,scope!=='clip');
   assert.equal(nodes.get('autoNext').disabled,scope!=='clip');
   await nodes.get('original').onclick();assert.equal(video.plays[0].at,start);
   await nodes.get('record').onclick();
@@ -1205,18 +1212,18 @@ for(const [scope,start,end] of [['whole',0,12],['paragraph',4,10],['clip',4,6]])
     await nodes.get('autoPractice').onclick();assert.equal(advances,0);
     [take]=await storage.listTakes('video');assert.equal(take.start,start);assert.equal(take.end,end);
   }
-  nodes.get('activityMode').value='sing';nodes.get('activityMode').onchange();assert.equal(nodes.get('karaokeScope').value,'whole');
-  nodes.get('activityMode').value='speech';nodes.get('activityMode').onchange();assert.equal(nodes.get('karaokeScope').value,scope);
+  nodes.get('activityMode').value='sing';nodes.get('activityMode').onchange();assert.equal(nodes.get('practiceScope').value,'whole');
+  nodes.get('activityMode').value='speech';nodes.get('activityMode').onchange();assert.equal(nodes.get('practiceScope').value,scope);
   await new Promise(r=>setTimeout(r,5));
-  const restored=await mount(storage,{video,globals});assert.equal(restored.nodes.get('karaokeScope').value,scope);
+  const restored=await mount(storage,{video,globals});assert.equal(restored.nodes.get('practiceScope').value,scope);
   (await storage.ready).close();
 });
 test('legacy speech sessions keep clip mode and whole-video scope rejects videos over ten minutes',async()=>{
   const storage=createStorage(new IDBFactory());let requests=0;
   await storage.saveSession({videoId:'video',activity:'speech',karaokeScope:'whole',start:3,end:5,cues:[],index:-1});
   const {nodes}=await mount(storage,{video:{duration:601,pause(){}},globals:{navigator:{mediaDevices:{async getUserMedia(){requests++;}}}}});
-  assert.equal(nodes.get('karaokeScope').value,'clip');
-  nodes.get('karaokeScope').value='whole';nodes.get('karaokeScope').onchange();await nodes.get('record').onclick();
+  assert.equal(nodes.get('practiceScope').value,'clip');
+  nodes.get('practiceScope').value='whole';nodes.get('practiceScope').onchange();await nodes.get('record').onclick();
   assert.equal(requests,0);assert.match(nodes.get('status').textContent,/10 分钟/);
   (await storage.ready).close();
 });
@@ -1226,6 +1233,46 @@ test('reusing a saved recording switches paragraph practice to its exact clip bo
   await storage.saveSession({videoId:'video',activity:'speech',speechScope:'paragraph',start:0,end:10,cues,index:0,paragraphFirst:0,paragraphLast:2});
   await storage.saveTake({id:'saved-range',videoId:'video',cueKey:cueKey(null,4,6),start:4,end:6,speed:1,createdAt:1,blob:new Blob(['voice'])});
   const {nodes}=await mount(storage);nodes.get('tab-recordings').onclick();nodes.get('reuseSongRange').onclick();
-  assert.equal(nodes.get('karaokeScope').value,'clip');assert.equal(Number(nodes.get('start').value),4);assert.equal(Number(nodes.get('end').value),6);
+  assert.equal(nodes.get('practiceScope').value,'clip');assert.equal(Number(nodes.get('start').value),4);assert.equal(Number(nodes.get('end').value),6);
+  (await storage.ready).close();
+});
+
+test('ordinary and automatic singing use the same selected-sentence version bucket',async()=>{
+  const storage=createStorage(new IDBFactory()),video=leadInVideo(),cue={start:0,end:1,text:'Same lyric'};
+  video.play=async function(){this.currentTime=1;};
+  await storage.saveSession({videoId:'video',activity:'sing',useBacking:false,karaokeScope:'clip',start:0,end:1,speed:'1',cues:[cue],index:0,prepSeconds:'0'});
+  class MediaRecorder{static isTypeSupported(){return true;}constructor(stream,options){this.state='inactive';this.mimeType=options.mimeType;}start(){this.state='recording';}stop(){this.state='inactive';this.ondataavailable({data:new Blob(['voice'])});queueMicrotask(()=>this.onstop());}}
+  const {nodes}=await mount(storage,{video,globals:{MediaRecorder,navigator:{mediaDevices:{async getUserMedia(){return {getTracks:()=>[{stop(){}}]};}}},requestAnimationFrame:fn=>setTimeout(fn,1),cancelAnimationFrame:clearTimeout,
+    EchoPractice:{...require('../extension/practice.js'),async runPractice({record}){await record();}}}});
+  await nodes.get('record').onclick();await nodes.get('autoPractice').onclick();
+  const takes=await storage.listTakes('video');assert.equal(takes.length,2);assert.deepEqual([...new Set(takes.map(t=>t.cueKey))],[`song:${cueKey(cue)}`]);
+  assert.equal(nodes.get('versionChoices').children.length,2);
+  (await storage.ready).close();
+});
+test('a late recording stop after navigating away and back cannot replace the next capture UI',async()=>{
+  const storage=createStorage(new IDBFactory()),video=leadInVideo({hold:true}),instances=[],stops=[];
+  const location={href:'https://www.youtube.com/watch?v=video',pathname:'/watch'};
+  class MediaRecorder{static isTypeSupported(){return true;}constructor(stream,options){this.state='inactive';this.mimeType=options.mimeType;instances.push(this);}start(){this.state='recording';}stop(){this.state='inactive';this.ondataavailable({data:new Blob(['voice-'+instances.indexOf(this)])});}}
+  const {nodes,events}=await mount(storage,{video,globals:{location,MediaRecorder,navigator:{mediaDevices:{async getUserMedia(){const index=stops.length;stops.push(0);return {getTracks:()=>[{stop(){stops[index]++;}}]};}}},requestAnimationFrame:fn=>setTimeout(fn,1),cancelAnimationFrame:clearTimeout}});
+  const first=nodes.get('record').onclick();await waitUntil(()=>instances[0]?.state==='recording');
+  location.href='https://www.youtube.com/watch?v=other';events.get('yt-navigate-finish')();await waitUntil(()=>!nodes.get('read').disabled);
+  location.href='https://www.youtube.com/watch?v=video';events.get('yt-navigate-finish')();await waitUntil(()=>!nodes.get('read').disabled);
+  const second=nodes.get('record').onclick();await waitUntil(()=>instances[1]?.state==='recording');
+  instances[0].onstop();await first;
+  assert.equal(instances[1].state,'recording');assert.equal(stops[1],0);
+  assert.equal(nodes.get('record').disabled,true);assert.equal(nodes.get('stop').textContent,'■ 结束录音');assert.equal(nodes.get('liveMeter').hidden,false);
+  nodes.get('stop').onclick();instances[1].onstop();await second;
+  assert.equal((await storage.listTakes('video')).length,2);assert.deepEqual(stops,[1,1]);
+  (await storage.ready).close();
+});
+
+test('plain dubbing starts capture before video playback and records startup offset',async()=>{
+  const storage=createStorage(new IDBFactory()),video=leadInVideo({hold:true});let instance,now=0;
+  class MediaRecorder{static isTypeSupported(){return true;}constructor(stream,options){instance=this;this.state='inactive';this.mimeType=options.mimeType;}start(){this.state='recording';}stop(){this.state='inactive';this.ondataavailable({data:new Blob(['complete-opening'])});queueMicrotask(()=>this.onstop());}}
+  video.play=async function(){assert.equal(instance.state,'recording');now=300;};
+  const {nodes}=await mount(storage,{video,globals:{MediaRecorder,performance:{now:()=>now},navigator:{mediaDevices:{async getUserMedia(){return {getTracks:()=>[{stop(){}}]};}}},requestAnimationFrame:fn=>setTimeout(fn,1),cancelAnimationFrame:clearTimeout}});
+  nodes.get('end').value=1;nodes.get('end').onchange();
+  const pending=nodes.get('record').onclick();await waitUntil(()=>!nodes.get('transport').hidden);video.currentTime=1;await pending;
+  const [take]=await storage.listTakes('video');assert.equal(take.vocalOffset,.3);assert.equal(take.start,0);assert.equal(take.end,1);
   (await storage.ready).close();
 });

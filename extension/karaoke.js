@@ -19,29 +19,34 @@
   async function createAudioOutput(music, volume=1, env=root) {
     const context=new env.AudioContext();
     try{
-      const source=context.createMediaElementSource(music),gain=context.createGain();
-      source.connect(gain);gain.connect(context.destination);setGain(gain,volume);
       await context.resume();
+      if(context.state==='suspended')throw Error('Audio context suspended');
+      // Keep HTML-audio fallback usable if the device cannot start: creating
+      // a media-element source reroutes the element away from its normal output.
+      const gain=context.createGain();gain.connect(context.destination);setGain(gain,volume);
+      const source=context.createMediaElementSource(music);source.connect(gain);
       let disposed=false;
       return {setVolume:value=>setGain(gain,value),dispose:()=>{if(disposed)return;disposed=true;void context.close().catch(()=>{});}};
     }catch(error){await context.close().catch(()=>{});throw error;}
   }
   async function createMonitor({blob,video,start,speed,volume=1}, env=root) {
     const context=new env.AudioContext();
-    const url=env.URL.createObjectURL(blob), music=new env.Audio(url);
-    let disposed=false;
+    let url,music,loadTimer=0,disposed=false;
+    const clearLoading=()=>{env.clearTimeout(loadTimer);loadTimer=0;if(music)music.oncanplay=music.onerror=null;};
     const cleanup=()=>{
-      if(disposed)return;disposed=true;music.pause();music.removeAttribute('src');music.load();
-      env.URL.revokeObjectURL(url);void context.close().catch(()=>{});
+      if(disposed)return;disposed=true;clearLoading();
+      if(music){music.pause();music.removeAttribute('src');music.load();}
+      if(url)env.URL.revokeObjectURL(url);void context.close().catch(()=>{});
     };
     try {
+      url=env.URL.createObjectURL(blob);music=new env.Audio(url);
       music.preload='auto';music.playbackRate=speed;music.preservesPitch=true;
       const backing=context.createMediaElementSource(music), gain=context.createGain();setGain(gain,volume);
       backing.connect(gain);gain.connect(context.destination);
       const ready=new Promise((resolve,reject)=>{
-        const timeout=env.setTimeout(()=>reject(Error('伴奏加载超时，请重新生成。')),10000);
-        music.oncanplay=()=>{env.clearTimeout(timeout);resolve();};
-        music.onerror=()=>{env.clearTimeout(timeout);reject(Error('伴奏无法解码，请重新生成。'));};
+        loadTimer=env.setTimeout(()=>{clearLoading();reject(Error('伴奏加载超时，请重新生成。'));},10000);
+        music.oncanplay=()=>{clearLoading();resolve();};
+        music.onerror=()=>{clearLoading();reject(Error('伴奏无法解码，请重新生成。'));};
       });
       music.load();await Promise.all([ready,context.resume()]);
       return {setVolume:value=>setGain(gain,value),
@@ -71,7 +76,7 @@
       const current=++revision;pending=true;playing=true;
       try {await monitor.sync(position);}
       catch(error) {
-        if(!disposed && current===revision){enabled=false;pause();onError(error);}
+        if(!disposed && current===revision){enabled=false;pause();onError?.(error);}
       } finally {if(current===revision)pending=false;}
     }
     function tick() {

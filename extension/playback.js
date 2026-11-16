@@ -39,6 +39,31 @@
       });
     }
 
+    // Seeking is owned by the same operation as playback. Cancel immediately
+    // removes the listener/watchdog instead of waiting ten seconds to reject.
+    function seek(media, at, {force = false} = {}) {
+      cancel();
+      media.pause();
+      if (!force && Math.abs(media.currentTime - at) < 0.03 && !media.seeking) return Promise.resolve(true);
+      return new Promise((resolve, reject) => {
+        let finished = false;
+        function done(success, error) {
+          if (finished) return;
+          finished = true;
+          media.removeEventListener('seeked', onSeeked);
+          env.clearTimeout(timer); timer = 0; ++timerRevision;
+          if (completion === cancelled) completion = null;
+          if (error) reject(error); else resolve(success);
+        }
+        const cancelled = () => done(false);
+        const onSeeked = () => { if (!media.seeking && Math.abs(media.currentTime - at) < 0.1) done(true); };
+        media.addEventListener('seeked', onSeeked);
+        onCancel(cancelled);
+        timeout(() => done(false, Error('视频定位超时，请重试。')), 10000);
+        try { media.currentTime = at; } catch (error) { done(false, error); }
+      });
+    }
+
     function cancel() {
       ++watchRevision;
       ++timerRevision;
@@ -50,7 +75,7 @@
       done?.();
     }
 
-    return {watchEnd, timeout, onCancel, delay, cancel};
+    return {watchEnd, timeout, onCancel, delay, seek, cancel};
   }
   const api = {create};
   if (typeof module !== 'undefined') module.exports = api;
