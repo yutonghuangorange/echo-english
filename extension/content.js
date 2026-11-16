@@ -7,7 +7,7 @@
   const root = host.attachShadow({ mode: 'open' });
   root.innerHTML = EchoPanelView.html;
   const $ = id => root.getElementById(id);
-  EchoPanelSize.attach({panel:$('panel'),host,handle:$('resizePanel'),env:window});
+  EchoPanelSize.attach({panel:$('panel'),host,handle:$('resizePanel'),moveHandle:$('movePanel'),env:window});
   let cues = [], index = -1, take = null, mode = 'idle', generation = 0;
   let recorder = null, stream = null, audio = null, savedVideo = null, recordingMeter = null;
   const playback = EchoPlayback.create();
@@ -33,6 +33,13 @@
   let wordRequest = 0, selectedWord = null, analysisRequest = 0;
   let videoId = currentId();
   const storage = EchoStorage.createStorage();
+  const library=EchoLibrary.attach({view:root,storage,doc:document,onChange:async()=>{
+    const id=videoId;if(!id)return;
+    const values=await storage.listBackings(id);if(id!==videoId)return;
+    savedBackings=values;deletedTake=null;$('undoDelete').hidden=true;
+    await refreshHistory(take?.id);controls();
+  }});
+  $('openLibrary').onclick=()=>{if(mode!=='idle')return;saveProgress();return library.open();};
   let videoHistory = [], historyRequest = 0, restoring = true, progressWarning = false, deletedTake = null;
   let currentPage='practice', returnFocus=null;
   const pageNames = ['practice','transcript','recordings'];
@@ -197,6 +204,7 @@
   function status(text) { $('status').textContent = text; }
   function controls() {
     const busy = mode !== 'idle';
+    $('openLibrary').disabled=busy;
     const focused=root.activeElement;
     for(const id of ['openSongRecording','takeMixDownload','assembleSong','assemblyType'])$(id).disabled=busy;
     const recording=mode==='recording';
@@ -344,7 +352,8 @@
     if (restoring || !videoId) return;
     const start = Number($('start').value), end = Number($('end').value);
     if (!Number.isFinite(start) || !Number.isFinite(end) || start < 0 || end <= start) return;
-    const session = {captionSource,captionSourceName,loadedCaptionSource,replayVocalVolume:replayMix().vocal,replayBackingVolume:replayMix().backing,replayWithBacking:$('replayWithBacking').checked,backingVolume:Number($('backingVolume').value),contentLanguage:$('contentLanguage').value,captionLayout:$('captionLayout').value,videoId,cues:cues.map(c=>({...c})),index,start,end,speed:$('speed').value,showChinese:$('showChinese').checked,hideText:$('hideText').checked,followCaptions:$('followCaptions').checked,karaokeScope:$('karaokeScope').value,selectedTakeId:take?.id,updatedAt:Date.now()};
+    const title=(document.querySelector('ytd-watch-metadata h1')?.textContent || document.title || '').replace(/\s*[-–]\s*YouTube\s*$/,'').trim();
+    const session = {title:title || videoId,activity,useBacking:$('useBacking').checked,captionSource,captionSourceName,loadedCaptionSource,replayVocalVolume:replayMix().vocal,replayBackingVolume:replayMix().backing,replayWithBacking:$('replayWithBacking').checked,backingVolume:Number($('backingVolume').value),contentLanguage:$('contentLanguage').value,captionLayout:$('captionLayout').value,videoId,cues:cues.map(c=>({...c})),index,start,end,speed:$('speed').value,showChinese:$('showChinese').checked,hideText:$('hideText').checked,followCaptions:$('followCaptions').checked,karaokeScope:$('karaokeScope').value,selectedTakeId:take?.id,updatedAt:Date.now()};
     void storage.saveSession(session).catch(()=>{
       if (!progressWarning && session.videoId === videoId) { progressWarning=true; status('练习位置未能保存，请检查本地存储空间。录音仍可下载。'); }
     });
@@ -425,6 +434,7 @@
       if(id!==videoId || token!==generation) return;
       savedBackings=backings;videoHistory=values;setSongTake(values.find(t=>t.kind==='song')); mode='idle';
       if(session) {
+        if(['speech','sing'].includes(session.activity)){activity=session.activity;$('useBacking').checked=activity==='sing' && session.useBacking!==false;renderActivity();}
         captionSource=typeof session.captionSource==='string'?session.captionSource:'auto';captionSourceName=session.captionSourceName || '';loadedCaptionSource=session.loadedCaptionSource || '';renderCaptionSources();
         $('contentLanguage').value=EchoLanguages.validLanguage(session.contentLanguage)?session.contentLanguage:'auto';
         // Older sessions intentionally used English/Chinese splitting. Keep
@@ -1135,10 +1145,11 @@
     });
     if (token === generation) { finish(); status('自动跟读完成。可以重练或下载这次录音。'); }
   });
-  $('close').onclick = () => { closeWord(); stop(); host.style.display = 'none'; };
+  $('close').onclick = () => { library.close(true);closeWord(); stop(); host.style.display = 'none'; };
   root.addEventListener('keydown',event=>{
     if(event.key!=='Escape')return;
     event.preventDefault();event.stopPropagation();
+    if(library.isOpen()){library.escape();return;}
     if(!$('wordcard').hidden)closeWord();
     else if(mode!=='idle')stop();
     else $('close').click();
@@ -1232,8 +1243,9 @@
     }finally{if(token===generation){mode='idle';controls();}}
   });
   $('search').onclick = () => { window.open(`https://www.youtube.com/results?search_query=${encodeURIComponent($('query').value || ({'zh':'中文 歌词','ja':'日本語 字幕 歌詞','ko':'한국어 자막 가사','en':'english conversation subtitles'}[contentLanguage()] || 'subtitles lyrics'))}`, '_blank', 'noopener'); };
-  chrome.runtime.onMessage.addListener(message => { if (message.type === 'echo-toggle') { const open = host.style.display === 'none'; host.style.display = open ? 'block' : 'none'; if (!open) stop(); } });
+  chrome.runtime.onMessage.addListener(message => { if (message.type === 'echo-toggle') { const open = host.style.display === 'none'; host.style.display = open ? 'block' : 'none'; if (!open) {library.close(true);stop();} } });
   function resetVideo(id) {
+    library.close(true);
     stop();
     detachCaptionVideo();
     backingRestoreRequest++;
@@ -1273,6 +1285,6 @@
     if (id) void loadVideo(id);
     else restoring = false;
   });
-  window.addEventListener('pagehide',()=>{saveProgress();stop();detachCaptionVideo();});
+  window.addEventListener('pagehide',()=>{saveProgress();library.close(true);stop();detachCaptionVideo();});
   attachCaptionVideo(document.querySelector('video.html5-main-video'));renderActivity();controls(); if(videoId) void loadVideo(videoId); else restoring=false;
 })();

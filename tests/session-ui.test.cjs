@@ -29,7 +29,7 @@ async function mount(storage, overrides = {}) {
   const context={document:doc,location:{href:'https://www.youtube.com/watch?v=video',pathname:'/watch'},indexedDB:{},URL,Blob,console,setTimeout,clearTimeout,cancelAnimationFrame(){},requestAnimationFrame(){},crypto:globalThis.crypto,
     window:{addEventListener(){},speechSynthesis:{cancel(){}}},chrome:{runtime:{onMessage:{addListener(){}}}},
     EchoCaptionTracks:require('../extension/caption-tracks.js'),EchoPanelView:require('../extension/panel-view.js'),EchoTransport:require('../extension/transport.js'),EchoPlayback:require('../extension/playback.js'),
-    EchoAudioExport:require('../extension/audio-export.js'),EchoPanelSize:require('../extension/panel-size.js'),EchoLanguages:require('../extension/languages.js'),EchoKaraoke:require('../extension/karaoke.js'),EchoStorage:{...require('../extension/storage.js'),createStorage:()=>storage},EchoPractice:require('../extension/practice.js'),EchoDictionary:require('../extension/dictionary.js'),EchoSubtitles:require('../extension/subtitles.js'),EchoLiveMeter:require('../extension/live-meter.js'),EchoAudioAnalysis:require('../extension/audio-analysis.js')};
+    EchoAudioExport:require('../extension/audio-export.js'),EchoPanelSize:require('../extension/panel-size.js'),EchoLanguages:require('../extension/languages.js'),EchoKaraoke:require('../extension/karaoke.js'),EchoStorage:{...require('../extension/storage.js'),createStorage:()=>storage},EchoPractice:require('../extension/practice.js'),EchoDictionary:require('../extension/dictionary.js'),EchoSubtitles:require('../extension/subtitles.js'),EchoLibrary:require('../extension/library.js'),EchoLiveMeter:require('../extension/live-meter.js'),EchoAudioAnalysis:require('../extension/audio-analysis.js')};
   Object.assign(context,overrides.globals || {});
   // Existing UI fixtures provide a caption transport; integration fixtures can
   // pass the real page-context client to verify fetch rather than messaging.
@@ -752,8 +752,8 @@ test('generated accompaniment is restored after a page reload without contacting
   assert.equal((await first.listBackings('video')).length,1);(await first.ready).close();
   const reopened=createStorage(factory);let requests=0;
   const {nodes}=await mount(reopened,{video:{duration:60},globals:{chrome:{runtime:{onMessage:{addListener(){}},async sendMessage(){requests++;throw Error('offline');}}}}});
-  assert.equal(nodes.get('activityMode').value,'speech');assert.equal(nodes.get('karaokeSettings').hidden,true);
-  nodes.get('activityMode').value='sing';nodes.get('activityMode').onchange();
+  assert.equal(nodes.get('activityMode').value,'sing');assert.equal(nodes.get('karaokeSettings').hidden,false);
+  assert.equal(nodes.get('useBacking').checked,true);
   assert.equal(nodes.get('previewBacking').disabled,false);assert.equal(nodes.get('recordSong').disabled,false);
   assert.equal(nodes.get('prepareBacking').disabled,true);assert.equal(requests,0);
   (await reopened.ready).close();
@@ -866,5 +866,24 @@ test('caption UI uses the page-context client without sending a background reque
   await new Promise(r=>setTimeout(r,5));
   assert.equal(calls.length,2);assert.equal(background,0);assert.equal(calls[0].options.credentials,'omit');
   assert.equal((await storage.getSession(videoId)).cues[0].text,'页面内字幕');
+  (await storage.ready).close();
+});
+
+
+test('practice library is separate, can resume a video, and requires confirmation before cache cleanup',async()=>{
+  const storage=createStorage(new IDBFactory()),id='abcdefghijk';
+  await storage.saveSession({videoId:id,title:'我的练习歌曲',start:12,updatedAt:100});
+  await storage.saveTake({id:'keep',videoId:id,cueKey:'one',createdAt:100,start:0,end:2,speed:1,blob:new Blob(['voice'])});
+  await storage.saveBacking({key:'clear',videoId:id,start:0,end:20,createdAt:100,blob:new Blob(['music'])});
+  const {nodes,root}=await mount(storage);await nodes.get('openLibrary').onclick();
+  assert.equal(nodes.get('libraryDialog').open,true);assert.equal(nodes.get('page-practice').hidden,false);
+  const first=nodes.get('libraryList').children.find(card=>card.children[0].textContent==='我的练习歌曲');
+  assert(first);assert.match(first.children.at(-1).children[0].href,/watch\?v=abcdefghijk&t=12s/);
+  nodes.get('libraryCacheTab').onclick();nodes.get('clearAllBackings').onclick();
+  assert.equal((await storage.listBackings(id)).length,1);assert.equal(nodes.get('libraryConfirm').hidden,false);
+  root.onkeydown({key:'Escape',preventDefault(){},stopPropagation(){}});assert.equal(nodes.get('libraryConfirm').hidden,true);assert.equal(nodes.get('libraryDialog').open,true);
+  nodes.get('clearAllBackings').onclick();await nodes.get('libraryConfirmYes').onclick();
+  assert.equal((await storage.listBackings(id)).length,0);assert.equal((await storage.listTakes(id)).length,1);assert.equal((await storage.getSession(id)).title,'我的练习歌曲');
+  root.onkeydown({key:'Escape',preventDefault(){},stopPropagation(){}});assert.equal(nodes.get('libraryDialog').open,false);
   (await storage.ready).close();
 });

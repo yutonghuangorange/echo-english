@@ -13,14 +13,15 @@
 | `extension/practice.js` | 循环、自动跟读、录音连播顺序、字幕跟随等流程和纯函数 |
 | `extension/karaoke.js` | 伴奏覆盖范围、服务状态格式化、耳机监听、演唱回放伴奏同步与 Web Audio 音量 |
 | `extension/audio-export.js` | 分段取舍、时间轴对齐、人声与伴奏混合、WAV 导出 |
-| `extension/storage.js` | IndexedDB 迁移、练习会话、录音版本与伴奏缓存 |
+| `extension/storage.js` | IndexedDB 迁移、练习会话、录音版本与伴奏缓存；跨视频音频体积统计、分类型清理 |
+| `extension/library.js` | 独立练习库弹窗：最近视频、搜索、缓存用量、清理确认及关闭生命周期 |
 | `extension/caption-tracks.js` | 字幕轨道元数据、页面同源请求、JSON3 时间轴解析和当前轨道查询客户端 |
 | `extension/caption-current.js` | MAIN 环境只读桥接，仅返回当前视频选中字幕的语言和轨道标识；不改变播放器 |
 | `extension/subtitles.js`、`transcript.js` | 字幕文件解析、YouTube 文字记录读取 |
 | `extension/languages.js`、`dictionary.js` | 语言显示策略、英语词典数据整理 |
 | `extension/live-meter.js` | 麦克风实时 RMS／峰值、音量变化图、过载提示和分析节点清理 |
 | `extension/audio-analysis.js` | 本机波形与低音量停顿分析 |
-| `extension/panel-size.js` | 面板尺寸、拖动与本机尺寸偏好 |
+| `extension/panel-size.js` | 面板尺寸、标题拖动、位置与本机尺寸偏好 |
 | `extension/background.js`、`karaoke-relay.js` | 词典与本机伴奏服务请求、跨上下文通信 |
 | `karaoke/server.py` | 本机音频下载、去原唱、任务取消与缓存恢复 |
 
@@ -63,3 +64,12 @@ python3 -m unittest discover -s karaoke -p test_server.py
 `tests/session-ui.test.cjs` 用实际界面事件、模拟媒体和 IndexedDB 验证跨模块流程。`tests/playback.test.cjs` 和 `tests/transport.test.cjs` 使用可控时钟验证停止、替换调度、拖动进度及旧异步回调；同时检查浏览器按 manifest 顺序加载模块。
 
 自动测试不访问真实麦克风或 YouTube。改动媒体启动、缓冲和音频同步后，仍需在已加载扩展的 Chrome 中实测。更新脚本列表后要重新加载扩展并刷新视频页；单独刷新页面不能替换旧的扩展注册信息。
+
+
+## 练习库与面板位置
+
+练习库使用原生 dialog，录音／播放忙碌时禁用入口；Escape 先取消清理确认，再关闭弹窗。导航、扩展开关或关闭面板会退出弹窗，避免页面残留模态锁定。清理成功后重新查询当前视频的录音和伴奏，清除过期撤销引用。
+
+`storage.library()` 在同一个只读事务中游标汇总 sessions、recordings、backings，只返回标题、时间、数量、Blob.size 等元数据，不返回音频。`clearMedia()` 仅允许 recordings/backings，支持按视频删除；会话与字幕不删除。无需数据库版本升级。标题与活动模式随 session 保存。
+
+`panel-size.js` 统一管理位置和尺寸；位置存在 `echo-panel-position-v1`，尺寸沿用原 key。移动标题和缩放手柄分别捕获指针；ResizeObserver 和窗口 resize 约束可见位置，保留用户偏好。位置归位与尺寸重置独立。

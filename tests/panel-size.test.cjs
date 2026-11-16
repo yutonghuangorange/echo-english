@@ -32,3 +32,17 @@ test('blocked preference storage does not prevent resizing with the keyboard',()
   handle.onkeydown({key:'ArrowLeft',shiftKey:true,preventDefault(){},stopPropagation(){}});
   assert.equal(panel.style.width,'424px');
 });
+
+test('title drag and keyboard move persist, stay on screen, and reset independently of size',()=>{
+  const values=new Map(),listeners=new Map(),host={style:{}},handle={setPointerCapture(){}},moveHandle={setPointerCapture(){}};
+  const env={innerWidth:1200,innerHeight:900,localStorage:{getItem:k=>values.get(k),setItem:(k,v)=>values.set(k,v),removeItem:k=>values.delete(k)},addEventListener:(name,fn)=>listeners.set(name,fn)};
+  const panel={style:{},getBoundingClientRect(){return {left:parseFloat(host.style.left)||796,top:parseFloat(host.style.top)||80,width:parseFloat(this.style.width)||384,height:parseFloat(this.style.height)||500};}};
+  const api=attach({panel,host,handle,moveHandle,env}),event={button:0,pointerId:5,clientX:800,clientY:100,preventDefault(){},stopPropagation(){}};
+  moveHandle.onpointerdown(event);moveHandle.onpointermove({...event,clientX:200,clientY:200});moveHandle.onpointerup(event);
+  assert.equal(host.style.left,'196px');assert.equal(host.style.top,'180px');assert.equal(host.style.right,'auto');
+  assert.deepEqual(JSON.parse(values.get('echo-panel-position-v1')),{left:196,top:180});
+  moveHandle.onkeydown({...event,key:'ArrowLeft',shiftKey:true});assert.equal(host.style.left,'156px');
+  env.innerWidth=400;env.innerHeight=400;listeners.get('resize')();assert.equal(host.style.left,'8px');assert.equal(host.style.top,'8px');
+  env.innerWidth=1200;env.innerHeight=900;listeners.get('resize')();assert.equal(host.style.left,'156px');
+  api.resetPosition();assert.equal(host.style.left,'auto');assert.equal(host.style.right,'20px');assert(!values.has('echo-panel-position-v1'));
+});

@@ -69,7 +69,31 @@
           };
         });
       },
-      deleteTake(id) { return transaction(['recordings'],'readwrite',tx=>tx.objectStore('recordings').delete(id)); }
+      deleteTake(id) { return transaction(['recordings'],'readwrite',tx=>tx.objectStore('recordings').delete(id)); },
+      library() { return transaction(['sessions','recordings','backings'],'readonly',(tx,set)=>{
+        const videos=new Map();let remaining=3;set([]);
+        const item=id=>{if(!videos.has(id))videos.set(id,{videoId:id,title:'',updatedAt:0,recordings:0,recordingBytes:0,backings:0,backingBytes:0,start:0,activity:'speech'});return videos.get(id);};
+        for(const name of ['sessions','recordings','backings']){
+          tx.objectStore(name).openCursor().onsuccess=event=>{
+            const cursor=event.target.result;
+            if(!cursor){if(--remaining===0)set([...videos.values()].sort((a,b)=>b.updatedAt-a.updatedAt));return;}
+            const value=cursor.value,row=item(value.videoId);
+            if(name==='sessions'){row.title=value.title || '';row.start=value.start || 0;row.activity=value.activity || 'speech';row.hasSession=true;}
+            else if(name==='recordings'){row.recordings++;row.recordingBytes+=value.blob?.size || 0;}
+            else {row.backings++;row.backingBytes+=value.blob?.size || 0;}
+            row.updatedAt=Math.max(row.updatedAt,Number(value.updatedAt || value.createdAt)||0);
+            cursor.continue();
+          };
+        }
+      }); },
+      clearMedia(kind,videoId=null) {
+        if(!['recordings','backings'].includes(kind))return Promise.reject(Error('无效的清理类型。'));
+        return transaction([kind],'readwrite',tx=>{
+          const store=tx.objectStore(kind);
+          if(videoId===null){store.clear();return;}
+          store.index('videoId').getAllKeys(videoId).onsuccess=event=>{for(const key of event.target.result)store.delete(key);};
+        });
+      }
     };
   }
   const api={createStorage,cueKey,MAX_TAKES};

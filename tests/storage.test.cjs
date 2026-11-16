@@ -81,3 +81,23 @@ test('accompaniment audio survives database reopen and keeps a bounded cache ind
   assert.equal((await reopened.listTakes('video')).length,1);
   (await reopened.ready).close();
 });
+
+test('library groups metadata and byte counts across videos without returning audio blobs',async()=>{
+  const storage=createStorage(new IDBFactory());
+  await storage.saveSession({videoId:'one',title:'第一首歌曲',updatedAt:10,start:20,activity:'sing'});
+  await storage.saveTake(take('20','one'));await storage.saveTake(take('30','two'));
+  await storage.saveBacking({key:'backing',videoId:'one',createdAt:25,blob:new Blob(['music'])});
+  const rows=await storage.library();assert.deepEqual(rows.map(r=>r.videoId),['two','one']);
+  const one=rows[1];assert.equal(one.title,'第一首歌曲');assert.equal(one.recordingBytes,5);assert.equal(one.backingBytes,5);assert.equal(one.start,20);assert.equal(one.activity,'sing');assert.equal(one.hasSession,true);
+  assert(!JSON.stringify(rows).includes('blob'));(await storage.ready).close();
+});
+test('clearing accompaniment never deletes recordings or progress; recordings can be cleared per video',async()=>{
+  const storage=createStorage(new IDBFactory());
+  await storage.saveSession({videoId:'one',title:'Keep progress'});
+  await storage.saveTake(take('1','one'));await storage.saveTake(take('2','two'));
+  for(const videoId of ['one','two'])await storage.saveBacking({key:videoId,videoId,createdAt:1,blob:new Blob(['music'])});
+  await storage.clearMedia('backings','one');assert.equal((await storage.listBackings('one')).length,0);assert.equal((await storage.listBackings('two')).length,1);assert.equal((await storage.listTakes('one')).length,1);
+  await storage.clearMedia('recordings','one');assert.equal((await storage.listTakes('one')).length,0);assert.equal((await storage.listTakes('two')).length,1);assert.equal((await storage.getSession('one')).title,'Keep progress');
+  await storage.clearMedia('backings');assert.equal((await storage.listBackings('two')).length,0);
+  await assert.rejects(storage.clearMedia('sessions'),/无效/);(await storage.ready).close();
+});
