@@ -92,7 +92,10 @@
         <details class="fold" id="practiceSettings"><summary>播放与录音设置<span id="speedSummary">1×</span></summary><div class="fold-content">
           <div class="row"><label class="hint" for="speed">播放速度</label><select id="speed" aria-label="练习速度"><option value="0.75">0.75× 慢速</option><option value="1" selected>1× 原速</option><option value="1.25">1.25×</option></select></div>
           <label class="hint"><input id="echoCancellation" type="checkbox" aria-describedby="echoCancellationHint"> 录音时启用回声消除</label>
-          <p class="hint" id="echoCancellationHint">外放时可尝试开启；戴耳机唱歌建议关闭，避免人声忽大忽小。配音与唱歌分别记忆，下次录音生效。</p>
+          <p class="hint" id="echoCancellationHint">外放时可尝试开启；戴耳机唱歌建议关闭，减少对人声的处理。</p>
+          <label class="hint"><input id="autoGainControl" type="checkbox" aria-describedby="autoGainControlHint"> 录音时启用自动增益</label>
+          <p class="hint" id="autoGainControlHint">人声偏小时可尝试开启；唱歌可能出现音量起伏。两项设置按配音、唱歌分别记忆，下次录音生效。</p>
+          <div id="manualGainRow"><div class="row"><label class="hint" for="manualGainDb">手动录音增益</label><output class="hint" id="manualGainValue" for="manualGainDb">+0 dB</output></div><input id="manualGainDb" type="range" min="0" max="24" step="1" value="0" aria-describedby="manualGainHint" style="width:100%"><p class="hint" id="manualGainHint">固定放大人声，回听与下载均生效。默认不放大；可从 +6 dB 试起，留意录音音量的过载提示。只影响新录音，也会放大底噪。</p></div>
         </div></details>
         <details class="fold" id="clipSettings"><summary>片段与边界<span id="clipSummary">0.0–5.0 秒</span></summary><div class="fold-content">
           <div class="row"><label><small>起点</small><input id="start" aria-label="片段起点（秒）" type="number" min="0" step="0.1" value="0"></label><label><small>终点</small><input id="end" aria-label="片段终点（秒）" type="number" min="0" step="0.1" value="5"></label></div>

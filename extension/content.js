@@ -9,7 +9,7 @@
   const $ = id => root.getElementById(id);
   EchoPanelSize.attach({panel:$('panel'),host,handle:$('resizePanel'),moveHandle:$('movePanel'),env:window});
   let cues = [], index = -1, take = null, mode = 'idle', generation = 0;
-  let recorder = null, stream = null, audio = null, savedVideo = null, recordingMeter = null;
+  let recorder = null, stream = null, audio = null, savedVideo = null, recordingMeter = null, recordingInput = null;
   const playback = EchoPlayback.create();
   const transport = EchoTransport.create({
     container: $('transport'), slider: $('transportProgress'),
@@ -19,22 +19,45 @@
   let activity = 'speech';
   const microphonePreferenceKey='echo-microphone-v1';
   const echoPreferences={speech:true,sing:false};
+  const gainPreferences={speech:true,sing:false};
+  const manualGainPreferences={speech:0,sing:0};
   try {
     const saved=JSON.parse(window.localStorage.getItem(microphonePreferenceKey));
-    for(const key of ['speech','sing'])if(typeof saved?.[key]==='boolean')echoPreferences[key]=saved[key];
+    for(const key of ['speech','sing']){
+      if(typeof saved?.[key]==='boolean')echoPreferences[key]=saved[key];
+      if(typeof saved?.autoGainControl?.[key]==='boolean')gainPreferences[key]=saved.autoGainControl[key];
+      manualGainPreferences[key]=EchoMicrophone.clampDb(saved?.manualGainDb?.[key]);
+    }
   } catch {} // Recording remains available when local preferences are blocked.
   function microphoneConstraints(song=isSinging()) {
-    const echoCancellation=echoPreferences[song?'sing':'speech'];
-    // Keep suppression and automatic gain disabled for sustained singing,
-    // independently of the user's echo cancellation preference.
-    return song?{echoCancellation,noiseSuppression:false,autoGainControl:false}:{echoCancellation};
+    const key=song?'sing':'speech';
+    const echoCancellation=echoPreferences[key],autoGainControl=gainPreferences[key];
+    // Singing keeps noise suppression off; echo cancellation and automatic
+    // gain are independent user preferences shared by all recording paths.
+    return song?{echoCancellation,noiseSuppression:false,autoGainControl}:{echoCancellation,autoGainControl};
   }
-  $('echoCancellation').onchange=()=>{
-    if(mode!=='idle'){$('echoCancellation').checked=echoPreferences[activity];return;}
-    echoPreferences[activity]=$('echoCancellation').checked;
-    try {window.localStorage.setItem(microphonePreferenceKey,JSON.stringify(echoPreferences));}
-    catch {status('回声消除已调整，但无法保存设置；刷新后将恢复默认值。');}
+  function saveMicrophonePreferences(){
+    try {window.localStorage.setItem(microphonePreferenceKey,JSON.stringify({...echoPreferences,autoGainControl:gainPreferences,manualGainDb:manualGainPreferences}));}
+    catch {status('录音设置已调整，但无法保存；刷新后将恢复原来的设置。');}
+  }
+  function renderMicrophoneSettings(){
+    $('echoCancellation').checked=echoPreferences[activity];
+    $('autoGainControl').checked=gainPreferences[activity];
+    $('manualGainRow').hidden=gainPreferences[activity];
+    $('manualGainDb').value=manualGainPreferences[activity];
+    $('manualGainValue').textContent=`+${manualGainPreferences[activity]} dB`;
+  }
+  for(const [id,preferences] of [['echoCancellation',echoPreferences],['autoGainControl',gainPreferences]]){
+    $(id).onchange=()=>{
+      if(mode==='idle'){preferences[activity]=$(id).checked;saveMicrophonePreferences();}
+      renderMicrophoneSettings();
+    };
+  }
+  $('manualGainDb').oninput=()=>{
+    if(mode==='idle' && !gainPreferences[activity])manualGainPreferences[activity]=EchoMicrophone.clampDb(Number($('manualGainDb').value));
+    renderMicrophoneSettings();
   };
+  $('manualGainDb').onchange=()=>{if(mode==='idle')saveMicrophonePreferences();};
   let captionTracks=[],captionListRequest=0,captionSource='auto',captionSourceName='',loadedCaptionSource='';
   const captionClient=EchoCaptionTracks.createClient();
   let captionVideo = null, captionSignature = '', captionGhost = null;
@@ -98,7 +121,7 @@
   function usesBacking() {return isSinging() && $('useBacking').checked;}
   function renderActivity() {
     $('activityMode').value=activity;
-    $('echoCancellation').checked=echoPreferences[activity];
+    renderMicrophoneSettings();
     const singing=isSinging();
     $('singActions').hidden=!singing;$('karaokeSettings').hidden=!singing;
     $('karaokeSettings').open=false;
@@ -247,7 +270,7 @@
     $('captionSetup').hidden=recording || cues.length>0;
     $('clipSettings').hidden=recording || (isSinging() && $('karaokeScope').value!=='clip');
     $('linePractice').hidden=isSinging() || recording;
-    for (const id of ['echoCancellation','captionSource','refreshCaptionTracks','contentLanguage','captionLayout','activityMode','read','import','transcriptRead','transcriptImport','prepareBacking','karaokeScope','useBacking','backingVolume','prev','next','markStart','markEnd','original','speed','start','end','record','startEarlier','startLater','endEarlier','endLater','loop','loopCount','autoPractice','prepSeconds','autoNext']) $(id).disabled = busy;
+    for (const id of ['echoCancellation','autoGainControl','manualGainDb','captionSource','refreshCaptionTracks','contentLanguage','captionLayout','activityMode','read','import','transcriptRead','transcriptImport','prepareBacking','karaokeScope','useBacking','backingVolume','prev','next','markStart','markEnd','original','speed','start','end','record','startEarlier','startLater','endEarlier','endLater','loop','loopCount','autoPractice','prepSeconds','autoNext']) $(id).disabled = busy;
     for(const id of ['karaokeScope','useBacking'])$(id).disabled=busy || !isSinging();
     $('backingVolume').disabled=!isSinging() || !['idle','backing','recording'].includes(mode);
     $('backingVolumeValue').textContent=`${Math.round(Number($('backingVolume').value)*100)}%`;
@@ -308,7 +331,7 @@
     generation++;
     cancelPlayback(); restoreVideo();
     if (recorder && recorder.state !== 'inactive') { mode = 'saving'; recorder.stop(); }
-    else { recordMonitor?.dispose();recordMonitor=null;recorder=null;stream?.getTracks().forEach(t => t.stop()); stream = null; mode = 'idle'; }
+    else { recordMonitor?.dispose();recordMonitor=null;recordingInput?.dispose();recordingInput=null;recorder=null;stream?.getTracks().forEach(t => t.stop()); stream = null; mode = 'idle'; }
     controls();
   }
   function guarded(fn) { return async () => { const before = generation; try { await fn(); } catch (e) { if (generation > before + 1) return; stop(); status(e.message || String(e)); } }; }
@@ -756,11 +779,15 @@
     const mic = await navigator.mediaDevices.getUserMedia({audio: microphoneAudio, video: false});
     if (token !== generation) { mic.getTracks().forEach(t => t.stop()); return; }
     stream = mic;
+    const gainKey=isSinging() || options.song?'sing':'speech';
+    const input=await EchoMicrophone.createInput(mic,gainPreferences[gainKey]?0:manualGainPreferences[gainKey]);
+    if(token!==generation){input.dispose();mic.getTracks().forEach(t=>t.stop());return;}
+    recordingInput=input;
     const monitor=ready ? await EchoKaraoke.createMonitor({blob:ready.blob,video:v,start:ready.start,speed:r.speed,volume:Number($('backingVolume').value)}) : null;
-    if(token!==generation){monitor?.dispose();mic.getTracks().forEach(t=>t.stop());return;}
+    if(token!==generation){monitor?.dispose();input.dispose();mic.getTracks().forEach(t=>t.stop());return;}
     recordMonitor=monitor;
     const mimeType = ['audio/webm;codecs=opus', 'audio/webm'].find(t => MediaRecorder.isTypeSupported(t));
-    recorder = mimeType ? new MediaRecorder(mic, { mimeType }) : new MediaRecorder(mic);
+    recorder = mimeType ? new MediaRecorder(input.stream, { mimeType }) : new MediaRecorder(input.stream);
     const singingTake=options.song || isSinging();
     const recordedKey=singingTake ? `song:${options.song?EchoStorage.cueKey(null,r.start,r.end):currentCueKey()}` : currentCueKey();
     const recordedLabel=options.song ? (r.start===0 && Math.abs(r.end-v.duration)<0.01?'整首演唱':'片段演唱') : index>=0 ? `第 ${index+1} 句` : '手动片段';
@@ -787,10 +814,11 @@
       v.removeEventListener('timeupdate',observePosition);
       v.removeEventListener('waiting',onWaiting);v.removeEventListener('playing',onPlaying);
       monitor?.dispose();if(recordMonitor===monitor)recordMonitor=null;
+      input.dispose();if(recordingInput===input)recordingInput=null;
       mic.getTracks().forEach(t => t.stop());
       const blob = new Blob(chunks, { type: currentRecorder.mimeType });
       if (!blob.size) { if (recorder === currentRecorder) { recorder = null; stream=null; if(id===videoId) {mode = 'idle'; controls();} } resolveRecording(false); return; }
-      const value = { id:crypto.randomUUID(),videoId:id,cueKey:recordedKey,label:recordedLabel,...r,blob,createdAt:Date.now(),capture:'vocal',vocalOffset,...(capturedEnd>r.start?{capturedEnd}:{}),...(monitor?{backingKey:ready.key}:{}),...(singingTake?{kind:'song'}:{}) };
+      const value = { id:crypto.randomUUID(),videoId:id,cueKey:recordedKey,label:recordedLabel,...r,blob,createdAt:Date.now(),capture:'vocal',inputGainDb:input.db,autoGainControl:microphoneAudio.autoGainControl,vocalOffset,...(capturedEnd>r.start?{capturedEnd}:{}),...(monitor?{backingKey:ready.key}:{}),...(singingTake?{kind:'song'}:{}) };
       if(recorder===currentRecorder){recorder=null;stream=null;}
       try {
         await saveRecording(value, {token, keepBusy: options.keepBusy, monitored: !!monitor});
@@ -807,7 +835,7 @@
     recorder.start(250);
     const captureStartedAt=clock();
     mode = 'recording'; controls();
-    meter=EchoLiveMeter.start({stream:mic,container:$('liveMeter'),canvas:$('liveMeterCanvas'),value:$('liveMeterValue'),bar:$('liveMeterBar')});recordingMeter=meter;
+    meter=EchoLiveMeter.start({stream:input.stream,container:$('liveMeter'),canvas:$('liveMeterCanvas'),value:$('liveMeterValue'),bar:$('liveMeterBar')});recordingMeter=meter;
     status('录音已启动，正在准备同步播放…');
     v.addEventListener('waiting',onWaiting);v.addEventListener('playing',onPlaying);
     v.addEventListener('timeupdate',observePosition);

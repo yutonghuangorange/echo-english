@@ -29,7 +29,7 @@ async function mount(storage, overrides = {}) {
   const context={document:doc,location:{href:'https://www.youtube.com/watch?v=video',pathname:'/watch'},indexedDB:{},URL,Blob,console,setTimeout,clearTimeout,cancelAnimationFrame(){},requestAnimationFrame(){},crypto:globalThis.crypto,
     window:{addEventListener(){},speechSynthesis:{cancel(){}}},chrome:{runtime:{onMessage:{addListener(){}}}},
     EchoCaptionTracks:require('../extension/caption-tracks.js'),EchoPanelView:require('../extension/panel-view.js'),EchoTransport:require('../extension/transport.js'),EchoPlayback:require('../extension/playback.js'),
-    EchoAudioExport:require('../extension/audio-export.js'),EchoPanelSize:require('../extension/panel-size.js'),EchoLanguages:require('../extension/languages.js'),EchoKaraoke:require('../extension/karaoke.js'),EchoStorage:{...require('../extension/storage.js'),createStorage:()=>storage},EchoPractice:require('../extension/practice.js'),EchoDictionary:require('../extension/dictionary.js'),EchoSubtitles:require('../extension/subtitles.js'),EchoLibrary:require('../extension/library.js'),EchoLiveMeter:require('../extension/live-meter.js'),EchoAudioAnalysis:require('../extension/audio-analysis.js')};
+    EchoAudioExport:require('../extension/audio-export.js'),EchoPanelSize:require('../extension/panel-size.js'),EchoLanguages:require('../extension/languages.js'),EchoKaraoke:require('../extension/karaoke.js'),EchoStorage:{...require('../extension/storage.js'),createStorage:()=>storage},EchoPractice:require('../extension/practice.js'),EchoDictionary:require('../extension/dictionary.js'),EchoSubtitles:require('../extension/subtitles.js'),EchoLibrary:require('../extension/library.js'),EchoLiveMeter:require('../extension/live-meter.js'),EchoMicrophone:require('../extension/microphone.js'),EchoAudioAnalysis:require('../extension/audio-analysis.js')};
   Object.assign(context,overrides.globals || {});
   // Existing UI fixtures provide a caption transport; integration fixtures can
   // pass the real page-context client to verify fetch rather than messaging.
@@ -632,7 +632,7 @@ test('ordinary dubbing records the microphone directly with the accompaniment se
   }
   const {nodes}=await mount(storage,{video,globals:{MediaRecorder,navigator:{mediaDevices:{getUserMedia:async constraints=>{
       assert.equal(constraints.video,false);
-      assert.deepEqual({...constraints.audio},{echoCancellation:true});
+      assert.deepEqual({...constraints.audio},{echoCancellation:true,autoGainControl:true});
       return mic;
     }}},
     EchoKaraoke:{...require('../extension/karaoke.js'),createMonitor:async()=>{mixes++;throw Error('Must not monitor ordinary dubbing');}},
@@ -898,7 +898,7 @@ test('echo cancellation is remembered per activity and applied to microphone req
   assert.equal(checkbox.checked,true);
   checkbox.checked=false;checkbox.onchange();
   await nodes.get('record').onclick();
-  assert.deepEqual({...requests.at(-1).audio},{echoCancellation:false});
+  assert.deepEqual({...requests.at(-1).audio},{echoCancellation:false,autoGainControl:true});
   nodes.get('activityMode').value='sing';nodes.get('activityMode').onchange();
   assert.equal(checkbox.checked,false);
   checkbox.checked=true;checkbox.onchange();
@@ -912,5 +912,61 @@ test('echo cancellation is remembered per activity and applied to microphone req
   assert.equal(refreshed.nodes.get('echoCancellation').checked,false);
   refreshed.nodes.get('activityMode').value='sing';refreshed.nodes.get('activityMode').onchange();
   assert.equal(refreshed.nodes.get('echoCancellation').checked,true);
+  (await storage.ready).close();
+});
+
+test('automatic and manual gain are independent per activity, preserve legacy echo preferences and reach recording',async()=>{
+  const storage=createStorage(new IDBFactory()),preferences=new Map([['echo-microphone-v1',JSON.stringify({speech:false,sing:true})]]),requests=[];
+  const localStorage={getItem:key=>preferences.get(key) || null,setItem:(key,value)=>preferences.set(key,value)};
+  const globals={window:{localStorage,addEventListener(){},speechSynthesis:{cancel(){}}},
+    navigator:{mediaDevices:{async getUserMedia(options){requests.push(options);throw Error('Fixture microphone');}}}};
+  const {nodes}=await mount(storage,{globals});
+  assert.equal(nodes.get('echoCancellation').checked,false);
+  assert.equal(nodes.get('autoGainControl').checked,true);assert.equal(nodes.get('manualGainRow').hidden,true);
+  nodes.get('autoGainControl').checked=false;nodes.get('autoGainControl').onchange();
+  assert.equal(nodes.get('manualGainRow').hidden,false);
+  nodes.get('manualGainDb').value='6';nodes.get('manualGainDb').oninput();nodes.get('manualGainDb').onchange();
+  await nodes.get('record').onclick();
+  assert.deepEqual({...requests.at(-1).audio},{echoCancellation:false,autoGainControl:false});
+  nodes.get('activityMode').value='sing';nodes.get('activityMode').onchange();
+  assert.equal(nodes.get('echoCancellation').checked,true);
+  assert.equal(nodes.get('autoGainControl').checked,false);assert.equal(nodes.get('manualGainDb').value,0);
+  nodes.get('manualGainDb').value='16';nodes.get('manualGainDb').oninput();nodes.get('manualGainDb').onchange();
+  nodes.get('autoGainControl').checked=true;nodes.get('autoGainControl').onchange();
+  assert.equal(nodes.get('manualGainRow').hidden,true);
+  nodes.get('useBacking').checked=false;nodes.get('useBacking').onchange();
+  await nodes.get('record').onclick();
+  assert.deepEqual({...requests.at(-1).audio},{echoCancellation:true,noiseSuppression:false,autoGainControl:true});
+  const refreshed=(await mount(storage,{globals})).nodes;
+  refreshed.get('activityMode').value='speech';refreshed.get('activityMode').onchange();
+  assert.equal(refreshed.get('autoGainControl').checked,false);assert.equal(refreshed.get('manualGainDb').value,6);
+  refreshed.get('activityMode').value='sing';refreshed.get('activityMode').onchange();
+  assert.equal(refreshed.get('autoGainControl').checked,true);assert.equal(refreshed.get('manualGainDb').value,16);
+  (await storage.ready).close();
+});
+
+test('manual input gain reaches the saved vocal recording and meter, then releases its graph',async()=>{
+  const storage=createStorage(new IDBFactory());
+  const video={duration:60,currentTime:0,muted:false,playbackRate:1,pause(){},async play(){this.currentTime=1;},addEventListener(){},removeEventListener(){}};
+  const mic={getTracks:()=>[{stop(){}}]},processed={},meterStreams=[];let disposed=0;
+  class MediaRecorder{
+    static isTypeSupported(){return true;}
+    constructor(source){assert.equal(source,processed);this.state='inactive';this.mimeType='audio/webm';}
+    start(){this.state='recording';}
+    stop(){this.state='inactive';this.ondataavailable({data:new Blob(['amplified-vocal'])});queueMicrotask(()=>this.onstop());}
+  }
+  const {nodes}=await mount(storage,{video,globals:{MediaRecorder,
+    navigator:{mediaDevices:{async getUserMedia(){return mic;}}},
+    EchoMicrophone:{...require('../extension/microphone.js'),async createInput(source,db){assert.equal(source,mic);assert.equal(db,16);return {stream:processed,db,dispose(){disposed++;}};}},
+    EchoLiveMeter:{start({stream}){meterStreams.push(stream);return {dispose(){}};}},
+    requestAnimationFrame:fn=>setTimeout(fn,0),cancelAnimationFrame:clearTimeout}});
+  nodes.get('activityMode').value='sing';nodes.get('activityMode').onchange();
+  nodes.get('useBacking').checked=false;nodes.get('useBacking').onchange();
+  nodes.get('start').value='0';nodes.get('end').value='1';
+  nodes.get('manualGainDb').value='16';nodes.get('manualGainDb').oninput();
+  await nodes.get('record').onclick();
+  const [take]=await storage.listTakes('video');
+  assert.equal(take.inputGainDb,16);assert.equal(take.autoGainControl,false);
+  assert.equal(await take.blob.text(),'amplified-vocal');assert.deepEqual(meterStreams,[processed]);assert.equal(disposed,1);
   (await storage.ready).close();
 });
