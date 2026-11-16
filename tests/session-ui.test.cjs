@@ -53,7 +53,7 @@ test('empty pages hide irrelevant recording controls and keep the practice dock 
   const {nodes}=await mount(storage);
   assert.equal(nodes.get('practiceDock').hidden,false);
   assert.equal(nodes.get('captionSetup').hidden,false);
-  assert.equal(nodes.get('captionOptions').hidden,true);
+  assert.equal(nodes.get('captionOptions').hidden,true);assert.equal(nodes.get('clipCue').disabled,true);
   assert.equal(nodes.get('practiceTools').open,false);
   nodes.get('tab-recordings').onclick();
   assert.equal(nodes.get('practiceDock').hidden,true);
@@ -62,7 +62,7 @@ test('empty pages hide irrelevant recording controls and keep the practice dock 
   assert.equal(nodes.get('recordingDetails').hidden,true);
   assert.equal(nodes.get('playAll').hidden,true);
   nodes.get('backToPractice').onclick();assert.equal(nodes.get('practiceDock').hidden,false);
-  nodes.get('openTranscript').onclick();assert.equal(nodes.get('practiceDock').hidden,true);
+  nodes.get('openLanguageSettings').onclick();assert.equal(nodes.get('practiceDock').hidden,true);assert.equal(nodes.get('captionSettings').open,true);
   (await storage.ready).close();
 });
 
@@ -402,6 +402,10 @@ test('selecting a lyric uses the main clip recording controls without a duplicat
   assert.equal(nodes.get('singActions').hidden,false);assert.equal(nodes.get('practiceTools').open,false);
   assert.match(nodes.get('clipSummary').textContent,/2.0–4.0/);
   assert.match(nodes.get('record').textContent,/开始片段录唱/);
+  assert.equal(nodes.get('clipCue').value,'1');
+  nodes.get('clipCue').value='0';nodes.get('clipCue').onchange();assert.equal(nodes.get('start').value,'0.00');assert.equal(nodes.get('end').value,'2.00');
+  await nodes.get('startLater').onclick();assert.equal(nodes.get('clipCue').value,'');
+  nodes.get('clipCue').value='1';nodes.get('clipCue').onchange();assert.equal(nodes.get('start').value,'2.00');
   nodes.get('prev').onclick();assert.equal(nodes.get('start').value,'0.00');
   assert.equal(nodes.get('karaokeScope').value,'clip');
   nodes.get('transcriptSearch').value='no match';nodes.get('transcriptSearch').oninput();
