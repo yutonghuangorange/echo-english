@@ -737,20 +737,37 @@
     if (token !== generation) return;
     audio = new Audio(t.url);
     const a = audio;
-    // Pause both tracks on buffering; resynchronize video to recorded elapsed time.
-    const onWaiting = () => a.pause();
-    const onPlaying = () => { if (audio === a) { a.currentTime = Math.max(0, (v.currentTime - t.start) / t.speed); void a.play().catch(() => { stop(); status('录音无法播放，请重新录制。'); }); } };
+    // The recording is the playback clock: never seek past its opening to catch
+    // up with a video that started earlier or resumed from buffering.
+    let started=false,buffering=false;
+    const onWaiting = () => {if(started){buffering=true;a.pause();}};
+    const onPlaying = () => {
+      if(audio!==a || !started || !buffering)return;
+      buffering=false;
+      const position=Math.min(t.end,t.start+(a.currentTime || 0)*t.speed);
+      if(Math.abs(v.currentTime-position)>0.15)v.currentTime=position;
+      void a.play().catch(()=>{if(audio===a){stop();status('录音无法播放，请重试或下载录音。');}});
+    };
     v.addEventListener('waiting', onWaiting); v.addEventListener('playing', onPlaying);
+    let ended=false,resolvePlayback;
+    const playbackDone=new Promise(resolve=>{resolvePlayback=resolve;});
+    a.onended=()=>{ended=true;resolvePlayback();};
     try {
-      await v.play();
-      if (token !== generation) return;
+      a.preload='auto';
       await a.play();
-      await new Promise(resolve => {
-        pendingDone = resolve;
-        a.onended = resolve;
-        watchEnd(v, t.end, resolve);
-        timer = setTimeout(resolve, EchoPractice.playbackTimeout(t));
-      });
+      if (token !== generation) return;
+      pendingDone=resolvePlayback;
+      if(!ended){
+        await v.play();
+        if (token !== generation) return;
+        started=true;
+        const position=Math.min(t.end,t.start+(a.currentTime || 0)*t.speed);
+        if(!ended && Math.abs(v.currentTime-position)>0.15)v.currentTime=position;
+        // A partially recorded take or delayed video must not cut off the file.
+        watchEnd(v, t.end, () => v.pause());
+        timer = setTimeout(resolvePlayback, EchoPractice.playbackTimeout(t));
+      }
+      await playbackDone;
     } finally { v.removeEventListener('waiting', onWaiting); v.removeEventListener('playing', onPlaying); }
     if (token === generation) { if (keepBusy) { cancelPlayback(); restoreVideo(); mode = 'practice'; controls(); } else finish(); }
   }

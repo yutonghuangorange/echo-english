@@ -168,6 +168,28 @@ test('volume remains adjustable during accompaniment preview and saves the chose
   (await storage.ready).close();
 });
 
+test('song replay starts at audio opening and buffering moves video instead of skipping recorded audio',async()=>{
+  const storage=createStorage(new IDBFactory()),listeners=new Map(),calls=[],audioSeeks=[];let sound;
+  await storage.saveTake({id:'song',kind:'song',videoId:'video',cueKey:'song:manual',start:0,end:10,speed:1,createdAt:1,blob:new Blob(['song'])});
+  const video={duration:60,currentTime:0,muted:false,playbackRate:1,pause(){},
+    addEventListener(name,fn){listeners.set(name,fn);},removeEventListener(name){listeners.delete(name);},
+    async play(){calls.push('video');this.currentTime=3;listeners.get('playing')?.();}};
+  class Audio{
+    constructor(){sound=this;this.elapsed=0;}
+    get currentTime(){return this.elapsed;}set currentTime(value){audioSeeks.push(value);this.elapsed=value;}
+    pause(){}async play(){calls.push('audio');}
+  }
+  const {nodes}=await mount(storage,{video,globals:{Audio}});
+  nodes.get('activityMode').value='sing';nodes.get('activityMode').onchange();
+  const replaying=nodes.get('songReplay').onclick();
+  for(let i=0;i<10 && !calls.includes('video');i++)await Promise.resolve();
+  await new Promise(resolve=>setTimeout(resolve,0));assert.deepEqual(calls.slice(0,2),['audio','video']);assert.deepEqual(audioSeeks,[]);
+  assert.equal(video.currentTime,0);
+  sound.elapsed=0.6;listeners.get('waiting')();video.currentTime=4;listeners.get('playing')();
+  assert.equal(video.currentTime,0.6);assert.deepEqual(audioSeeks,[]);
+  sound.onended();await replaying;(await storage.ready).close();
+});
+
 test('searching lyrics preserves original cue selection and reveals optional line practice',async()=>{
   const storage=createStorage(new IDBFactory());
   await storage.saveSession({videoId:'video',index:0,start:0,end:2,speed:'1',cues:[{start:0,end:2,text:'First line'},{start:2,end:4,text:'Second line'}]});
