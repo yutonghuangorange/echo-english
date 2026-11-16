@@ -10,7 +10,7 @@ const {createStorage,cueKey}=require('../extension/storage.js');
 async function mount(storage, overrides = {}) {
   const nodes=new Map(),created=[],downloads=[];
   class Element {
-    constructor(){this.children=[];this.hidden=false;this.value='';this.style={};this.attrs={};this.classList={toggle:()=>{}};created.push(this);}
+    constructor(){this.children=[];this.hidden=false;this.value='';this.style={};this.attrs={};this.dataset={};this.classList={toggle:()=>{}};created.push(this);}
     set innerHTML(html){this.html=html;for(const match of html.matchAll(/\bid="([^"]+)"/g))nodes.set(match[1],new Element());
       nodes.get('followCaptions').checked=true;
       for(const [id,value] of Object.entries({start:'0',end:'5',speed:'1',loopCount:'3',prepSeconds:'3',backingVolume:'1',karaokeScope:'whole',assemblyType:'vocal',activityMode:'speech',contentLanguage:'auto',captionLayout:'original'}))nodes.get(id).value=value;}
@@ -29,7 +29,7 @@ async function mount(storage, overrides = {}) {
   const context={document:doc,location:{href:'https://www.youtube.com/watch?v=video',pathname:'/watch'},indexedDB:{},URL,Blob,console,setTimeout,clearTimeout,cancelAnimationFrame(){},requestAnimationFrame(){},crypto:globalThis.crypto,
     window:{addEventListener(){},speechSynthesis:{cancel(){}}},chrome:{runtime:{onMessage:{addListener(){}}}},
     EchoCaptionTracks:require('../extension/caption-tracks.js'),EchoPanelView:require('../extension/panel-view.js'),EchoTransport:require('../extension/transport.js'),EchoPlayback:require('../extension/playback.js'),
-    EchoAudioExport:require('../extension/audio-export.js'),EchoPanelSize:require('../extension/panel-size.js'),EchoLanguages:require('../extension/languages.js'),EchoKaraoke:require('../extension/karaoke.js'),EchoStorage:{...require('../extension/storage.js'),createStorage:()=>storage},EchoPractice:require('../extension/practice.js'),EchoDictionary:require('../extension/dictionary.js'),EchoSubtitles:require('../extension/subtitles.js'),EchoAudioAnalysis:require('../extension/audio-analysis.js')};
+    EchoAudioExport:require('../extension/audio-export.js'),EchoPanelSize:require('../extension/panel-size.js'),EchoLanguages:require('../extension/languages.js'),EchoKaraoke:require('../extension/karaoke.js'),EchoStorage:{...require('../extension/storage.js'),createStorage:()=>storage},EchoPractice:require('../extension/practice.js'),EchoDictionary:require('../extension/dictionary.js'),EchoSubtitles:require('../extension/subtitles.js'),EchoLiveMeter:require('../extension/live-meter.js'),EchoAudioAnalysis:require('../extension/audio-analysis.js')};
   Object.assign(context,overrides.globals || {});
   // Existing UI fixtures provide a caption transport; integration fixtures can
   // pass the real page-context client to verify fetch rather than messaging.
@@ -171,7 +171,7 @@ test('plain recording pauses for buffering and saves to its original video after
   assert.equal(nodes.get('practiceDock').hidden,true);
   assert.equal(nodes.get('stop').textContent,'■ 结束录音');
   assert.equal(nodes.get('transport').hidden,false);
-  assert.equal(nodes.get('transportTime').textContent,'0:00 / 0:05');
+  assert.equal(nodes.get('transportTime').textContent,'0:00 / 0:05');assert.equal(nodes.get('liveMeter').hidden,false);
   assert.equal(nodes.get('transportProgress').disabled,true);
   assert.equal(nodes.get('transportProgress').oninput,null);
   video.currentTime=2;frames.values().next().value();
@@ -184,7 +184,7 @@ test('plain recording pauses for buffering and saves to its original video after
   location.href='https://www.youtube.com/watch?v=other';events.get('yt-navigate-finish')();
   await recording;
   assert.equal((await storage.listTakes('video')).length,1);assert.equal((await storage.listTakes('other')).length,0);
-  assert.equal(stopped,1);assert.equal(nodes.get('recordingContent').hidden,true);
+  assert.equal(stopped,1);assert.equal(nodes.get('recordingContent').hidden,true);assert.equal(nodes.get('liveMeter').hidden,true);
   assert.equal(nodes.get('transport').hidden,true);
   assert.equal(nodes.get('hideText').checked,false);assert.equal(nodes.get('showChinese').checked,false);
   assert.equal(nodes.get('followCaptions').checked,true);

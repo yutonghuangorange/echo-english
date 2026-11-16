@@ -18,6 +18,7 @@
 | `extension/caption-current.js` | MAIN 环境只读桥接，仅返回当前视频选中字幕的语言和轨道标识；不改变播放器 |
 | `extension/subtitles.js`、`transcript.js` | 字幕文件解析、YouTube 文字记录读取 |
 | `extension/languages.js`、`dictionary.js` | 语言显示策略、英语词典数据整理 |
+| `extension/live-meter.js` | 麦克风实时 RMS／峰值、音量变化图、过载提示和分析节点清理 |
 | `extension/audio-analysis.js` | 本机波形与低音量停顿分析 |
 | `extension/panel-size.js` | 面板尺寸、拖动与本机尺寸偏好 |
 | `extension/background.js`、`karaoke-relay.js` | 词典与本机伴奏服务请求、跨上下文通信 |
@@ -36,6 +37,7 @@
 - 原声和伴奏试听跟随视频时钟；录音回放跟随录音文件时钟。缓冲恢复时让视频追随录音，避免跳过录音开头。
 - 唱歌模式只显示主录唱入口，歌词点选及上下句选择通过 `select(..., true)` 切换当前片段；循环和自动练习独立折叠。是否监听伴奏由伴奏设置决定，关闭时主按钮可清唱，所有唱歌模式录音都标记为 `kind: song`。
 - 唱歌麦克风请求关闭 `echoCancellation`、`noiseSuppression`、`autoGainControl`；普通配音保留回声消除及其他默认设置。此策略取决于唱歌模式，不取决于是否启用伴奏。
+- 录音启动后才旁路创建实时音量分析，不等待 AudioContext，也不将麦克风连接到扬声器；MediaRecorder 始终接收原始麦克风流。缓冲跟随录音暂停，停止、错误、导航和自然结束时释放分析节点、AudioContext 和动画帧。
 - 唱歌只录麦克风，伴奏仅监听。唱歌先启动录音器再启动伴奏，普通配音保留原有启动顺序；修改这里需覆盖开头、缓冲、停止和导航场景。
 - `saveRecording()` 始终保存到开始录制时的视频，只有该视频仍打开时才更新界面。切换视频统一走 `resetVideo()`。
 - 独立人声演唱回放通过 `EchoKaraoke.followRecording()` 将伴奏绑定到录音时钟，扣除 `vocalOffset` 后定位，不修改人声播放位置。同步器负责伴奏漂移校正、缓冲、开关和清理；旧版混合录音不进入此流程。

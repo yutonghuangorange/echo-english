@@ -23,6 +23,7 @@
     #mixSummary{font-size:10px;color:#90a4b6}.mix-row{display:grid;grid-template-columns:44px minmax(0,1fr) 42px;align-items:center;gap:10px;font-size:12px;color:#b6c8d6;margin:7px 0}
     .mix-row output{text-align:right;font-size:11px}.mix-options{display:flex;justify-content:space-between;align-items:center;margin-top:7px}.mix-options .text-button{margin-left:auto}
     #mixHint{font-size:10px;line-height:1.5;margin:6px 0 0}#songResult small{font-size:11px}#songResult button{flex:0 0 auto}
+    .live-meter{padding:9px 20px 7px;border-top:1px solid #2b3946;background:#111b24;flex-shrink:0}.meter-heading{display:flex;justify-content:space-between;gap:8px;font-size:11px;color:#90a4b6}.meter-heading output{font-size:10px;text-align:right;color:#b3eedb}.live-meter canvas{display:block;width:100%;height:32px;margin:5px 0;background:transparent;border-radius:0}.meter-track{height:3px;border-radius:3px;background:#30414e;overflow:hidden}.meter-fill{height:100%;width:0;background:#b3eedb;transition:width .06s linear}.live-meter[data-level="loud"] output{color:#e8bd78}.live-meter[data-level="clip"] output{color:#ff8e88}.live-meter[data-level="loud"] .meter-fill{background:#e8bd78}.live-meter[data-level="clip"] .meter-fill{background:#ff8e88}
     .practice-dock{padding:12px 20px;background:#111b24;border-top:1px solid #2b3946;flex-shrink:0}
     .main-actions{grid-template-columns:repeat(2,minmax(0,1fr))}.main-actions button{min-width:0;font-size:13px}
     .recording-heading{flex-wrap:wrap}.compact{font-size:11px;padding:7px 9px}.recording-heading .compact{margin-left:auto}
@@ -140,6 +141,7 @@
   <div class="main-actions"><button id="original">▶ 听原声</button><button id="replay" disabled>▷ 我的配音</button><button class="primary" id="record">● 开始配音</button></div>
   </div>
     </div>
+    <div id="liveMeter" class="live-meter" hidden><div class="meter-heading"><span>麦克风 · 实时音量</span><output id="liveMeterValue">正在检测…</output></div><canvas id="liveMeterCanvas" width="640" height="64" aria-hidden="true"></canvas><div class="meter-track" role="meter" aria-label="麦克风实时音量，单位 dBFS" aria-valuemin="-60" aria-valuemax="0" aria-valuenow="-60"><div id="liveMeterBar" class="meter-fill"></div></div></div>
     <div id="transport" hidden style="padding:8px 20px 0;flex-shrink:0;background:#111b24">
       <div style="display:flex;justify-content:space-between;font-size:11px;color:#9ab2c1"><span id="transportLabel"></span><span id="transportTime"></span></div>
       <input id="transportProgress" type="range" min="0" max="1" step="0.001" value="0" aria-label="播放进度，可点击或拖动跳转" style="display:block;width:100%;margin:6px 0;accent-color:#b3eedb" disabled>

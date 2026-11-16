@@ -9,7 +9,7 @@
   const $ = id => root.getElementById(id);
   EchoPanelSize.attach({panel:$('panel'),host,handle:$('resizePanel'),env:window});
   let cues = [], index = -1, take = null, mode = 'idle', generation = 0;
-  let recorder = null, stream = null, audio = null, savedVideo = null;
+  let recorder = null, stream = null, audio = null, savedVideo = null, recordingMeter = null;
   const playback = EchoPlayback.create();
   const transport = EchoTransport.create({
     container: $('transport'), slider: $('transportProgress'),
@@ -260,6 +260,7 @@
     if (savedVideo) { const { v, muted, rate } = savedVideo; v.pause(); v.muted = muted; v.playbackRate = rate; savedVideo = null; }
   }
   function cancelPlayback() {
+    recordingMeter?.dispose();recordingMeter=null;
     transport.hide();
     $('mixControls').open=false;
     replayMonitor?.dispose();replayMonitor=null;
@@ -740,14 +741,15 @@
     const recordedLabel=options.song ? (r.start===0 && Math.abs(r.end-v.duration)<0.01?'整首演唱':'片段演唱') : index>=0 ? `第 ${index+1} 句` : '手动片段';
     const currentRecorder = recorder, chunks = [];
     const clock=()=>globalThis.performance?.now?.() ?? Date.now();
+    let meter=null;
     let vocalOffset=0;
     let starting=true;
     let capturedEnd=r.start;
     const observePosition=()=>{if(Number.isFinite(v.currentTime))capturedEnd=Math.max(capturedEnd,Math.min(r.end,v.currentTime));};
-    const onWaiting=()=>{monitor?.pause();if(currentRecorder.state==='recording')currentRecorder.pause();};
+    const onWaiting=()=>{monitor?.pause();if(currentRecorder.state==='recording'){currentRecorder.pause();meter?.setPaused(true);}};
     const onPlaying=()=>{
       if(starting || token!==generation || !['recording','paused'].includes(currentRecorder.state))return;
-      void Promise.resolve(monitor?.sync()).then(()=>{if(token===generation && currentRecorder.state==='paused')currentRecorder.resume();})
+      void Promise.resolve(monitor?.sync()).then(()=>{if(token===generation && currentRecorder.state==='paused'){currentRecorder.resume();meter?.setPaused(false);}})
         .catch(()=>{if(token===generation){stop();status('伴奏播放失败，录音已停止，请重新生成伴奏。');}});
     };
     let resolveRecording;
@@ -755,6 +757,7 @@
     recorder.ondataavailable = e => { if (e.data.size) chunks.push(e.data); };
     recorder.onerror = () => { stop(); status('录音失败，请检查麦克风后重试。'); };
     recorder.onstop = async () => {
+      meter?.dispose();if(recordingMeter===meter)recordingMeter=null;
       if(id===videoId)observePosition();
       v.removeEventListener('timeupdate',observePosition);
       v.removeEventListener('waiting',onWaiting);v.removeEventListener('playing',onPlaying);
@@ -776,8 +779,10 @@
     // Capture dry vocals before starting the singing monitor. Ordinary dubbing
     // retains its existing video-first startup; do not reorder these paths.
     if(!monitor){await v.play();if(token!==generation)return;}
-    recorder.start(250); mode = 'recording'; controls();
+    recorder.start(250);
     const captureStartedAt=clock();
+    mode = 'recording'; controls();
+    meter=EchoLiveMeter.start({stream:mic,container:$('liveMeter'),canvas:$('liveMeterCanvas'),value:$('liveMeterValue'),bar:$('liveMeterBar')});recordingMeter=meter;
     status('录音已启动，正在准备同步播放…');
     v.addEventListener('waiting',onWaiting);v.addEventListener('playing',onPlaying);
     v.addEventListener('timeupdate',observePosition);
@@ -792,7 +797,7 @@
     if(currentRecorder.state==='paused'){
       await monitor?.resume?.();
       if(token!==generation)return completed;
-      currentRecorder.resume();
+      currentRecorder.resume();meter?.setPaused(false);
     }
     const position=monitor?.position?.();
     if(Number.isFinite(position) && Math.abs(v.currentTime-position)>0.15)v.currentTime=position;
