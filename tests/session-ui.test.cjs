@@ -29,7 +29,7 @@ async function mount(storage, overrides = {}) {
   const context={document:doc,location:{href:'https://www.youtube.com/watch?v=video',pathname:'/watch'},indexedDB:{},URL,Blob,console,setTimeout,clearTimeout,cancelAnimationFrame(){},requestAnimationFrame(){},crypto:globalThis.crypto,
     window:{addEventListener(){},speechSynthesis:{cancel(){}}},chrome:{runtime:{onMessage:{addListener(){}}}},
     EchoCaptionTracks:require('../extension/caption-tracks.js'),EchoPanelView:require('../extension/panel-view.js'),EchoTransport:require('../extension/transport.js'),EchoPlayback:require('../extension/playback.js'),
-    EchoAudioExport:require('../extension/audio-export.js'),EchoPanelSize:require('../extension/panel-size.js'),EchoLanguages:require('../extension/languages.js'),EchoKaraoke:require('../extension/karaoke.js'),EchoStorage:{...require('../extension/storage.js'),createStorage:()=>storage},EchoPractice:require('../extension/practice.js'),EchoDictionary:require('../extension/dictionary.js'),EchoSubtitles:require('../extension/subtitles.js'),EchoLibrary:require('../extension/library.js'),EchoLiveMeter:require('../extension/live-meter.js'),EchoMicrophone:require('../extension/microphone.js'),EchoAudioAnalysis:require('../extension/audio-analysis.js')};
+    EchoAudioExport:require('../extension/audio-export.js'),EchoAssembly:require('../extension/assembly.js'),EchoPanelSize:require('../extension/panel-size.js'),EchoLanguages:require('../extension/languages.js'),EchoKaraoke:require('../extension/karaoke.js'),EchoStorage:{...require('../extension/storage.js'),createStorage:()=>storage},EchoPractice:require('../extension/practice.js'),EchoDictionary:require('../extension/dictionary.js'),EchoSubtitles:require('../extension/subtitles.js'),EchoLibrary:require('../extension/library.js'),EchoLiveMeter:require('../extension/live-meter.js'),EchoMicrophone:require('../extension/microphone.js'),EchoAudioAnalysis:require('../extension/audio-analysis.js')};
   Object.assign(context,overrides.globals || {});
   // Existing UI fixtures provide a caption transport; integration fixtures can
   // pass the real page-context client to verify fetch rather than messaging.
@@ -369,10 +369,10 @@ test('dry vocal downloads can be mixed per take or assembled as a full song with
   assert.equal(nodes.get('takeMixDownload').hidden,false);await nodes.get('takeMixDownload').onclick();
   assert.equal(exports[0].vocalVolume,1.5);assert.equal(exports[0].volume,0.4);
   assert.equal(exports[0].origin,5);assert.equal(exports[0].duration,5);assert.equal(exports[0].backing.key,'backing');
-  nodes.get('assemblyType').value='vocal';await nodes.get('assembleSong').onclick();
+  nodes.get('assemblyType').value='vocal';await nodes.get('assembleSong').onclick();assert.equal(exports.length,1);await nodes.get('assemblyDownload').onclick();
   assert.equal(exports[1].origin,0);assert.equal(exports[1].duration,20);assert.equal(exports[1].backing,null);
-  nodes.get('assemblyType').value='mixed';await nodes.get('assembleSong').onclick();
-  assert.equal(exports[2].backing.key,'backing');assert.equal(downloads.length,3);
+  nodes.get('assemblyType').value='mixed';nodes.get('assemblyType').onchange();await nodes.get('assemblyDownload').onclick();
+  assert.equal(exports[2].backing.key,'backing');assert.equal(downloads.length,3);nodes.get('closeAssembly').onclick();
   assert.match(downloads[0].download,/vocal-and-backing.wav$/);assert.match(downloads[1].download,/vocals.wav$/);
   (await storage.ready).close();
 });
@@ -1054,8 +1054,8 @@ test('paragraph mode restores, keeps multi-sentence bounds during browsing, reco
   await nodes.get('record').onclick();
   const [take]=await storage.listTakes('video');assert.equal(take.start,3);assert.equal(take.end,11.8);assert.equal(take.kind,'song');
   assert.match(take.label,/第 2–4 句/);assert.equal(await take.blob.text(),'whole-paragraph');
-  assert.match(nodes.get('assemblyInfo').textContent,/已覆盖 8.8 \/ 30.0 秒/);
-  assert.match(nodes.get('assemblyPlan').textContent,/3.0–11.8 秒 · 第 2–4 句/);assert.match(nodes.get('assemblyPlan').textContent,/未录人声/);
+  assert.match(nodes.get('assemblyInfo').textContent,/已选 8.8 \/ 30.0 秒/);
+  await nodes.get('assembleSong').onclick();assert.equal(nodes.get('assemblyDialog').open,true);assert.match(nodes.get('assemblyEditorInfo').textContent,/8.8 \/ 30.0/);nodes.get('closeAssembly').onclick();
   nodes.get('paragraphFirst').value='0';nodes.get('paragraphFirst').onchange();
   nodes.get('paragraphLast').value='2';nodes.get('paragraphLast').onchange();
   await new Promise(r=>setTimeout(r,5));const session=await storage.getSession('video');assert.equal(session.paragraphFirst,0);assert.equal(session.paragraphLast,2);assert.equal(session.end,8.8);
@@ -1085,5 +1085,40 @@ test('shared main controls and automatic practice use the same whole-song range 
   assert.equal(plays[0],0);assert.equal(plays[1],0);assert.match(nodes.get('status').textContent,/自动跟读完成/);
   nodes.get('prepSeconds').value='2';nodes.get('prepSeconds').onchange();await new Promise(r=>setTimeout(r,5));
   assert.equal((await storage.getSession('video')).prepSeconds,'2');
+  (await storage.ready).close();
+});
+
+test('assembly editor auditions an older version, excludes ranges, persists choices and downloads the same selection',async()=>{
+  const storage=createStorage(new IDBFactory()),requests=[];
+  for(const [id,time] of [['older',1],['newer',2]])await storage.saveTake({id,videoId:'video',kind:'song',capture:'vocal',cueKey:'same',label:id,start:0,end:10,speed:1,createdAt:time,blob:new Blob([id])});
+  const overrides={video:{duration:20,pause(){}},globals:{setTimeout:(fn,ms)=>setTimeout(fn,ms===30000?0:ms),
+    EchoAudioExport:{...require('../extension/audio-export.js'),async render(options){requests.push(options);return {blob:new Blob(['selected-preview']),gaps:[]};}}}};
+  const {nodes,downloads}=await mount(storage,overrides);
+  await nodes.get('assembleSong').onclick();assert.equal(nodes.get('assemblyDialog').open,true);assert.equal(requests.length,0);
+  const row=nodes.get('assemblyEditorList').children[0],select=row.children[1],check=row.children[0].children[0].children[0];
+  select.value='older';select.onchange();await row.children[0].children[1].onclick();
+  assert.equal(requests[0].duration,10);assert.equal(requests[0].selection[0].takeId,'older');assert.equal(nodes.get('assemblyAudio').hidden,false);
+  check.checked=false;check.onchange();assert.equal(nodes.get('assemblyDownload').disabled,true);assert.equal(nodes.get('assemblyAudio').hidden,true);
+  check.checked=true;check.onchange();await nodes.get('assemblyPreview').onclick();await nodes.get('assemblyDownload').onclick();
+  assert.deepEqual(requests[1].selection.map(s=>s.takeId),['older',null]);assert.equal(requests[1].duration,20);
+  assert.deepEqual(requests[2].selection,requests[1].selection);assert.equal(downloads.length,1);
+  nodes.get('closeAssembly').onclick();assert.equal(nodes.get('assemblyAudio').hidden,true);
+  const restored=(await mount(storage,overrides)).nodes;await restored.get('assembleSong').onclick();
+  assert.equal(restored.get('assemblyEditorList').children[0].children[1].value,'older');restored.get('closeAssembly').onclick();
+  (await storage.ready).close();
+});
+
+for(const action of ['close','cancel'])test(`assembly ${action} fences a pending render so it cannot publish stale audio`,async()=>{
+  const storage=createStorage(new IDBFactory());let resolve;
+  await storage.saveTake({id:'voice',videoId:'video',kind:'song',capture:'vocal',cueKey:'voice',start:0,end:5,speed:1,createdAt:1,blob:new Blob(['voice'])});
+  const {nodes,downloads}=await mount(storage,{video:{duration:10,pause(){}},globals:{
+    EchoAudioExport:{...require('../extension/audio-export.js'),render:()=>new Promise(r=>{resolve=r;})}}});
+  await nodes.get('assembleSong').onclick();const pending=nodes.get('assemblyPreview').onclick();
+  assert.equal(nodes.get('assemblyDownload').disabled,true);
+  nodes.get(action==='close'?'closeAssembly':'assemblyCancelRender').onclick();
+  resolve({blob:new Blob(['late audio'])});await pending;
+  assert.equal(nodes.get('assemblyAudio').hidden,true);assert.equal(downloads.length,0);
+  if(action==='cancel'){assert.equal(nodes.get('assemblyDialog').open,true);assert.equal(nodes.get('assemblyDownload').disabled,false);nodes.get('closeAssembly').onclick();}
+  else assert.equal(nodes.get('assemblyDialog').open,false);
   (await storage.ready).close();
 });

@@ -21,8 +21,32 @@
     if(segments.some(s=>s.take.speed!==1))throw Error('合成下载暂支持 1× 录唱；其他速度仍可下载原始人声。');
     return {segments,gaps,duration};
   }
-  async function render({takes,duration,origin=0,backing=null,volume=1,vocalVolume=1,sampleRate=44100,active=()=>true},env=root){
-    const timeline=plan(takes.map(t=>({...t,start:t.start-origin,end:t.end-origin,...(Number.isFinite(t.capturedEnd)?{capturedEnd:t.capturedEnd-origin}:{})})),duration);
+  function selectionPlan(takes,duration,selection){
+    if(!Number.isFinite(duration) || duration<=0 || duration>600)throw Error('合成范围需在 10 分钟内。');
+    if(!Array.isArray(selection))throw Error('拼接选择无效。');
+    const available=new Map(takes.filter(t=>t.capture==='vocal' && !t.withBacking && t.kind==='song').map(t=>[t.id,t]));
+    const segments=[],gaps=[];let end=0;
+    for(const part of [...selection].sort((a,b)=>a.start-b.start)){
+      if(!Number.isFinite(part.start) || !Number.isFinite(part.end) || part.start<0 || part.end>duration+0.0001 || part.end<=part.start)throw Error('拼接片段超出导出范围。');
+      if(part.takeId===null)continue;
+      const take=available.get(part.takeId);
+      if(!take)throw Error('所选录音已不存在，请重新选择。');
+      if(take.speed!==1)throw Error('合成下载暂支持 1× 录唱。');
+      const capturedEnd=Math.min(take.end,Number.isFinite(take.capturedEnd)?take.capturedEnd:take.end);
+      if(part.start<Math.max(0,take.start)-0.0001 || part.end>capturedEnd+0.0001)throw Error('所选录音未覆盖该片段。');
+      if(part.start<end-0.0001)throw Error('拼接片段不能重叠，请为每个时段选择一个版本。');
+      if(part.start>end)gaps.push({start:end,end:part.start});
+      const last=segments.at(-1);
+      if(last && last.take.id===take.id && Math.abs(last.end-part.start)<0.0001)last.end=part.end;
+      else segments.push({start:part.start,end:part.end,take});
+      end=part.end;
+    }
+    if(end<duration)gaps.push({start:end,end:duration});
+    return {segments,gaps,duration};
+  }
+  async function render({takes,duration,origin=0,selection=null,backing=null,volume=1,vocalVolume=1,sampleRate=44100,active=()=>true},env=root){
+    const shifted=takes.map(t=>({...t,start:t.start-origin,end:t.end-origin,...(Number.isFinite(t.capturedEnd)?{capturedEnd:t.capturedEnd-origin}:{})}));
+    const timeline=selection===null?plan(shifted,duration):selectionPlan(shifted,duration,selection.map(s=>({...s,start:s.start-origin,end:s.end-origin})));
     if(backing && (backing.start>origin+0.001 || backing.end<origin+duration-0.001))throw Error('需要覆盖整个下载范围的伴奏，请先生成整首伴奏。');
     if(!timeline.segments.length)throw Error('此范围内没有已录人声。');
     const length=Math.ceil(duration*sampleRate),channels=[new Float32Array(length),new Float32Array(length)];
@@ -64,5 +88,5 @@
       return {blob:new Blob([bytes],{type:'audio/wav'}),gaps:timeline.gaps};
     }finally{await context.close().catch(()=>{});}
   }
-  const api={plan,render};if(typeof module!=='undefined')module.exports=api;else root.EchoAudioExport=api;
+  const api={plan,selectionPlan,render};if(typeof module!=='undefined')module.exports=api;else root.EchoAudioExport=api;
 })(globalThis);

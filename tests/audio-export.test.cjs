@@ -61,3 +61,19 @@ test('a new sentence replaces only its overlap within an older paragraph and kee
   assert.deepEqual(result.segments.map(s=>[s.start,s.end,s.take.id]),[[10,18,'paragraph'],[18,22,'sentence'],[22,30,'paragraph'],[35,45,'next-paragraph']]);
   assert.deepEqual(result.gaps,[{start:0,end:10},{start:30,end:35},{start:45,end:50}]);
 });
+
+test('manual assembly uses the selected older version and keeps excluded time silent',async()=>{
+  const old=voice('old',0,4,1,{cueKey:'same',vocalOffset:0.5}),newer=voice('new',0,4,2,{cueKey:'same'});
+  class AudioContext{
+    async decodeAudioData(bytes){const id=new TextDecoder().decode(bytes);return {sampleRate:2,numberOfChannels:1,getChannelData:()=>id==='old'?Float32Array.from([.1,.2,.3,.4,.5,.6,.7,.8,.9]):new Float32Array(8).fill(.8)};}
+    async close(){}
+  }
+  const result=await render({takes:[old,newer],duration:1,origin:1,sampleRate:2,selection:[{start:1,end:2,takeId:'old'}]}, {AudioContext,setTimeout:fn=>queueMicrotask(fn)});
+  const view=new DataView(await result.blob.arrayBuffer());assert(Math.abs(view.getInt16(44,true)/32767-.4)<.001);assert(Math.abs(view.getInt16(48,true)/32767-.5)<.001);
+  const {selectionPlan}=require('../extension/audio-export.js');
+  const plan=selectionPlan([old,newer],4,[{start:0,end:1,takeId:'old'},{start:1,end:3,takeId:null},{start:3,end:4,takeId:'new'}]);
+  assert.deepEqual(plan.gaps,[{start:1,end:3}]);assert.deepEqual(plan.segments.map(s=>s.take.id),['old','new']);
+  assert.throws(()=>selectionPlan([old],4,[{start:0,end:2,takeId:'old'},{start:1,end:3,takeId:'old'}]),/不能重叠/);
+  assert.throws(()=>selectionPlan([old],5,[{start:0,end:5,takeId:'old'}]),/未覆盖/);
+  assert.throws(()=>selectionPlan([old],4,[{start:0,end:1,takeId:'missing'}]),/不存在/);
+});

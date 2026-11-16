@@ -42,6 +42,7 @@
     @media(max-height:600px){header{padding:12px 18px 8px}.pages{padding:12px 18px}.practice-dock{padding:8px 18px}.cue-card{padding:12px}.caption{font-size:19px;padding:8px 0;min-height:44px}footer{padding-top:8px;padding-bottom:8px}}
     @media(prefers-reduced-motion:reduce){.caption-context{transition:none}}
     .panel{position:relative}.pages{flex:1 1 auto}.resize-handle{position:absolute;left:2px;bottom:2px;width:24px;height:24px;padding:0;border:0;border-radius:0 0 0 16px;background:transparent;color:#8199aa;cursor:nesw-resize;touch-action:none;user-select:none;font-size:16px}.resize-handle:hover{background:#2f4152;color:#b3eedb}footer{padding-left:30px}
+    .assembly-dialog{color:#edf2f7;background:#131d27;border:1px solid #405467;border-radius:16px;padding:0;width:680px;max-width:calc(100vw - 24px);max-height:calc(100dvh - 32px);box-shadow:0 24px 80px #000b}.assembly-dialog[open]{display:flex;flex-direction:column}.assembly-dialog::backdrop{background:#0009}.assembly-dialog header{padding:14px 20px 8px}.assembly-dialog h2{font-size:17px;margin:0}.assembly-editor-tools{padding:0 20px 8px;border-bottom:1px solid #30414e}.assembly-editor-tools p{margin:6px 0}.assembly-editor-tools .row{margin:8px 0}.assembly-editor-tools #assemblyReset{flex:0 0 auto}.assembly-timeline{display:flex;gap:2px;height:10px;border-radius:5px;overflow:hidden;margin:10px 0}.assembly-timeline span{background:#344454;min-width:1px}.assembly-timeline .selected{background:#a8e5cf}.assembly-editor-list{padding:4px 20px;overflow:auto;min-height:0;scrollbar-width:thin;scrollbar-color:#405467 transparent}.assembly-row{border:1px solid #30414e;border-radius:10px;padding:10px 12px;margin:10px 0;background:#192734}.assembly-row-head{display:flex;align-items:center;justify-content:space-between;gap:8px;margin-bottom:7px}.assembly-row-head .check{font-size:13px;color:#d4e1e9}.assembly-row select{font-size:12px}.assembly-row small{display:block;margin-top:6px}.assembly-editor-footer{border-top:1px solid #30414e;padding:8px 20px 12px;flex-shrink:0}.assembly-editor-footer p{margin:4px 0;max-height:55px;overflow:auto}.assembly-editor-footer .row{margin:8px 0 0}.assembly-editor-footer audio{display:block;width:100%;height:36px;margin:6px 0}.assembly-editor-footer button{font-size:12px}@media(max-height:620px){.assembly-editor-tools p:last-child{display:none}.assembly-row{margin:7px 0}.assembly-dialog header{padding-top:8px}}
   </style><div class="panel" id="panel">
     <header><div id="movePanel" role="button" tabindex="0" aria-label="移动面板" title="拖动标题移动；方向键微调，Home 或双击归位。"><h1>Echo<small>配音与唱歌练习</small></h1></div><div class="header-actions"><button id="openLibrary" class="text-button" aria-haspopup="dialog">练习库</button><button class="close" id="close" aria-label="关闭">×</button></div></header>
     <nav class="tabs" role="tablist" aria-label="练习面板"><button id="tab-practice" role="tab" aria-selected="true" aria-controls="page-practice" tabindex="0">练习</button><button id="tab-transcript" role="tab" aria-selected="false" aria-controls="page-transcript" tabindex="-1">台词</button><button id="tab-recordings" role="tab" aria-selected="false" aria-controls="page-recordings" tabindex="-1">录音</button></nav>
@@ -137,10 +138,9 @@
         </div></details>
         </div>
         <details class="fold" id="songAssembly" hidden><summary>分段合成整首</summary><div class="fold-content">
-          <p class="hint" id="assemblyInfo"></p><details class="fold" id="assemblyPlanDetails"><summary>查看拼接安排</summary><div id="assemblyPlan" class="hint" style="white-space:pre-line;max-height:180px;overflow:auto"></div></details><p class="hint" id="assemblyWarning" hidden></p>
-          <select id="assemblyType" aria-label="整首下载内容"><option value="vocal">仅人声</option><option value="mixed">人声＋整首伴奏</option></select>
-          <p class="hint">按视频时间轴合成，重叠处用最新录音，未录处保留空白。暂支持 1× 录唱；WAV 文件约 10 MB / 分钟。合成采用底部的回听音量比例。</p>
-          <button id="assembleSong">合成并下载整首</button>
+          <p class="hint" id="assemblyInfo"></p><p class="hint" id="assemblyWarning" hidden></p>
+          <p class="hint">按视频时间轴合成。可试听、选版本或排除某段；未选人声的位置保留空白。暂支持 1× 录唱。</p>
+          <button id="assembleSong">选择片段并合成 →</button>
         </div></details>
         <div id="historyBrowser"><div class="recording-heading"><small>按时间排列 · 点选即播放</small><small id="recordingSummary"></small></div>
         <input id="recordingSearch" class="recording-search" placeholder="搜索台词、编号或时间" aria-label="查找录音">
@@ -166,6 +166,12 @@
     <footer><div class="status" id="status" role="status">准备好了，从一句开始。</div><button id="stop" disabled hidden>■ 停止</button></footer>
     <button class="resize-handle" id="resizePanel" aria-label="调整面板大小" title="拖动左下角调整大小；双击或按 Home 恢复默认。方向键微调，Shift 加速。">⤢</button>
   </div>
+  <dialog id="assemblyDialog" class="assembly-dialog" aria-labelledby="assemblyEditorTitle">
+    <header><h2 id="assemblyEditorTitle">选择片段合成整首</h2><button id="closeAssembly" class="close" aria-label="关闭拼接界面">×</button></header>
+    <div class="assembly-editor-tools"><p id="assemblyEditorInfo" class="hint"></p><div id="assemblyEditorTimeline" class="assembly-timeline" aria-hidden="true"></div><div class="row"><label class="hint" for="assemblyType">试听与下载</label><select id="assemblyType" aria-label="整首下载内容"><option value="vocal">仅人声</option><option value="mixed">人声＋伴奏</option></select><button id="assemblyReset" class="text-button">恢复自动</button></div><p class="hint">重叠录音按时间边界拆开，每段可选不同版本。使用回听音量比例；混合整首需完整伴奏。原始录音保留。</p></div>
+    <div id="assemblyEditorList" class="assembly-editor-list"></div>
+    <div class="assembly-editor-footer"><p id="assemblyAudioLabel" class="hint"></p><audio id="assemblyAudio" controls preload="metadata" hidden></audio><p id="assemblyEditorMessage" role="status" class="hint"></p><div class="row"><button id="assemblyCancelRender" hidden>停止生成</button><button id="assemblyPreview">▷ 试听整首</button><button id="assemblyDownload" class="primary">下载当前拼接</button></div></div>
+  </dialog>
   <dialog id="libraryDialog" class="library-dialog" aria-labelledby="libraryTitle">
     <header><h2 id="libraryTitle">我的练习库</h2><button class="close" id="closeLibrary" aria-label="关闭练习库">×</button></header>
     <nav class="library-tabs" role="tablist" aria-label="练习库页面"><button id="libraryRecentTab" role="tab" aria-selected="true" aria-controls="libraryBody">最近练习</button><button id="libraryCacheTab" role="tab" aria-selected="false" aria-controls="libraryBody" tabindex="-1">缓存管理</button></nav>
