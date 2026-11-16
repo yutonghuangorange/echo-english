@@ -17,7 +17,7 @@ import uuid
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 
 PORT = 8765
-MAX_SECONDS = 300
+MAX_SECONDS = 600
 ACTIVE_STATES = ("queued", "downloading", "converting", "separating", "encoding")
 
 
@@ -44,7 +44,7 @@ def validate_clip(data):
     if any(isinstance(v, bool) or not isinstance(v, (int, float)) or not math.isfinite(v) for v in (start, end)):
         raise ValueError("片段时间必须为有限数字。")
     if start < 0 or end <= start or end - start > MAX_SECONDS or end > 86400:
-        raise ValueError("请选择不超过 5 分钟的片段。")
+        raise ValueError("请选择不超过 10 分钟的片段。")
     return {"videoId": video, "start": round(start, 3), "end": round(end, 3)}
 
 
@@ -131,7 +131,10 @@ class Jobs:
                 with (job["directory"] / "worker.log").open("rb") as log:
                     log.seek(0, 2)
                     log.seek(max(0, log.tell() - 8192))
-                    percent, eta = separation_progress(log.read().decode(errors="replace"))
+                    output = log.read().decode(errors="replace")
+                    percent, eta = separation_progress(output)
+                    if percent is None and re.search(r'Downloading:.*https?://', output):
+                        result["modelDownloading"] = True
             except OSError:
                 pass
         return dict(result, progress=percent, remainingSeconds=eta,
@@ -208,21 +211,21 @@ class Jobs:
                           "-f", "bestaudio/best", "--download-sections", f"*{job['start']}-{job['end']}",
                           "--force-keyframes-at-cuts", "-x", "--audio-format", "wav",
                           "-o", str(directory / "source.%(ext)s"),
-                          f"https://www.youtube.com/watch?v={job['videoId']}"], 300,
+                          f"https://www.youtube.com/watch?v={job['videoId']}"], 600,
                      "无法读取此视频音频；视频可能要求登录、限制访问，或需更新 yt-dlp。")
         job["state"] = "converting"
         self.command(job, ["ffmpeg", "-nostdin", "-v", "error", "-y", "-i", str(directory / "source.wav"),
                           "-t", str(job["end"] - job["start"]), "-ar", "44100", "-ac", "2",
-                          str(directory / "clip.wav")], 60, "音频片段转换失败。")
+                          str(directory / "clip.wav")], 120, "音频片段转换失败。")
         job["state"] = "separating"
         self.command(job, [sys.executable, "-m", "demucs", "--two-stems", "vocals", "-n", "htdemucs",
                           "-d", "cpu", "--segment", "4", "--shifts", "0", "-j", "1",
-                          "-o", str(directory / "stems"), str(directory / "clip.wav")], 1800,
+                          "-o", str(directory / "stems"), str(directory / "clip.wav")], 3600,
                      "本机去原唱失败；首次运行需联网下载模型。")
         job["state"] = "encoding"
         self.command(job, ["ffmpeg", "-nostdin", "-v", "error", "-y", "-i",
                           str(directory / "stems" / "htdemucs" / "clip" / "no_vocals.wav"),
-                          "-codec:a", "libmp3lame", "-b:a", "192k", str(job["audio"])], 60,
+                          "-codec:a", "libmp3lame", "-b:a", "192k", str(job["audio"])], 120,
                      "伴奏压缩失败。")
         # Keep only the accompaniment and diagnostic log after success.
         shutil.rmtree(directory / "stems", ignore_errors=True)
@@ -296,7 +299,7 @@ def handler(jobs):
                     return self.reply(200, jobs.cancel(match[1]))
                 self.reply(404, {"error": "路径不存在。"})
             except (ValueError, TypeError):
-                self.reply(400, {"error": "请选择有效的视频和 0–300 秒片段。"})
+                self.reply(400, {"error": "请选择有效的视频和 0–600 秒片段。"})
             except KeyError:
                 self.reply(404, {"error": "任务不存在。"})
             except RuntimeError as error:

@@ -5,6 +5,21 @@ const {key,blobFromBase64,createMix}=require('../extension/karaoke.js');
 const sender={tab:{url:'https://www.youtube.com/watch?v=jNQXAC9IVRw'}};
 const id='a'.repeat(32);
 
+test('service detection uses the fixed health endpoint without creating a job',async()=>{
+  await request({action:'health'},sender,async(url,options)=>{
+    assert.equal(url,'http://127.0.0.1:8765/health');assert.equal(options.method,'GET');assert.equal(options.body,undefined);
+    return {ok:true,json:async()=>({service:'echo-karaoke',version:1})};
+  });
+  assert.match(require('../extension/karaoke.js').progressText({state:'separating',modelDownloading:true}),/正在下载分离模型/);
+});
+
+test('relay accepts a complete ten-minute song',async()=>{
+  await request({action:'start',videoId:'jNQXAC9IVRw',start:0,end:600},sender,async(_,options)=>{
+    assert.equal(JSON.parse(options.body).end,600);
+    return {ok:true,json:async()=>({id,state:'queued'})};
+  });
+});
+
 test('karaoke relay accepts only fixed loopback routes and current-video clips',async()=>{
   const calls=[];
   const fetcher=async(url,opts)=>{calls.push({url,opts});return {ok:true,json:async()=>({id,state:'queued'})};};
@@ -12,7 +27,7 @@ test('karaoke relay accepts only fixed loopback routes and current-video clips',
   assert.equal(calls[0].url,'http://127.0.0.1:8765/jobs');
   assert.equal(calls[0].opts.headers['X-Echo-Client'],'echo-english');
   assert.deepEqual(JSON.parse(calls[0].opts.body),{videoId:'jNQXAC9IVRw',start:0,end:180});
-  for(const message of [{action:'start',videoId:'aaaaaaaaaaa',start:0,end:1},{action:'start',videoId:'jNQXAC9IVRw',start:0,end:301},
+  for(const message of [{action:'start',videoId:'aaaaaaaaaaa',start:0,end:1},{action:'start',videoId:'jNQXAC9IVRw',start:0,end:601},
     {action:'start',videoId:'jNQXAC9IVRw',start:NaN,end:1},{action:'status',jobId:'../../etc/passwd'},{action:'fetch',url:'https://evil.test'}])
     await assert.rejects(request(message,sender,fetcher));
   await assert.rejects(request({action:'status',jobId:id},{tab:{url:'https://www.youtube.com.evil.test/watch?v=jNQXAC9IVRw'}},fetcher));

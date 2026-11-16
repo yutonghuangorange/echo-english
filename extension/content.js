@@ -13,7 +13,7 @@
     .tabs{display:flex;padding:0 20px;gap:20px;border-bottom:1px solid #2b3946;flex-shrink:0}.tabs button{background:transparent;border:0;border-radius:0;padding:10px 1px 12px;color:#8fa1b2;font-size:13px;border-bottom:2px solid transparent}.tabs button[aria-selected="true"]{color:#b3eedb;border-bottom-color:#b3eedb}
     .pages{overflow:auto;min-height:0;padding:20px 22px;scrollbar-width:thin;scrollbar-color:#405467 transparent}.row{display:flex;gap:8px;align-items:center;margin:10px 0}.row>*{flex:1;min-width:0}.row label{display:flex;gap:6px;align-items:center}input,select{min-width:0;background:#101922;color:#edf2f7;border:1px solid #364957;border-radius:8px;padding:8px;width:100%}input[type="checkbox"]{width:auto;accent-color:#b3eedb}
     .hint,small{color:#90a4b6;font-size:12px}.eyebrow{font-size:10px;color:#90a4b6;letter-spacing:1.5px}.cue-card{padding:17px;background:#192734;border:1px solid #2e414f;border-radius:14px;margin-bottom:16px}.caption{font-size:21px;line-height:1.65;min-height:64px;padding:10px 0 14px}.cue-nav{display:flex;align-items:center;justify-content:space-between;color:#90a4b6;font-size:12px}.cue-nav button{background:transparent;border:0;padding:2px 8px;color:#a3bbcc;font-size:18px}.caption-options{display:flex;flex-wrap:wrap;gap:12px;border-top:1px solid #30414e;padding-top:10px}.check{display:flex;gap:5px;align-items:center;color:#9ab0bf;font-size:12px;margin:0}#translation{color:#b2c1cd;font-size:14px;line-height:1.7;margin-bottom:14px}#rawCaption{font-size:12px;color:#9ab0bf;margin-top:8px}
-    .primary{background:#b3eedb;border-color:#b3eedb;color:#163b32;font-weight:700}.primary:hover{background:#c9f5e8}.main-actions{display:grid;grid-template-columns:1fr 1fr;gap:8px}.main-actions .primary{grid-column:1 / -1;padding:13px}.secondary-actions{display:flex;gap:8px;margin:10px 0 18px}.secondary-actions button{flex:1;font-size:12px;background:transparent;color:#a5c5d6;padding:8px}.fold{border-top:1px solid #2b3946;padding:13px 0 0;margin-top:14px}.fold summary{color:#b6c8d6;font-size:12px;list-style:none;display:flex;justify-content:space-between}.fold summary::after{content:'＋';color:#8199aa}.fold[open] summary::after{content:'−'}.fold-content{padding-top:8px}.micro button{font-size:11px;padding:7px 4px}.setup{display:flex;gap:12px;align-items:center;justify-content:space-between;background:#192734;border:1px dashed #3b505f;border-radius:10px;padding:10px 12px;margin-bottom:14px;font-size:12px;color:#90a4b6}.setup button{flex-shrink:0;padding:7px 10px;font-size:12px}.page-title{font-size:17px;font-weight:600;margin:0 0 6px}.page-subtitle{font-size:12px;color:#90a4b6;margin-bottom:18px}.empty{padding:24px 16px;text-align:center;border:1px dashed #3b505f;border-radius:12px;color:#90a4b6;font-size:13px}.empty strong{display:block;color:#d4e1e9;font-size:15px;margin-bottom:6px}.empty button{margin-top:12px}
+    .primary{background:#b3eedb;border-color:#b3eedb;color:#163b32;font-weight:700}.primary:hover{background:#c9f5e8}.main-actions{display:grid;grid-template-columns:1fr 1fr;gap:8px}.main-actions .primary{grid-column:1 / -1;padding:13px}.secondary-actions{display:flex;gap:8px;margin:10px 0 18px}.secondary-actions button{flex:1;font-size:12px;background:transparent;color:#a5c5d6;padding:8px}.fold{border-top:1px solid #2b3946;padding:13px 0 0;margin-top:14px}.fold > summary{color:#b6c8d6;font-size:12px;list-style:none;display:flex;justify-content:space-between}.fold > summary::after{content:'＋';color:#8199aa}.fold[open] > summary::after{content:'−'}.fold-content{padding-top:8px}.micro button{font-size:11px;padding:7px 4px}.setup{display:flex;gap:12px;align-items:center;justify-content:space-between;background:#192734;border:1px dashed #3b505f;border-radius:10px;padding:10px 12px;margin-bottom:14px;font-size:12px;color:#90a4b6}.setup button{flex-shrink:0;padding:7px 10px;font-size:12px}.page-title{font-size:17px;font-weight:600;margin:0 0 6px}.page-subtitle{font-size:12px;color:#90a4b6;margin-bottom:18px}.empty{padding:24px 16px;text-align:center;border:1px dashed #3b505f;border-radius:12px;color:#90a4b6;font-size:13px}.empty strong{display:block;color:#d4e1e9;font-size:15px;margin-bottom:6px}.empty button{margin-top:12px}
     .list{max-height:340px;overflow:auto;scrollbar-width:thin;margin-top:16px}.cue{display:block;text-align:left;width:100%;margin:6px 0;font-size:13px;background:#192734;border-color:transparent;padding:12px}.cue.active{border-color:#8cc7b3;background:#263e3c}a{color:#b3eedb}#download{display:none;text-align:center;width:100%;padding:10px;border:1px solid #3a5b54;border-radius:10px;text-decoration:none}
     .word{display:inline;border:0;border-bottom:1px dotted #648a87;border-radius:0;padding:0 1px;background:transparent;font:inherit;color:inherit}.word:hover{background:#2d4647;color:#b3eedb}.word:disabled{opacity:1}.wordcard{background:#0e1821;border:1px solid #37505a;border-radius:12px;padding:12px;margin:12px 0}.wordcard p{font-size:13px;margin:8px 0}.wordcard .row{margin-top:0}canvas{width:100%;height:90px;background:#0e1821;border-radius:10px;margin:12px 0}.analysis-text{font-size:12px;color:#a3b7c6;white-space:pre-line;margin-bottom:12px}
     footer{border-top:1px solid #2b3946;background:#111b24;padding:12px 20px;display:flex;align-items:center;gap:10px;flex-shrink:0}.status{font-size:11px;color:#9ab2c1;flex:1;line-height:1.6;max-height:70px;overflow:auto}#stop{background:#643640;border-color:#88505a;color:#ffe2e6;font-size:12px;padding:8px 12px;flex-shrink:0}
@@ -40,13 +40,22 @@
         <div class="main-actions"><button id="original">▶ 听原声</button><button id="replay" disabled>▷ 我的配音</button><button class="primary" id="record">● 开始配音</button></div>
         <div class="secondary-actions"><button id="loop">↻ 单句循环</button><button id="autoPractice">▶ 自动跟读</button></div>
         <details class="fold" id="karaokeSettings" hidden><summary>唱歌 · 去原唱伴奏</summary><div class="fold-content">
-          <p class="hint">生成伴奏 → 试听 → 录唱 → 回听。默认处理整首，最长 5 分钟。</p>
+          <p class="hint">生成伴奏 → 试听 → 录唱 → 回听。默认处理整首，最长 10 分钟。</p>
           <select id="karaokeScope" aria-label="唱歌范围"><option value="whole" selected>整首歌曲（默认）</option><option value="clip">当前练习片段</option></select>
+          <div class="row"><span class="hint" id="karaokeService" role="status">伴奏服务 · 尚未检测</span><button id="checkKaraoke">重新检测</button></div>
           <div class="row"><button id="prepareBacking">① 生成整首伴奏</button><button id="previewBacking" disabled>▷ 试听伴奏</button></div>
+          <div id="karaokeNotice" role="alert" style="padding:10px 12px;border:1px solid #d8aa69;border-radius:10px;color:#ffe0ac;font-size:13px;overflow-wrap:anywhere" hidden></div>
           <div class="row"><button class="primary" id="recordSong" disabled>② 开始整首录唱</button></div>
           <label class="hint">伴奏音量 <input id="backingVolume" type="range" min="0" max="1" step="0.05" value="0.65" aria-label="伴奏音量"></label>
           <label class="check"><input id="useBacking" type="checkbox">逐句配音也使用此伴奏</label>
-          <p class="hint" id="karaokeInfo" role="status">首次使用需启动本机伴奏服务。建议戴耳机，分离可能残留原唱。</p>
+          <p class="hint" id="karaokeInfo" role="status">生成伴奏需要额外配置本机服务，安装扩展不会自动安装。展开下方说明查看准备步骤。</p>
+          <details class="fold" id="karaokeHelp"><summary>首次使用：如何启用伴奏？</summary><div class="fold-content hint">
+            <p>只需安装一个 Echo 扩展。生成伴奏还需要这台电脑上的 Python、FFmpeg 和分离模型；普通配音、录音与回放无需这些组件。</p>
+            <p>① 在项目目录运行 <code>bash start-karaoke.sh</code>，自动安装依赖并启动服务；以后也用此命令启动。<br>② 保持终端开启，回到这里点击“重新检测”，再生成伴奏。首次下载模型及分离歌曲可能需要几分钟。</p>
+            <p>Linux 已验证；macOS 脚本尚待实机验证，缺少系统组件时需已有 Homebrew。暂不支持 Windows，也未提供扩展自动启动助手。</p>
+            <a href="https://github.com/zexiangliu/echo-english/blob/master/karaoke/README.md" target="_blank" rel="noopener noreferrer">查看伴奏服务安装说明 ↗</a>
+            <p>建议戴耳机录唱。分离结果可能残留原唱。</p>
+          </div></details>
           <progress id="karaokeProgress" max="100" aria-label="去原唱阶段进度" style="width:100%;accent-color:#b3eedb" hidden></progress>
           <div id="songResult" hidden><small id="songInfo"></small><div class="row"><button id="songReplay">回听演唱</button><button id="songAgain" title="需先生成伴奏，重录会保留上一版">重新录唱</button><a id="songDownload">下载演唱</a></div></div>
         </div></details>
@@ -63,7 +72,7 @@
         <details class="fold" id="clipSettings"><summary>片段与边界<span id="clipSummary">0.0–5.0 秒</span></summary><div class="fold-content">
           <div class="row"><label><small>起点</small><input id="start" aria-label="片段起点（秒）" type="number" min="0" step="0.1" value="0"></label><label><small>终点</small><input id="end" aria-label="片段终点（秒）" type="number" min="0" step="0.1" value="5"></label></div>
           <div class="row micro"><button id="startEarlier">起点 −0.2s</button><button id="startLater">起点 +0.2s</button><button id="endEarlier">终点 −0.2s</button><button id="endLater">终点 +0.2s</button></div>
-          <div class="row"><button id="markStart">此刻设为起点</button><button id="markEnd">此刻设为终点</button></div><p class="hint">配音时原声静音；每段最长 5 分钟。</p>
+          <div class="row"><button id="markStart">此刻设为起点</button><button id="markEnd">此刻设为终点</button></div><p class="hint">配音时原声静音；每段最长 10 分钟。</p>
         </div></details>
       </section>
       <section id="page-transcript" role="tabpanel" aria-labelledby="tab-transcript" hidden>
@@ -103,6 +112,7 @@
   const captionEvents = ['timeupdate','seeking','seeked','play','pause','ended'];
   let savedBackings = [], activeKaraokeJob = null, recordMix = null, songTake = null, songUrl = null;
   let backingRestoreRequest=0, restoringBacking=false, karaokeIssue='';
+  let serviceState='unknown',serviceCheck=null;
   let wordRequest = 0, selectedWord = null, analysisRequest = 0;
   let videoId = currentId();
   const storage = EchoStorage.createStorage();
@@ -150,13 +160,13 @@
   $('activityMode').onchange=()=>{
     if(mode==='idle'){activity=$('activityMode').value==='sing'?'sing':'speech';karaokeIssue='';}
     renderActivity();controls();
-    if(isSinging())void restoreServerBacking();
+    if(isSinging()){void checkKaraokeService();void restoreServerBacking();}
   };
   function backingFor(r) {return savedBackings.find(value=>EchoKaraoke.covers(value,videoId,r)) || null;}
   function songRange() {
     if($('karaokeScope').value==='clip')return range();
     const v=video();
-    if(v.duration>300)throw Error('视频超过 5 分钟，请选择「当前练习片段」并设置歌曲起止时间。');
+    if(v.duration>600)throw Error('视频超过 10 分钟，请选择「当前练习片段」并设置歌曲起止时间。');
     if(v.duration<=0)throw Error('请等待视频加载。');
     return {start:0,end:v.duration,speed:Number($('speed').value)};
   }
@@ -170,7 +180,9 @@
     const ready=target && backingFor(target);
     $('previewBacking').disabled=busy || !ready;
     $('recordSong').disabled=busy || !ready;
-    $('prepareBacking').disabled=busy || !!ready || restoringBacking;
+    $('prepareBacking').disabled=busy || !!ready;
+    $('karaokeNotice').hidden=!karaokeIssue;
+    $('karaokeNotice').textContent=karaokeIssue;
     $('prepareBacking').textContent=mode==='separating'?'① 正在生成伴奏…':ready?'① 伴奏已就绪':whole?'① 生成整首伴奏':'① 生成片段伴奏';
     $('recordSong').textContent=whole?'② 开始整首录唱':'② 开始片段录唱';
     $('songReplay').disabled=busy || !songTake;
@@ -180,7 +192,7 @@
     else if(error)$('karaokeInfo').textContent=error;
     else if(karaokeIssue)$('karaokeInfo').textContent=karaokeIssue;
     else if(ready)$('karaokeInfo').textContent='伴奏已就绪。可以试听，再点击开始录唱；也可切换台词逐句练习，无需重新生成。';
-    else $('karaokeInfo').textContent='先生成伴奏，再开始录唱。首次使用需启动本机伴奏服务；建议戴耳机。';
+    else $('karaokeInfo').textContent=serviceState==='online'?'先生成伴奏，再试听、录唱。建议戴耳机。':serviceState==='offline'?'伴奏服务未连接。请查看下方启动说明，启动后点击“重新检测”。已有的伴奏和录音仍可使用。':'生成伴奏需要额外配置本机服务，安装扩展不会自动安装。展开下方“首次使用”查看准备步骤。';
   }
   function setSongTake(value) {
     if(songTake?.id===value?.id)return;
@@ -224,7 +236,7 @@
   function range() {
     const start = Number($('start').value), end = Number($('end').value), v = video();
     if (!Number.isFinite(start) || !Number.isFinite(end) || start < 0 || end <= start || end > v.duration + 0.1) throw Error('请设置有效起止时间，终点需在视频时长内。');
-    if (end - start > 300) throw Error('每个练习片段最长 5 分钟，请缩短片段。');
+    if (end - start > 600) throw Error('每个练习片段最长 10 分钟，请缩短片段。');
     return { start, end, speed: Number($('speed').value) };
   }
   function saveVideo(v) { savedVideo = { v, muted: v.muted, rate: v.playbackRate }; }
@@ -418,10 +430,32 @@
   });
   $('recordingSearch').oninput=renderHistory;
   async function karaokeRequest(action, data = {}) {
-    const result=await chrome.runtime.sendMessage({type:'echo-karaoke',action,...data});
+    let timeout;
+    let result;
+    try{
+      result=await Promise.race([
+        chrome.runtime.sendMessage({type:'echo-karaoke',action,...data}),
+        new Promise((_,reject)=>{timeout=setTimeout(()=>reject(Error('伴奏服务响应超时。请在项目根目录运行 bash start-karaoke.sh；若已启动，请重新加载扩展并刷新 YouTube 页面。')),action==='audio'?35000:12000);})
+      ]);
+    }finally{clearTimeout(timeout);}
     if(!result || result.error)throw Error(result?.error || '伴奏服务未响应，请重新加载扩展后重试。');
     return result;
   }
+  function checkKaraokeService() {
+    if(serviceCheck)return serviceCheck;
+    $('checkKaraoke').disabled=true;$('karaokeService').textContent='伴奏服务 · 正在检测…';
+    serviceCheck=(async()=>{
+      try{
+        const result=await karaokeRequest('health');
+        if(result.service!=='echo-karaoke')throw Error('服务不匹配');
+        serviceState='online';$('karaokeService').textContent='伴奏服务 · 已连接';$('karaokeHelp').open=false;
+      }catch{
+        serviceState='offline';$('karaokeService').textContent='伴奏服务 · 未连接（未启动或不可用）';$('karaokeHelp').open=true;
+      }finally{$('checkKaraoke').disabled=false;serviceCheck=null;updateBackingControls();}
+    })();
+    return serviceCheck;
+  }
+  $('checkKaraoke').onclick=async()=>{await checkKaraokeService();if(serviceState==='online'){karaokeIssue='';controls();await restoreServerBacking();}};
   async function keepBacking(value) {
     savedBackings=[value,...savedBackings.filter(old=>old.key!==value.key)].slice(0,8);
     try{await storage.saveBacking(value);return true;}
@@ -461,18 +495,27 @@
   });
   $('prepareBacking').onclick=guarded(async()=>{
     if(mode!=='idle' || !isSinging())return;
+    // Explicit generation takes priority over the optional cache lookup.
+    backingRestoreRequest++;restoringBacking=false;
     karaokeIssue='';
     let r;
     try{r=songRange();}catch(error){karaokeIssue=error.message;controls();status(error.message);return;}
+    if(serviceState==='offline'){
+      karaokeIssue='伴奏尚未开始生成：本机服务未连接。请在项目根目录运行 bash start-karaoke.sh（首次自动安装），保持终端开启，再点击“重新检测”。';
+      $('karaokeHelp').open=true;controls();status(karaokeIssue);
+      $('karaokeNotice').scrollIntoView?.({block:'nearest'});return;
+    }
     const id=videoId, token=++generation;
     video().pause();mode='separating';controls();
     $('karaokeProgress').hidden=false;$('karaokeProgress').removeAttribute('value');
     status('正在准备伴奏，请稍候…');$('karaokeInfo').textContent='正在连接本机伴奏服务…';
+    $('karaokeNotice').textContent='正在连接本机伴奏服务，请稍候…';$('karaokeNotice').hidden=false;
     let job;
     try {
       job=await karaokeRequest('start',{videoId:id,start:r.start,end:r.end});
       if(token!==generation){void karaokeRequest('cancel',{jobId:job.id}).catch(()=>{});return;}
       activeKaraokeJob=job.id;
+      $('karaokeNotice').hidden=true;
       while(token===generation && id===videoId){
         if(job.state==='error')throw Error(job.error || '伴奏生成失败，请重试。');
         if(job.state==='cancelled')throw Error('伴奏任务已停止，请重新生成。');
@@ -480,13 +523,13 @@
         const text=EchoKaraoke.progressText(job);
         if(job.state==='separating' && Number.isFinite(job.progress))$('karaokeProgress').value=job.progress;
         else $('karaokeProgress').removeAttribute('value');
-        status(text);$('karaokeInfo').textContent=text;
+        status('正在生成伴奏，可随时停止。');$('karaokeInfo').textContent=text;
         await new Promise(resolve=>setTimeout(resolve,1500));
         if(token!==generation)return;
         job=await karaokeRequest('status',{jobId:job.id});
       }
       if(token!==generation || id!==videoId)return;
-      $('karaokeProgress').value=100;status(EchoKaraoke.progressText(job));$('karaokeInfo').textContent=EchoKaraoke.progressText(job);
+      $('karaokeProgress').value=100;status('正在加载伴奏…');$('karaokeInfo').textContent=EchoKaraoke.progressText(job);
       const result=await karaokeRequest('audio',{jobId:job.id});
       if(token!==generation || id!==videoId)return;
       const stored=await keepBacking({key:EchoKaraoke.key(id,r),videoId:id,start:r.start,end:r.end,createdAt:Date.now(),blob:EchoKaraoke.blobFromBase64(result)});
@@ -495,9 +538,10 @@
     } catch(error) {
       if(token!==generation)return;
       karaokeIssue=error.message || '伴奏生成失败，请重试。';
+      $('karaokeHelp').open=true;
       $('karaokeInfo').textContent=karaokeIssue;status(karaokeIssue);
     } finally {
-      if(token===generation){activeKaraokeJob=null;$('karaokeProgress').hidden=true;mode='idle';controls();}
+      if(token===generation){activeKaraokeJob=null;$('karaokeProgress').hidden=true;mode='idle';controls();if(karaokeIssue)$('karaokeNotice').scrollIntoView?.({block:'nearest'});}
     }
   });
   $('previewBacking').onclick=guarded(async()=>{

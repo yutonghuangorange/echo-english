@@ -80,8 +80,8 @@ class Tests(unittest.TestCase):
     def test_validation_rejects_arbitrary_urls_and_unbounded_clips(self):
         self.assertEqual(validate_clip(CLIP), CLIP)
         self.assertEqual(validate_clip(dict(CLIP, end=180))["end"], 180)
-        self.assertEqual(validate_clip(dict(CLIP, end=300))["end"], 300)
-        for patch in ({"videoId": "https://evil.test"}, {"start": -1}, {"end": 301}, {"start": True},
+        self.assertEqual(validate_clip(dict(CLIP, end=600))["end"], 600)
+        for patch in ({"videoId": "https://evil.test"}, {"start": -1}, {"end": 601}, {"start": True},
                       {"end": float("nan")}, {"end": float("inf")}, {"end": "5"}, {"end": 0}):
             with self.assertRaises(ValueError):
                 validate_clip(dict(CLIP, **patch))

@@ -29,12 +29,37 @@ async function mount(storage, overrides = {}) {
   Object.assign(context,overrides.globals || {});
   if(context.chrome.runtime.sendMessage){
     const send=context.chrome.runtime.sendMessage;
-    context.chrome.runtime.sendMessage=message=>message.action==='cached'?Promise.resolve(overrides.cachedBackings || {backings:[]}):send(message);
+    context.chrome.runtime.sendMessage=message=>message.action==='health'?Promise.resolve(overrides.health ? overrides.health() : {service:'echo-karaoke',version:1}):message.action==='cached'?Promise.resolve(overrides.cachedBackings || {backings:[]}):send(message);
   }
   vm.runInNewContext(fs.readFileSync('extension/content.js','utf8'),context);
   for(let i=0;i<20 && nodes.get('read').disabled;i++)await new Promise(r=>setTimeout(r,2));
   return {nodes,root};
 }
+test('singing detects offline service and retry collapses setup help after connection',async()=>{
+  const storage=createStorage(new IDBFactory());let online=false,checks=0,starts=0;
+  const {nodes}=await mount(storage,{health:()=>{checks++;return online?{service:'echo-karaoke'}:{error:'offline'};},globals:{chrome:{runtime:{onMessage:{addListener(){}},async sendMessage(){starts++;return {};}}}}});
+  assert.equal(checks,0);
+  nodes.get('activityMode').value='sing';nodes.get('activityMode').onchange();
+  await nodes.get('checkKaraoke').onclick();
+  assert.match(nodes.get('karaokeService').textContent,/未连接/);assert.equal(nodes.get('karaokeHelp').open,true);
+  assert.equal(starts,0);assert.equal(nodes.get('record').disabled,false);
+  online=true;await nodes.get('checkKaraoke').onclick();
+  assert.match(nodes.get('karaokeService').textContent,/已连接/);assert.equal(nodes.get('karaokeHelp').open,false);assert.equal(starts,0);
+  (await storage.ready).close();
+});
+test('offline generation shows setup next to the button even while cache lookup is pending',async()=>{
+  const storage=createStorage(new IDBFactory());let starts=0;
+  const {nodes}=await mount(storage,{health:()=>({error:'offline'}),cachedBackings:new Promise(()=>{}),globals:{chrome:{runtime:{onMessage:{addListener(){}},async sendMessage(){starts++;return {};}}}}});
+  nodes.get('activityMode').value='sing';nodes.get('activityMode').onchange();
+  await nodes.get('checkKaraoke').onclick();
+  assert.equal(nodes.get('prepareBacking').disabled,false);
+  await nodes.get('prepareBacking').onclick();
+  assert.equal(starts,0);assert.equal(nodes.get('karaokeNotice').hidden,false);
+  assert.match(nodes.get('karaokeNotice').textContent,/bash start-karaoke.sh/);
+  assert.equal(nodes.get('karaokeHelp').open,true);
+  nodes.get('speed').onchange();assert.equal(nodes.get('karaokeNotice').hidden,false);
+  (await storage.ready).close();
+});
 test('content script restores selected sentence, boundaries, settings and matching take',async()=>{
   const storage=createStorage(new IDBFactory());
   const first={start:0,end:2,text:'First sentence'},second={start:2.2,end:5.4,text:'Second sentence',key:cueKey({start:2,text:'Second sentence'})};
@@ -240,10 +265,10 @@ test('default generation covers the whole song and reuses it for different sente
 
 test('long videos require choosing a clip rather than silently truncating a song',async()=>{
   const storage=createStorage(new IDBFactory());let requests=0;
-  const {nodes}=await mount(storage,{video:{duration:600,pause(){}},globals:{chrome:{runtime:{onMessage:{addListener(){}},async sendMessage(){requests++;}}}}});
+  const {nodes}=await mount(storage,{video:{duration:601,pause(){}},globals:{chrome:{runtime:{onMessage:{addListener(){}},async sendMessage(){requests++;}}}}});
   nodes.get('activityMode').value='sing';nodes.get('activityMode').onchange();
   await nodes.get('prepareBacking').onclick();
-  assert.equal(requests,0);assert.match(nodes.get('status').textContent,/超过 5 分钟/);
+  assert.equal(requests,0);assert.match(nodes.get('status').textContent,/超过 10 分钟/);
   assert.equal(nodes.get('recordSong').disabled,true);
   (await storage.ready).close();
 });
@@ -293,6 +318,7 @@ test('generation displays live separation progress, encoding state and completio
         if(polls++===0){
           assert.equal(nodes.get('karaokeProgress').hidden,false);assert.equal(nodes.get('karaokeProgress').value,40);
           assert.match(nodes.get('karaokeInfo').textContent,/40%.*已用.*预计剩余/);
+          assert.doesNotMatch(nodes.get('status').textContent,/%|已用|预计剩余/);
           return {id:'e'.repeat(32),state:'encoding',progress:null,elapsedSeconds:30};
         }
         assert.match(nodes.get('karaokeInfo').textContent,/压缩并保存/);
@@ -392,10 +418,10 @@ test('old Chinese sessions keep complete lyrics rather than enabling legacy Engl
 
 test('whole-song validation remains beside the generation button without sending a request',async()=>{
   const storage=createStorage(new IDBFactory());let requests=0;
-  const {nodes}=await mount(storage,{video:{duration:360,pause(){}},globals:{chrome:{runtime:{onMessage:{addListener(){}},async sendMessage(){requests++;return {};}}}}});
+  const {nodes}=await mount(storage,{video:{duration:601,pause(){}},globals:{chrome:{runtime:{onMessage:{addListener(){}},async sendMessage(){requests++;return {};}}}}});
   nodes.get('activityMode').value='sing';nodes.get('activityMode').onchange();
   await nodes.get('prepareBacking').onclick();
-  assert.equal(requests,0);assert.match(nodes.get('karaokeInfo').textContent,/超过 5 分钟/);assert.match(nodes.get('status').textContent,/超过 5 分钟/);
+  assert.equal(requests,0);assert.match(nodes.get('karaokeInfo').textContent,/超过 10 分钟/);assert.match(nodes.get('status').textContent,/超过 10 分钟/);
   assert.equal(nodes.get('prepareBacking').disabled,false);
   (await storage.ready).close();
 });
