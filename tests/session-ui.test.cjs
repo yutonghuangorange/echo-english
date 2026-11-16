@@ -13,7 +13,7 @@ async function mount(storage, overrides = {}) {
     constructor(){this.children=[];this.hidden=false;this.value='';this.style={};this.attrs={};this.classList={toggle:()=>{}};created.push(this);}
     set innerHTML(html){this.html=html;for(const match of html.matchAll(/\bid="([^"]+)"/g))nodes.set(match[1],new Element());
       nodes.get('followCaptions').checked=true;
-      for(const [id,value] of Object.entries({start:'0',end:'5',speed:'1',loopCount:'3',prepSeconds:'3',backingVolume:'0.65',karaokeScope:'whole',activityMode:'speech',contentLanguage:'auto',captionLayout:'original'}))nodes.get(id).value=value;}
+      for(const [id,value] of Object.entries({start:'0',end:'5',speed:'1',loopCount:'3',prepSeconds:'3',backingVolume:'1',karaokeScope:'whole',activityMode:'speech',contentLanguage:'auto',captionLayout:'original'}))nodes.get(id).value=value;}
     get innerHTML(){return this.html;}
     setAttribute(k,v){this.attrs[k]=v;} getAttribute(k){return this.attrs[k];} removeAttribute(k){delete this.attrs[k];if(k==='value')this.value=0;}
     append(...children){this.children.push(...children);} replaceChildren(...children){this.children=children;}
@@ -148,6 +148,23 @@ test('song mode exposes main recording and guides missing accompaniment without 
   nodes.get('activityMode').value='speech';nodes.get('activityMode').onchange();
   assert.equal(nodes.get('singActions').hidden,true);assert.equal(nodes.get('karaokeSettings').hidden,true);
   assert.equal(nodes.get('linePractice').open,true);assert.equal(nodes.get('linePracticeSummary').hidden,true);
+  (await storage.ready).close();
+});
+
+test('volume remains adjustable during accompaniment preview and saves the chosen gain',async()=>{
+  const storage=createStorage(new IDBFactory());let gain=1;
+  await storage.saveBacking({key:'music',videoId:'video',start:0,end:60,createdAt:1,blob:new Blob(['audio'])});
+  const video={duration:60,currentTime:0,muted:false,playbackRate:1,pause(){},async play(){},addEventListener(){},removeEventListener(){}};
+  class Audio{pause(){}async play(){}}
+  const {nodes}=await mount(storage,{video,globals:{Audio,EchoKaraoke:{...require('../extension/karaoke.js'),async createBackingOutput(){return {setVolume(value){gain=value;},dispose(){}};}}}});
+  nodes.get('activityMode').value='sing';nodes.get('activityMode').onchange();
+  const playing=nodes.get('previewBacking').onclick();
+  for(let i=0;i<5;i++)await Promise.resolve();
+  assert.equal(nodes.get('backingVolume').disabled,false);
+  nodes.get('backingVolume').value='1.5';nodes.get('backingVolume').oninput();
+  assert.equal(gain,1.5);assert.equal(nodes.get('backingVolumeValue').textContent,'150%');
+  nodes.get('backingVolume').onchange();nodes.get('stop').onclick();await playing;
+  const session=await storage.getSession('video');assert.equal(session.backingVolume,1.5);
   (await storage.ready).close();
 });
 

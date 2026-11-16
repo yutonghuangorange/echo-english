@@ -84,6 +84,20 @@ test('whole-song backing covers shorter phrases but never another video or an un
   assert.equal(covers({...backing,start:20},'song',{start:10,end:30}),false);
 });
 
+test('accompaniment preview supports live gain above HTML audio volume without changing the element volume',async()=>{
+  let gain,closed=0;const music={volume:1};
+  const source={connect(){}};
+  class AudioContext{
+    destination={};createMediaElementSource(value){assert.equal(value,music);return source;}
+    createGain(){return gain={gain:{value:1},connect(){}};}
+    async resume(){}async close(){closed++;}
+  }
+  const output=await require('../extension/karaoke.js').createBackingOutput(music,1.5,{AudioContext});
+  assert.equal(gain.gain.value,1.5);output.setVolume(2);assert.equal(gain.gain.value,2);
+  output.setVolume(0);assert.equal(gain.gain.value,0);output.setVolume(99);assert.equal(gain.gain.value,2);
+  assert.equal(music.volume,1);output.dispose();assert.equal(closed,1);
+});
+
 test('progress labels separate stage progress from total time and avoid invented percentages',()=>{
   const {progressText}=require('../extension/karaoke.js');
   assert.equal(progressText({state:'separating',progress:40,elapsedSeconds:16,remainingSeconds:23}),

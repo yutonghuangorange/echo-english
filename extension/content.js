@@ -21,6 +21,7 @@
     .recording-heading{display:flex;align-items:center;justify-content:space-between;gap:8px}.recording-heading .page-title{margin:0}.selected-recording{background:#192734;border:1px solid #355348;border-radius:12px;padding:14px;margin:16px 0}.selected-recording #historyInfo{margin:5px 0;font-size:12px}.selected-recording #recordingText{font-size:14px;line-height:1.6;display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical;overflow:hidden}.version-choices{display:flex;gap:6px;flex-wrap:wrap}.version-choice{font-size:11px;padding:5px 9px;border-radius:20px;background:transparent;color:#94adbc}.version-choice[aria-pressed="true"]{background:#b3eedb;color:#163b32;border-color:#b3eedb}.recording-search{font-size:12px;margin:10px 0 4px}.recording-timeline{max-height:260px;overflow:auto;scrollbar-width:thin}.history-item{display:flex;align-items:center;gap:6px}.history-item .history-row{flex:1;min-width:0}.history-delete{flex-shrink:0;font-size:12px;padding:8px;color:#ffb4ad;background:transparent}.recording-timeline .history-row{position:relative;padding-left:32px;border-color:transparent}.recording-timeline .history-row::before{content:'▷';position:absolute;left:11px;top:12px;color:#8fbdaf}.recording-timeline .history-row[aria-pressed="true"]{border-color:#8cc7b3}.recording-timeline .history-row small{white-space:nowrap;overflow:hidden;text-overflow:ellipsis}.recording-timeline .history-row:disabled{opacity:.65}
     .caption-stage{position:relative}.caption-context{font-size:14px;line-height:1.5;color:#c3d4df;opacity:.42;min-height:22px;max-height:44px;overflow:hidden;display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical;transition:opacity .2s}.caption[data-phase="upcoming"]{color:#c4d9df}.caption[data-phase="ended"]{opacity:.65}.caption-phase{font-size:11px;color:#8fbdae;min-height:17px;margin-top:5px}
     #linePractice:not(.fold){margin-top:16px}#linePractice.fold .main-actions{margin-top:12px}#transcriptSearch{margin-top:14px}
+    input[type="range"]{padding:0;border:0;border-radius:0;background:transparent;accent-color:#b3eedb;cursor:pointer}input[type="range"]:disabled{cursor:default}input[type="range"]:focus-visible{outline:2px solid #b3eedb;outline-offset:3px}
     @media(prefers-reduced-motion:reduce){.caption-context{transition:none}}
   </style><div class="panel">
     <header><div><h1>Echo<small>配音与唱歌练习</small></h1></div><button class="close" id="close" aria-label="关闭">×</button></header>
@@ -58,7 +59,7 @@
           <p class="hint">按上方录唱范围生成，最长 10 分钟。准备好后回到主区录唱。</p>
           <div class="row"><span class="hint" id="karaokeService" role="status">伴奏服务 · 尚未检测</span><button id="checkKaraoke">重新检测</button></div>
           <div class="row"><button id="prepareBacking">生成整首伴奏</button><button id="previewBacking" disabled>▷ 试听伴奏</button></div>
-          <label class="hint">伴奏音量 <input id="backingVolume" type="range" min="0" max="1" step="0.05" value="0.65" aria-label="伴奏音量"></label>
+          <label class="hint">伴奏音量 · <output id="backingVolumeValue" for="backingVolume">100%</output><input id="backingVolume" type="range" min="0" max="2" step="0.05" value="1" aria-label="伴奏音量"></label><div class="hint">100% 为原始音量，可提升至 200%。</div>
           <details class="fold" id="karaokeHelp"><summary>首次使用：如何启用伴奏？</summary><div class="fold-content hint">
             <p>只需安装一个 Echo 扩展。生成伴奏还需要这台电脑上的 Python、FFmpeg 和分离模型；普通配音、录音与回放无需这些组件。</p>
             <p>① 在项目目录运行 <code>bash start-karaoke.sh</code>，自动安装依赖并启动服务；以后也用此命令启动。<br>② 保持终端开启，回到这里点击“重新检测”，再生成伴奏。首次下载模型及分离歌曲可能需要几分钟。</p>
@@ -120,6 +121,7 @@
   const captionEvents = ['timeupdate','seeking','seeked','play','pause','ended'];
   let savedBackings = [], activeKaraokeJob = null, recordMix = null, songTake = null, songUrl = null;
   let backingRestoreRequest=0, restoringBacking=false, karaokeIssue='';
+  let backingOutput=null;
   let serviceState='unknown',serviceCheck=null,serviceMaxSeconds=null;
   let wordRequest = 0, selectedWord = null, analysisRequest = 0;
   let videoId = currentId();
@@ -245,7 +247,9 @@
     $('karaokeSettings').hidden=!isSinging() || recording;
     for(const id of ['captionSetup','linePractice','practiceSettings','clipSettings'])$(id).hidden=recording;
     for (const id of ['contentLanguage','captionLayout','activityMode','read','import','transcriptRead','transcriptImport','prepareBacking','karaokeScope','useBacking','backingVolume','prev','next','markStart','markEnd','original','speed','start','end','record','startEarlier','startLater','endEarlier','endLater','loop','loopCount','autoPractice','prepSeconds','autoNext']) $(id).disabled = busy;
-    for(const id of ['karaokeScope','useBacking','backingVolume'])$(id).disabled=busy || !isSinging();
+    for(const id of ['karaokeScope','useBacking'])$(id).disabled=busy || !isSinging();
+    $('backingVolume').disabled=!isSinging() || !['idle','backing','recording'].includes(mode);
+    $('backingVolumeValue').textContent=`${Math.round(Number($('backingVolume').value)*100)}%`;
     $('prev').disabled=busy || index<=0;
     $('next').disabled=busy || index<0 || index>=cues.length-1;
     updateBackingControls();
@@ -347,7 +351,7 @@
     if (restoring || !videoId) return;
     const start = Number($('start').value), end = Number($('end').value);
     if (!Number.isFinite(start) || !Number.isFinite(end) || start < 0 || end <= start) return;
-    const session = {contentLanguage:$('contentLanguage').value,captionLayout:$('captionLayout').value,videoId,cues:cues.map(c=>({...c})),index,start,end,speed:$('speed').value,showChinese:$('showChinese').checked,hideText:$('hideText').checked,followCaptions:$('followCaptions').checked,karaokeScope:$('karaokeScope').value,selectedTakeId:take?.id,updatedAt:Date.now()};
+    const session = {backingVolume:Number($('backingVolume').value),contentLanguage:$('contentLanguage').value,captionLayout:$('captionLayout').value,videoId,cues:cues.map(c=>({...c})),index,start,end,speed:$('speed').value,showChinese:$('showChinese').checked,hideText:$('hideText').checked,followCaptions:$('followCaptions').checked,karaokeScope:$('karaokeScope').value,selectedTakeId:take?.id,updatedAt:Date.now()};
     void storage.saveSession(session).catch(()=>{
       if (!progressWarning && session.videoId === videoId) { progressWarning=true; status('练习位置未能保存，请检查本地存储空间。录音仍可下载。'); }
     });
@@ -429,6 +433,7 @@
         $('captionLayout').value=['original','en-zh'].includes(session.captionLayout)?session.captionLayout:EchoLanguages.detect(sample)==='en'?'en-zh':'original';
         $('speed').value=['0.75','1','1.25'].includes(session.speed)?session.speed:'1';
         $('karaokeScope').value=session.karaokeScope==='clip'?'clip':'whole';
+        $('backingVolume').value=Number.isFinite(session.backingVolume)?Math.max(0,Math.min(2,session.backingVolume)):1;
         $('showChinese').checked=!!session.showChinese; $('hideText').checked=!!session.hideText; $('followCaptions').checked=session.followCaptions!==false;
         displayCues(session.cues || [],session.index);
         $('start').value=session.start; $('end').value=session.end; index=session.index>=0 && session.index<cues.length?session.index:-1;
@@ -513,6 +518,12 @@
     }catch{/* Cache lookup is optional; ordinary dubbing and explicit generation still work. */}
     finally{if(request===backingRestoreRequest){restoringBacking=false;controls();}}
   }
+  $('backingVolume').oninput=()=>{
+    const volume=Number($('backingVolume').value);
+    $('backingVolumeValue').textContent=`${Math.round(volume*100)}%`;
+    backingOutput?.setVolume(volume);recordMix?.setVolume?.(volume);
+  };
+  $('backingVolume').onchange=saveProgress;
   $('karaokeScope').onchange=()=>{karaokeIssue='';controls();saveProgress();if(!restoringBacking)void restoreServerBacking();};
   $('openBacking').onclick=()=>{
     $('karaokeSettings').open=true;
@@ -602,17 +613,21 @@
     mode='backing';controls();saveVideo(v);v.muted=true;v.playbackRate=r.speed;
     try {
       await seek(v,r.start,token);if(token!==generation)return;
-      const a=new Audio(url);audio=a;a.playbackRate=r.speed;a.volume=Number($('backingVolume').value);a.preservesPitch=true;
+      const a=new Audio(url);audio=a;a.playbackRate=r.speed;a.volume=1;a.preservesPitch=true;
       const wait=()=>a.pause(), sync=()=>{
         if(token!==generation)return;
         a.currentTime=Math.max(0,v.currentTime-ready.start);
         void a.play().catch(()=>{if(token===generation){stop();status('伴奏无法播放，请重新生成。');}});
       };
       v.addEventListener('waiting',wait);v.addEventListener('playing',sync);
+      let output;
       try {
+        output=await EchoKaraoke.createBackingOutput(a,Number($('backingVolume').value));
+        if(token!==generation)return;
+        backingOutput=output;
         status('正在试听去原唱伴奏…');await v.play();if(token!==generation)return;sync();
         await new Promise(resolve=>{pendingDone=resolve;a.onended=resolve;watchEnd(v,r.end,resolve);timer=setTimeout(resolve,EchoPractice.playbackTimeout(r));});
-      } finally {v.removeEventListener('waiting',wait);v.removeEventListener('playing',sync);}
+      } finally {v.removeEventListener('waiting',wait);v.removeEventListener('playing',sync);output?.dispose();if(backingOutput===output)backingOutput=null;}
       if(token===generation){finish();status('伴奏试听完成。');}
     } finally {URL.revokeObjectURL(url);}
   });
@@ -1003,7 +1018,7 @@
   chrome.runtime.onMessage.addListener(message => { if (message.type === 'echo-toggle') { const open = host.style.display === 'none'; host.style.display = open ? 'block' : 'none'; if (!open) stop(); } });
   document.addEventListener('yt-navigate-finish', () => {
     const id = currentId(); if (id === videoId) return;
-    stop();detachCaptionVideo();backingRestoreRequest++;restoringBacking=false;karaokeIssue='';activity='speech';$('contentLanguage').value='auto';$('captionLayout').value='original';renderActivity();savedBackings=[];$('karaokeScope').value='whole';setSongTake(null);$('useBacking').checked=false;$('karaokeInfo').textContent='已切换视频，请为新片段生成伴奏。'; restoring=true; videoId=id; historyRequest++;videoHistory=[];deletedTake=null;$('undoDelete').hidden=true;setTake(null);displayCues([]); $('start').value = 0; $('end').value = 5; updateSummaries();
+    stop();detachCaptionVideo();backingRestoreRequest++;restoringBacking=false;karaokeIssue='';activity='speech';$('contentLanguage').value='auto';$('captionLayout').value='original';renderActivity();savedBackings=[];$('karaokeScope').value='whole';$('backingVolume').value=1;setSongTake(null);$('useBacking').checked=false;$('karaokeInfo').textContent='已切换视频，请为新片段生成伴奏。'; restoring=true; videoId=id; historyRequest++;videoHistory=[];deletedTake=null;$('undoDelete').hidden=true;setTake(null);displayCues([]); $('start').value = 0; $('end').value = 5; updateSummaries();
     status('已切换视频，请重新选择台词或片段。'); if (id) void loadVideo(id); else restoring=false;
   });
   window.addEventListener('pagehide',()=>{saveProgress();stop();detachCaptionVideo();if(songUrl)URL.revokeObjectURL(songUrl);});
