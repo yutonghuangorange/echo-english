@@ -27,8 +27,13 @@ async function mount(storage, overrides = {}) {
   const doc={getElementById:()=>null,documentElement:new Element(),createElement:()=>new Element(),createTextNode:text=>({textContent:text}),addEventListener(name,fn){events.set(name,fn);},querySelector:selector=>selector==='video.html5-main-video'?(overrides.video || {duration:60}):null};
   const context={document:doc,location:{href:'https://www.youtube.com/watch?v=video',pathname:'/watch'},indexedDB:{},URL,Blob,console,setTimeout,clearTimeout,cancelAnimationFrame(){},requestAnimationFrame(){},crypto:globalThis.crypto,
     window:{addEventListener(){},speechSynthesis:{cancel(){}}},chrome:{runtime:{onMessage:{addListener(){}}}},
+    EchoPanelView:require('../extension/panel-view.js'),EchoTransport:require('../extension/transport.js'),EchoPlayback:require('../extension/playback.js'),
     EchoAudioExport:require('../extension/audio-export.js'),EchoPanelSize:require('../extension/panel-size.js'),EchoLanguages:require('../extension/languages.js'),EchoKaraoke:require('../extension/karaoke.js'),EchoStorage:{...require('../extension/storage.js'),createStorage:()=>storage},EchoPractice:require('../extension/practice.js'),EchoDictionary:require('../extension/dictionary.js'),EchoSubtitles:require('../extension/subtitles.js'),EchoAudioAnalysis:require('../extension/audio-analysis.js')};
   Object.assign(context,overrides.globals || {});
+  for (const name of ['EchoTransport','EchoPlayback']) {
+    const api=context[name];
+    context[name]={...api,create:options=>api.create({...options,env:context})};
+  }
   if(context.chrome.runtime.sendMessage){
     const send=context.chrome.runtime.sendMessage;
     context.chrome.runtime.sendMessage=message=>message.action==='health'?Promise.resolve(overrides.health ? overrides.health() : {service:'echo-karaoke',version:1,maxSeconds:600}):message.action==='cached'?Promise.resolve(overrides.cachedBackings || {backings:[]}):send(message);
