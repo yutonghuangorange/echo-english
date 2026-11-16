@@ -43,12 +43,14 @@
       voice.connect(voiceGain);voiceGain.connect(destination);
       const ready=new Promise((resolve,reject)=>{
         const timeout=env.setTimeout(()=>reject(Error('伴奏加载超时，请重新生成。')),10000);
-        music.onloadedmetadata=()=>{env.clearTimeout(timeout);resolve();};
+        music.oncanplay=()=>{env.clearTimeout(timeout);resolve();};
         music.onerror=()=>{env.clearTimeout(timeout);reject(Error('伴奏无法解码，请重新生成。'));};
       });
       music.load();await Promise.all([ready,context.resume()]);
       return {stream:destination.stream,setVolume:value=>setGain(gain,value),
-        async sync(){if(disposed)return;music.currentTime=Math.max(0,video.currentTime-start);await music.play();},
+        async sync(position=video.currentTime){if(disposed)return;music.currentTime=Math.max(0,position-start);await music.play();},
+        async resume(){if(!disposed)await music.play();},
+        position:()=>start+music.currentTime,
         pause(){music.pause();},dispose:cleanup};
     }catch(error){cleanup();throw error;}
   }

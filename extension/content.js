@@ -677,9 +677,10 @@
     const recordedKey=options.song ? `song:${EchoStorage.cueKey(null,r.start,r.end)}` : currentCueKey();
     const recordedLabel=options.song ? (r.start===0 && Math.abs(r.end-v.duration)<0.01?'整首演唱':'片段演唱') : index>=0 ? `第 ${index+1} 句` : '手动片段';
     const currentRecorder = recorder, chunks = [];
+    let starting=true;
     const onWaiting=()=>{mix?.pause();if(currentRecorder.state==='recording')currentRecorder.pause();};
     const onPlaying=()=>{
-      if(token!==generation || !['recording','paused'].includes(currentRecorder.state))return;
+      if(starting || token!==generation || !['recording','paused'].includes(currentRecorder.state))return;
       void Promise.resolve(mix?.sync()).then(()=>{if(token===generation && currentRecorder.state==='paused')currentRecorder.resume();})
         .catch(()=>{if(token===generation){stop();status('伴奏播放失败，录音已停止，请重新生成伴奏。');}});
     };
@@ -712,13 +713,24 @@
     saveVideo(v); v.muted = true; v.playbackRate = r.speed;
     await seek(v, r.start, token);
     if (token !== generation) { mic.getTracks().forEach(t => t.stop()); return; }
-    // Start video first so buffering does not insert a long silent lead-in.
-    await v.play();
-    if (token !== generation) return;
+    // Keep the established microphone-only flow. Mixed singing must capture
+    // before starting its backing, which may otherwise skip to a later clock.
+    if(!mix){await v.play();if(token!==generation)return;}
     recorder.start(250); mode = 'recording'; controls();
+    status('录音已启动，正在准备同步播放…');
     v.addEventListener('waiting',onWaiting);v.addEventListener('playing',onPlaying);
-    if(mix)await mix.sync();
+    if(mix)await mix.sync(r.start);
     if(token!==generation)return completed;
+    if(mix)await v.play();
+    if(token!==generation)return completed;
+    starting=false;
+    if(currentRecorder.state==='paused'){
+      await mix?.resume?.();
+      if(token!==generation)return completed;
+      currentRecorder.resume();
+    }
+    const position=mix?.position?.();
+    if(Number.isFinite(position) && Math.abs(v.currentTime-position)>0.15)v.currentTime=position;
     status(mix?'● 正在演唱，保留伴奏并录下你的歌声…':'● 正在配音，视频原声已静音…');
     const endRecording = () => {
       if (token !== generation) return;

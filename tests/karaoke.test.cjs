@@ -61,7 +61,7 @@ test('mix sends accompaniment to headphones and recording, while microphone is n
     async resume(){events.push('resume');}async close(){events.push('close');}
   }
   class Audio {
-    constructor(){music=this;}load(){queueMicrotask(()=>this.onloadedmetadata?.());}
+    constructor(){music=this;}load(){queueMicrotask(()=>this.oncanplay?.());}
     async play(){events.push('play');}pause(){events.push('pause');}removeAttribute(){}
   }
   const env={AudioContext:Context,Audio,URL:{createObjectURL:()=> 'blob:music',revokeObjectURL:()=>events.push('revoke')},setTimeout,clearTimeout};
@@ -70,6 +70,8 @@ test('mix sends accompaniment to headphones and recording, while microphone is n
   assert.equal(mix.stream,'mixed-stream');
   assert.deepEqual(edges,[['music','gain1'],['gain1','speakers'],['gain1','recording'],['mic','gain2'],['gain2','recording']]);
   await mix.sync();assert.equal(music.currentTime,2);assert.equal(music.playbackRate,0.75);assert.equal(music.preservesPitch,true);
+  video.currentTime=99;await mix.sync(10);assert.equal(music.currentTime,0);
+  await mix.resume();assert.equal(music.currentTime,0);assert.equal(mix.position(),10);
   mix.pause();mix.dispose();mix.dispose();
   assert.equal(events.filter(e=>e==='close').length,1);assert.equal(events.filter(e=>e==='revoke').length,1);
 });

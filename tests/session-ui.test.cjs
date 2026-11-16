@@ -344,7 +344,7 @@ test('whole-song recording uses the full duration and offers replay, retry and d
   const listeners=new Map(),mixedStream={},events=[];let time=0;
   const video={duration:180,muted:false,playbackRate:1,pause(){},get currentTime(){return time;},set currentTime(v){time=v;},
     addEventListener(name,fn){if(!listeners.has(name))listeners.set(name,new Set());listeners.get(name).add(fn);},
-    removeEventListener(name,fn){listeners.get(name)?.delete(fn);},async play(){time=180;}};
+    removeEventListener(name,fn){listeners.get(name)?.delete(fn);},async play(){events.push('video-play');time=180;}};
   const mic={getTracks:()=>[{stop(){events.push('mic-stop');}}]};
   class MediaRecorder {
     static isTypeSupported(){return true;}
@@ -352,7 +352,7 @@ test('whole-song recording uses the full duration and offers replay, retry and d
     start(){this.state='recording';events.push('recorder-start');}
     stop(){this.state='inactive';this.ondataavailable({data:new Blob(['mixed-audio'])});queueMicrotask(()=>this.onstop());}
   }
-  const mix={stream:mixedStream,async sync(){events.push('sync');},pause(){events.push('pause');},dispose(){events.push('dispose');}};
+  const mix={stream:mixedStream,async sync(position){assert.equal(position,0);events.push('sync');},pause(){events.push('pause');},dispose(){events.push('dispose');}};
   const {nodes}=await mount(storage,{video,globals:{MediaRecorder,navigator:{mediaDevices:{getUserMedia:async()=>mic}},
     EchoKaraoke:{...require('../extension/karaoke.js'),createMix:async options=>{assert.equal(options.mic,mic);return mix;}},
     requestAnimationFrame:fn=>setTimeout(fn,0),cancelAnimationFrame:clearTimeout,
@@ -372,6 +372,7 @@ test('whole-song recording uses the full duration and offers replay, retry and d
   assert.equal(nodes.get('start').value,0);assert.equal(nodes.get('end').value,180);
   assert.equal(nodes.get('recordSong').textContent,'● 再录一次');
   assert.equal(takes[0].withBacking,true);assert.equal(await takes[0].blob.text(),'mixed-audio');
+  assert.deepEqual(events.filter(value=>['recorder-start','sync','video-play'].includes(value)),['recorder-start','sync','video-play']);
   assert(events.includes('dispose'));assert(events.includes('mic-stop'));assert.equal(video.muted,false);
   assert.match(nodes.get('historyInfo').textContent,/含伴奏/);
   assert.equal(nodes.get('record').disabled,false);
