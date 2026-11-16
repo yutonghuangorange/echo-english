@@ -16,13 +16,14 @@
   }
   // Accompaniment is monitored only; the recorder receives the microphone directly.
   function setGain(gain, volume) {gain.gain.value=Number.isFinite(volume)?Math.max(0,Math.min(2,volume)):1;}
-  async function createBackingOutput(music, volume=1, env=root) {
+  async function createAudioOutput(music, volume=1, env=root) {
     const context=new env.AudioContext();
     try{
       const source=context.createMediaElementSource(music),gain=context.createGain();
       source.connect(gain);gain.connect(context.destination);setGain(gain,volume);
       await context.resume();
-      return {setVolume:value=>setGain(gain,value),dispose:()=>{void context.close().catch(()=>{});}};
+      let disposed=false;
+      return {setVolume:value=>setGain(gain,value),dispose:()=>{if(disposed)return;disposed=true;void context.close().catch(()=>{});}};
     }catch(error){await context.close().catch(()=>{});throw error;}
   }
   async function createMonitor({blob,video,start,speed,volume=1}, env=root) {
@@ -93,6 +94,6 @@
       }
     };
   }
-  const api={key,covers,progressText,blobFromBase64,createMonitor,createBackingOutput,followRecording};
+  const api={key,covers,progressText,blobFromBase64,createMonitor,createAudioOutput,createBackingOutput:createAudioOutput,followRecording};
   if(typeof module!=='undefined')module.exports=api;else root.EchoKaraoke=api;
 })(globalThis);

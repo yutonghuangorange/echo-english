@@ -17,6 +17,12 @@
     .caption-stage{position:relative}.caption-context{font-size:14px;line-height:1.5;color:#c3d4df;opacity:.65;min-height:22px;max-height:44px;overflow:hidden;display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical;transition:opacity .2s}.caption[data-phase="upcoming"]{color:#c4d9df}.caption[data-phase="ended"]{opacity:.65}.caption-phase{font-size:11px;color:#8fbdae;min-height:17px;margin-top:5px}
     #transcriptSearch{margin-top:14px}
     input[type="range"]{padding:0;border:0;border-radius:0;background:transparent;accent-color:#b3eedb;cursor:pointer}input[type="range"]:disabled{cursor:default}input[type="range"]:focus-visible{outline:2px solid #b3eedb;outline-offset:3px}
+    .mix-controls{padding:8px 20px;flex-shrink:0;background:#111b24;border-top:1px solid #2b3946}
+    .mix-controls>summary{display:flex;align-items:center;gap:8px;list-style:none;font-size:12px;color:#d4e1e9}
+    .mix-controls>summary::after{content:'＋';margin-left:auto;color:#8199aa}.mix-controls[open]>summary::after{content:'−'}
+    #mixSummary{font-size:10px;color:#90a4b6}.mix-row{display:grid;grid-template-columns:44px minmax(0,1fr) 42px;align-items:center;gap:10px;font-size:12px;color:#b6c8d6;margin:7px 0}
+    .mix-row output{text-align:right;font-size:11px}.mix-options{display:flex;justify-content:space-between;align-items:center;margin-top:7px}.mix-options .text-button{margin-left:auto}
+    #mixHint{font-size:10px;line-height:1.5;margin:6px 0 0}#songResult small{font-size:11px}#songResult button{flex:0 0 auto}
     .practice-dock{padding:12px 20px;background:#111b24;border-top:1px solid #2b3946;flex-shrink:0}
     .main-actions{grid-template-columns:repeat(2,minmax(0,1fr))}.main-actions button{min-width:0;font-size:13px}
     .recording-heading{flex-wrap:wrap}.compact{font-size:11px;padding:7px 9px}.recording-heading .compact{margin-left:auto}
@@ -53,7 +59,7 @@
           <div id="karaokeNotice" role="alert" style="padding:10px 12px;border:1px solid #d8aa69;border-radius:10px;color:#ffe0ac;font-size:13px;overflow-wrap:anywhere" hidden></div>
           <p class="hint" id="karaokeInfo"></p>
           <progress id="karaokeProgress" max="100" aria-label="去原唱阶段进度" style="width:100%;accent-color:#b3eedb" hidden></progress>
-          <div id="songResult" hidden><details class="fold"><summary><span id="songInfo"></span></summary><div class="row"><a id="songDownload">↓ 仅人声</a><button id="songMixDownload">人声＋伴奏</button></div><small>原始人声为 WebM；合成 WAV 暂支持 1× 录唱。</small></details></div>
+          <div id="songResult" class="row" hidden><small id="songInfo"></small><button id="openSongRecording" class="text-button">版本与下载 →</button></div>
         </div>
         <details class="fold" id="captionSetup" open><summary id="captionSetupTitle">准备字幕 · 读取或导入</summary><div class="fold-content">
         <div class="row"><button id="read">读取台词</button><button id="import">导入字幕</button><input id="file" type="file" accept=".srt,.vtt" hidden></div>
@@ -67,12 +73,12 @@
           <label class="check"><input type="checkbox" id="autoNext">回放结束后自动练下一句</label><p class="hint" id="practiceFlowHint">自动跟读：原声 → 准备 → 配音 → 回放。</p>
 </div>
         </details>
-        <details class="fold" id="karaokeSettings" hidden><summary>伴奏设置</summary><div class="fold-content">
+        <details class="fold" id="karaokeSettings" hidden><summary>录唱设置</summary><div class="fold-content">
           <p class="hint">按上方录唱范围生成，最长 10 分钟。准备好后回到主区录唱。</p>
           <label class="check"><input id="useBacking" type="checkbox">录唱时播放伴奏（仅录人声）</label>
           <div class="row"><span class="hint" id="karaokeService" role="status">伴奏服务 · 尚未检测</span><button id="checkKaraoke">重新检测</button></div>
           <div class="row"><button id="prepareBacking">生成整首伴奏</button><button id="previewBacking" disabled>▷ 试听伴奏</button></div>
-          <label class="hint">伴奏音量 · <output id="backingVolumeValue" for="backingVolume">100%</output><input id="backingVolume" type="range" min="0" max="2" step="0.05" value="1" aria-label="伴奏音量"></label><div class="hint">100% 为原始音量，可提升至 200%。</div>
+          <label class="hint">录唱监听音量 · <output id="backingVolumeValue" for="backingVolume">100%</output><input id="backingVolume" type="range" min="0" max="2" step="0.05" value="1" aria-label="录唱监听音量"></label><div class="hint">用于试听和录唱时的耳机伴奏；回听音量在底部单独调整。</div>
           <details class="fold" id="karaokeHelp"><summary>首次使用：如何启用伴奏？</summary><div class="fold-content hint">
             <p>只需安装一个 Echo 扩展。生成伴奏还需要这台电脑上的 Python、FFmpeg 和分离模型；普通配音、录音与回放无需这些组件。</p>
             <p>① 在项目目录运行 <code>bash start-karaoke.sh</code>，自动安装依赖并启动服务；以后也用此命令启动。<br>② 保持终端开启，回到这里点击“重新检测”，再生成伴奏。首次下载模型及分离歌曲可能需要几分钟。</p>
@@ -110,15 +116,15 @@
           <div class="row"><button id="reviewReplay">▷ 回放录音</button><button id="compare">⇄ 对比原声</button></div>
           <div id="versionChoices" class="version-choices" role="group" aria-label="当前句的录音版本"></div>
         <details class="fold" id="recordingDetails"><summary>下载与录音详情</summary><div class="fold-content">
+          <div class="row"><a id="download">↓ 下载所选录音</a><button id="takeMixDownload" hidden>人声＋伴奏</button></div><p class="hint" id="mixDownloadHint">混合下载采用底部的回听音量比例，原始录音保持不变。</p>
           <div id="analysis" hidden><canvas id="waveform" width="660" height="180" role="img" aria-label="录音音量波形，橙色表示低音量停顿"></canvas><div id="analysisText" class="analysis-text" role="status"></div><small>波形显示音量和停顿，不代表发音准确度。</small></div>
-          <div class="row"><a id="download">↓ 下载所选录音</a><button id="takeMixDownload" hidden>人声＋伴奏</button></div>
           <small>每个练习片段保留最近 3 次，演唱与配音分别保存。连播使用各片段最新版本。</small><div class="history-actions"><button id="deleteTake" class="danger" disabled>删除所选版本</button></div>
         </div></details>
         </div>
         <details class="fold" id="songAssembly" hidden><summary>分段合成整首</summary><div class="fold-content">
           <p class="hint" id="assemblyInfo"></p><p class="hint" id="assemblyWarning" hidden></p>
           <select id="assemblyType" aria-label="整首下载内容"><option value="vocal">仅人声</option><option value="mixed">人声＋整首伴奏</option></select>
-          <p class="hint">按视频时间轴合成，重叠处用最新录音，未录处保留空白。暂支持 1× 录唱；WAV 文件约 10 MB / 分钟。</p>
+          <p class="hint">按视频时间轴合成，重叠处用最新录音，未录处保留空白。暂支持 1× 录唱；WAV 文件约 10 MB / 分钟。合成采用底部的回听音量比例。</p>
           <button id="assembleSong">合成并下载整首</button>
         </div></details>
         <div id="historyBrowser"><div class="recording-heading"><small>按时间排列 · 点选即播放</small><small id="recordingSummary"></small></div>
@@ -136,8 +142,14 @@
     <div id="transport" hidden style="padding:8px 20px 0;flex-shrink:0;background:#111b24">
       <div style="display:flex;justify-content:space-between;font-size:11px;color:#9ab2c1"><span id="transportLabel"></span><span id="transportTime"></span></div>
       <input id="transportProgress" type="range" min="0" max="1" step="0.001" value="0" aria-label="播放进度，可点击或拖动跳转" style="display:block;width:100%;margin:6px 0;accent-color:#b3eedb" disabled>
-      <label id="replayMusicOption" class="check" style="padding-bottom:6px" hidden><input id="replayWithBacking" type="checkbox" checked>回听时播放伴奏</label>
     </div>
+    <details id="mixControls" class="mix-controls" hidden>
+      <summary>回听音量<span id="mixSummary">人声 100% · 伴奏 100%</span></summary>
+      <div class="mix-options"><label id="replayMusicOption" class="check" hidden><input id="replayWithBacking" type="checkbox" checked>回听带伴奏</label><button id="resetReplayMix" class="text-button">重置音量</button></div>
+      <label class="mix-row"><span id="replayVocalLabel">人声</span><input id="replayVocalVolume" type="range" min="0" max="2" step="0.05" value="1" aria-label="回听人声音量"><output id="replayVocalValue" for="replayVocalVolume">100%</output></label>
+      <label id="replayBackingRow" class="mix-row"><span>伴奏</span><input id="replayBackingVolume" type="range" min="0" max="2" step="0.05" value="1" aria-label="回听伴奏音量"><output id="replayBackingValue" for="replayBackingVolume">100%</output></label>
+      <p id="mixHint" class="hint"></p>
+    </details>
     <footer><div class="status" id="status" role="status">准备好了，从一句开始。</div><button id="stop" disabled hidden>■ 停止</button></footer>
     <button class="resize-handle" id="resizePanel" aria-label="调整面板大小" title="拖动左下角调整大小；双击或按 Home 恢复默认。方向键微调，Shift 加速。">⤢</button>
   </div>`;

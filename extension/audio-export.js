@@ -21,7 +21,7 @@
     if(segments.some(s=>s.take.speed!==1))throw Error('合成下载暂支持 1× 录唱；其他速度仍可下载原始人声。');
     return {segments,gaps,duration};
   }
-  async function render({takes,duration,origin=0,backing=null,volume=1,sampleRate=44100,active=()=>true},env=root){
+  async function render({takes,duration,origin=0,backing=null,volume=1,vocalVolume=1,sampleRate=44100,active=()=>true},env=root){
     const timeline=plan(takes.map(t=>({...t,start:t.start-origin,end:t.end-origin,...(Number.isFinite(t.capturedEnd)?{capturedEnd:t.capturedEnd-origin}:{})})),duration);
     if(backing && (backing.start>origin+0.001 || backing.end<origin+duration-0.001))throw Error('需要覆盖整个下载范围的伴奏，请先生成整首伴奏。');
     if(!timeline.segments.length)throw Error('此范围内没有已录人声。');
@@ -46,7 +46,7 @@
     try{
       for(const take of new Map(timeline.segments.map(s=>[s.take.id,s.take])).values()){
         check();const decoded=await context.decodeAudioData(await take.blob.arrayBuffer());check();
-        for(const segment of timeline.segments.filter(s=>s.take.id===take.id))await add(decoded,segment.start,segment.end,segment.start-take.start+(take.vocalOffset || 0),1);
+        for(const segment of timeline.segments.filter(s=>s.take.id===take.id))await add(decoded,segment.start,segment.end,segment.start-take.start+(take.vocalOffset || 0),Math.max(0,Math.min(2,vocalVolume)));
       }
       if(backing){
         check();const decoded=await context.decodeAudioData(await backing.blob.arrayBuffer());check();

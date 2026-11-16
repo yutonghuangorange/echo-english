@@ -43,3 +43,15 @@ test('mixed clip export uses the correct offset in a full-song accompaniment',as
   const result=await render({takes:[voice('voice',2,4,1,{vocalOffset:2})],duration:2,origin:2,sampleRate:1,backing:{start:0,end:4,blob:new Blob(['backing'])}}, {AudioContext,setTimeout:fn=>queueMicrotask(fn)});
   const view=new DataView(await result.blob.arrayBuffer());assert(Math.abs(view.getInt16(44,true)/32767-0.4)<0.001);
 });
+
+
+test('export applies independent vocal and backing gains including mute',async()=>{
+  class AudioContext{
+    async decodeAudioData(bytes){const backing=new TextDecoder().decode(bytes)==='backing';return {sampleRate:1,numberOfChannels:1,getChannelData:()=>Float32Array.from([backing?0.1:0.2])};}
+    async close(){}
+  }
+  for(const [vocalVolume,volume,expected] of [[1.5,0.5,0.35],[0,0.5,0.05],[1.5,0,0.3]]){
+    const result=await render({takes:[voice('voice',0,1)],duration:1,sampleRate:1,vocalVolume,volume,backing:{start:0,end:1,blob:new Blob(['backing'])}}, {AudioContext,setTimeout:fn=>queueMicrotask(fn)});
+    const view=new DataView(await result.blob.arrayBuffer());assert(Math.abs(view.getInt16(44,true)/32767-expected)<0.001);
+  }
+});

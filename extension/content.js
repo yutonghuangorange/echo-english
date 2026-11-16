@@ -19,12 +19,14 @@
   let activity = 'speech';
   let captionVideo = null, captionSignature = '', captionGhost = null;
   const captionEvents = ['timeupdate','seeking','seeked','play','pause','ended'];
-  let savedBackings = [], activeKaraokeJob = null, recordMonitor = null, songTake = null, songUrl = null;
+  let savedBackings = [], activeKaraokeJob = null, recordMonitor = null, songTake = null;
   let backingRestoreRequest=0, restoringBacking=false, karaokeIssue='';
   let backingOutput=null;
-  let replayMonitor=null;
+  let replayMonitor=null, replayVoiceOutput=null, replayTake=null, replayBackingReady=false, replayVoiceMax=2;
+  for(const id of ['replayVocalVolume','replayBackingVolume'])$(id).value=1;
+  $('mixControls').open=false;
   $('replayWithBacking').checked=true;
-  $('replayWithBacking').onchange=()=>replayMonitor?.setEnabled($('replayWithBacking').checked);
+  $('replayWithBacking').onchange=()=>{replayMonitor?.setEnabled($('replayWithBacking').checked);renderMixControls();saveProgress();};
   let serviceState='unknown',serviceCheck=null,serviceMaxSeconds=null;
   let wordRequest = 0, selectedWord = null, analysisRequest = 0;
   let videoId = currentId();
@@ -132,17 +134,52 @@
     else if(ready)$('karaokeInfo').textContent='';
     else $('karaokeInfo').textContent=serviceState==='online'?'':serviceState==='offline'?'伴奏服务未连接。请查看下方启动说明，启动后点击“重新检测”。已有的伴奏和录音仍可使用。':'首次使用需准备本机伴奏服务，点击“准备伴奏”查看。';
   }
+  function clampGain(value) {return Number.isFinite(Number(value))?Math.max(0,Math.min(2,Number(value))):1;}
+  function replayMix() {
+    return {vocal:clampGain($('replayVocalVolume').value),backing:clampGain($('replayBackingVolume').value)};
+  }
+  function renderMixControls() {
+    const target=replayTake || (currentPage==='recordings'?take:currentPage==='practice'?(isSinging()?songTake:take):null);
+    const visible=!!target && (mode==='idle' || !!replayTake);
+    $('mixControls').hidden=!visible;
+    if(!target)return;
+    const drySong=target.kind==='song' && target.capture==='vocal' && !target.withBacking;
+    const ready=drySong && (replayTake?replayBackingReady:!!backingFor({start:target.start,end:target.capturedEnd ?? target.end}));
+    const {vocal,backing}=replayMix(), label=target.withBacking?'录音总音量':'人声';
+    $('replayVocalLabel').textContent=label;
+    $('replayVocalVolume').setAttribute('aria-label',target.withBacking?'回听录音总音量':'回听人声音量');
+    $('replayVocalVolume').max=String(replayTake?replayVoiceMax:2);
+    $('replayVocalValue').textContent=`${Math.round(vocal*100)}%`;
+    $('replayBackingValue').textContent=`${Math.round(backing*100)}%`;
+    $('replayMusicOption').hidden=!drySong;
+    $('replayWithBacking').disabled=!ready;
+    $('replayBackingRow').hidden=!drySong;
+    $('replayBackingVolume').disabled=!ready;
+    $('mixSummary').textContent=`${target.withBacking?'总音量':'人声'} ${Math.round(vocal*100)}%${drySong?` · 伴奏${$('replayWithBacking').checked?' '+Math.round(backing*100)+'%':'关'}`:''}`;
+    $('mixHint').textContent=target.withBacking?'旧版混合录音只能调整总音量，无法分别调节人声和伴奏。':drySong?
+      ready?'混合下载沿用此比例，原始人声不变。':'暂无可用伴奏，当前仅回听人声。':'只影响回听，原始录音不变。';
+    if(replayTake && replayVoiceMax===1)$('mixHint').textContent+=' 当前人声音量最高为 100%。';
+  }
+  function updateReplayMix() {
+    const {vocal,backing}=replayMix();
+    if(replayVoiceOutput)replayVoiceOutput.setVolume(vocal);
+    else if(replayTake && audio)audio.volume=Math.min(1,vocal);
+    replayMonitor?.setVolume(backing);
+    renderMixControls();
+  }
+  for(const id of ['replayVocalVolume','replayBackingVolume']){
+    $(id).oninput=updateReplayMix;$(id).onchange=saveProgress;
+  }
+  $('resetReplayMix').onclick=()=>{
+    $('replayVocalVolume').value=1;$('replayBackingVolume').value=1;
+    updateReplayMix();saveProgress();
+  };
   function setSongTake(value) {
     if(songTake?.id===value?.id)return;
-    if(songUrl)URL.revokeObjectURL(songUrl);
-    songTake=value || null;songUrl=value ? URL.createObjectURL(value.blob) : null;
+    songTake=value || null;
     $('songResult').hidden=!value;
     $('songInfo').textContent=value ? `最近演唱 · ${recordingTime(value.start)}–${recordingTime(value.end)} · ${value.speed}×` : '';
-    $('songDownload').href=songUrl || '';
-    $('songDownload').textContent=value?.withBacking?'↓ 旧版混合录音':'↓ 仅人声';
     $('songReplay').textContent='▷ 回听最近演唱';
-    $('songMixDownload').hidden=!value || value.capture!=='vocal' || !!value.withBacking;
-    $('songDownload').download=value ? `echo-song-${videoId}-${value.createdAt}.webm` : '';
     updateBackingControls();
   }
   $('speed').onchange = () => {updateSummaries();saveProgress();}; $('loopCount').onchange = updateSummaries;
@@ -159,7 +196,7 @@
   function controls() {
     const busy = mode !== 'idle';
     const focused=root.activeElement;
-    for(const id of ['songMixDownload','takeMixDownload','assembleSong','assemblyType'])$(id).disabled=busy;
+    for(const id of ['openSongRecording','takeMixDownload','assembleSong','assemblyType'])$(id).disabled=busy;
     const recording=mode==='recording';
     $('panel').setAttribute('aria-busy',String(['loading','reading','importing','exporting','saving','permission'].includes(mode)));
     $('practiceDock').hidden=currentPage!=='practice' || mode!=='idle';
@@ -183,7 +220,7 @@
     $('linePractice').hidden=isSinging() || recording;
     for (const id of ['contentLanguage','captionLayout','activityMode','read','import','transcriptRead','transcriptImport','prepareBacking','karaokeScope','useBacking','backingVolume','prev','next','markStart','markEnd','original','speed','start','end','record','startEarlier','startLater','endEarlier','endLater','loop','loopCount','autoPractice','prepSeconds','autoNext']) $(id).disabled = busy;
     for(const id of ['karaokeScope','useBacking'])$(id).disabled=busy || !isSinging();
-    $('backingVolume').disabled=!isSinging() || !['idle','backing','recording','replay'].includes(mode);
+    $('backingVolume').disabled=!isSinging() || !['idle','backing','recording'].includes(mode);
     $('backingVolumeValue').textContent=`${Math.round(Number($('backingVolume').value)*100)}%`;
     $('prev').disabled=busy || index<=0;
     $('next').disabled=busy || index<0 || index>=cues.length-1;
@@ -202,6 +239,7 @@
     root.querySelectorAll('.history-delete').forEach(b=>b.disabled=busy && mode!=='replay');
     root.querySelectorAll('.word').forEach(b => b.disabled = busy);
     root.querySelectorAll('.cue').forEach(b => b.disabled = busy);
+    renderMixControls();
     if(busy && focused?.disabled && !$('stop').disabled){
       returnFocus ||= focused;$('stop').focus();
     } else if(!busy && returnFocus){
@@ -221,8 +259,9 @@
   }
   function cancelPlayback() {
     transport.hide();
-    $('replayMusicOption').hidden=true;
+    $('mixControls').open=false;
     replayMonitor?.dispose();replayMonitor=null;
+    replayVoiceOutput?.dispose();replayVoiceOutput=null;replayTake=null;replayBackingReady=false;
     playback.cancel();
     if (audio) { audio.pause(); audio.src = ''; audio = null; }
     recordMonitor?.pause();
@@ -287,6 +326,7 @@
     $('recordingText').textContent=take ? recordingText(take) : '';
     $('reuseSongRange').hidden=!take;
     $('takeMixDownload').hidden=take?.kind!=='song' || take.capture!=='vocal' || !!take.withBacking;
+    $('mixDownloadHint').hidden=$('takeMixDownload').hidden;
     $('download').textContent=take?.withBacking?'↓ 旧版混合录音':take?.capture==='vocal'?'↓ 下载人声':'↓ 下载所选录音';
     if (take) { $('download').href = take.url; $('download').download = `echo-${videoId}-${take.start.toFixed(1)}.webm`; }
     controls();
@@ -301,7 +341,7 @@
     if (restoring || !videoId) return;
     const start = Number($('start').value), end = Number($('end').value);
     if (!Number.isFinite(start) || !Number.isFinite(end) || start < 0 || end <= start) return;
-    const session = {backingVolume:Number($('backingVolume').value),contentLanguage:$('contentLanguage').value,captionLayout:$('captionLayout').value,videoId,cues:cues.map(c=>({...c})),index,start,end,speed:$('speed').value,showChinese:$('showChinese').checked,hideText:$('hideText').checked,followCaptions:$('followCaptions').checked,karaokeScope:$('karaokeScope').value,selectedTakeId:take?.id,updatedAt:Date.now()};
+    const session = {replayVocalVolume:replayMix().vocal,replayBackingVolume:replayMix().backing,replayWithBacking:$('replayWithBacking').checked,backingVolume:Number($('backingVolume').value),contentLanguage:$('contentLanguage').value,captionLayout:$('captionLayout').value,videoId,cues:cues.map(c=>({...c})),index,start,end,speed:$('speed').value,showChinese:$('showChinese').checked,hideText:$('hideText').checked,followCaptions:$('followCaptions').checked,karaokeScope:$('karaokeScope').value,selectedTakeId:take?.id,updatedAt:Date.now()};
     void storage.saveSession(session).catch(()=>{
       if (!progressWarning && session.videoId === videoId) { progressWarning=true; status('练习位置未能保存，请检查本地存储空间。录音仍可下载。'); }
     });
@@ -390,6 +430,9 @@
         $('speed').value=['0.75','1','1.25'].includes(session.speed)?session.speed:'1';
         $('karaokeScope').value=session.karaokeScope==='clip'?'clip':'whole';
         $('backingVolume').value=Number.isFinite(session.backingVolume)?Math.max(0,Math.min(2,session.backingVolume)):1;
+        $('replayVocalVolume').value=clampGain(session.replayVocalVolume);
+        $('replayBackingVolume').value=clampGain(session.replayBackingVolume);
+        $('replayWithBacking').checked=session.replayWithBacking!==false;
         $('showChinese').checked=!!session.showChinese; $('hideText').checked=!!session.hideText; $('followCaptions').checked=session.followCaptions!==false;
         displayCues(session.cues || [],session.index);
         $('start').value=session.start; $('end').value=session.end; index=session.index>=0 && session.index<cues.length?session.index:-1;
@@ -477,7 +520,7 @@
   $('backingVolume').oninput=()=>{
     const volume=Number($('backingVolume').value);
     $('backingVolumeValue').textContent=`${Math.round(volume*100)}%`;
-    backingOutput?.setVolume(volume);recordMonitor?.setVolume?.(volume);replayMonitor?.setVolume(volume);
+    backingOutput?.setVolume(volume);recordMonitor?.setVolume?.(volume);
   };
   $('backingVolume').onchange=saveProgress;
   $('useBacking').onchange=()=>{controls();saveProgress();};
@@ -517,10 +560,11 @@
     const backing=withMusic?backingFor({start:origin,end:origin+duration}):null;
     if(withMusic && !backing)throw Error('缺少覆盖下载范围的伴奏，请先生成整首伴奏，再导出。独立人声仍可直接下载。');
     EchoAudioExport.plan(takes.map(t=>({...t,start:t.start-origin,end:t.end-origin,...(Number.isFinite(t.capturedEnd)?{capturedEnd:t.capturedEnd-origin}:{})})),duration);
-    const token=++generation,id=videoId,volume=Number($('backingVolume').value);
+    const token=++generation,id=videoId;
+    const {vocal:vocalVolume,backing:volume}=replayMix();
     mode='exporting';controls();status('正在本机合成 WAV，可点击停止取消…');
     try{
-      const result=await EchoAudioExport.render({takes,duration,origin,backing,volume,active:()=>token===generation && id===videoId});
+      const result=await EchoAudioExport.render({takes,duration,origin,backing,volume,vocalVolume,active:()=>token===generation && id===videoId});
       if(token!==generation || id!==videoId)return;
       downloadAudio(result.blob,`echo-${id}-${origin.toFixed(1)}-${withMusic?'vocal-and-backing':'vocals'}.wav`);
       status(result.gaps.length?'已下载合成音频，未录制的人声位置保留空白。':'合成完成，已开始下载。');
@@ -531,7 +575,7 @@
     const end=Number.isFinite(value.capturedEnd)?Math.min(value.end,value.capturedEnd):value.end;
     return exportAudio([value],end-value.start,value.start,true);
   }
-  $('songMixDownload').onclick=guarded(()=>exportTake(songTake));
+  $('openSongRecording').onclick=()=>{if(mode!=='idle' || !songTake)return;setTake(songTake);showPage('recordings',true);$('recordingDetails').open=true;};
   $('takeMixDownload').onclick=guarded(()=>exportTake(take));
   $('assembleSong').onclick=guarded(()=>exportAudio(videoHistory,video().duration,0,$('assemblyType').value==='mixed'));
   $('songReplay').onclick=guarded(()=>isSinging() && songTake && playRecording(songTake));
@@ -768,7 +812,9 @@
     if (token !== generation) return;
     audio = new Audio(t.url);
     const a = audio;
-    let accompaniment=null;
+    let accompaniment=null, voiceOutput=null;
+    replayTake=t;replayBackingReady=false;replayVoiceMax=2;
+    $('replayVocalVolume').max='2';
     const drySong=t.kind==='song' && t.capture==='vocal' && !t.withBacking;
     const vocalOffset=t.capture==='vocal'?(t.vocalOffset || 0):0;
     const videoPosition=()=>Math.min(t.end,t.start+Math.max(0,(a.currentTime || 0)-vocalOffset)*t.speed);
@@ -788,6 +834,15 @@
     const playbackDone=new Promise(resolve=>{resolvePlayback=resolve;});
     a.onended=()=>{ended=true;accompaniment?.pause();resolvePlayback();};
     try {
+      try {
+        voiceOutput=await EchoKaraoke.createAudioOutput(a,replayMix().vocal,globalThis);
+        if(token!==generation){voiceOutput.dispose();return;}
+        replayVoiceOutput=voiceOutput;
+      } catch {
+        if(token!==generation)return;
+        replayVoiceMax=1;$('replayVocalVolume').max='1';
+        $('replayVocalVolume').value=Math.min(1,replayMix().vocal);a.volume=replayMix().vocal;
+      }
       if(drySong) {
         const required={start:t.start,end:t.capturedEnd ?? t.end};
         const ready=savedBackings.find(b=>b.key===t.backingKey && EchoKaraoke.covers(b,videoId,required)) || backingFor(required);
@@ -795,11 +850,11 @@
         $('replayMusicOption').title=ready?'取消勾选可只听人声':'未找到对应伴奏，请重新生成后再回听。';
         if(ready) {
           try {
-            const monitor=await EchoKaraoke.createMonitor({blob:ready.blob,video:v,start:ready.start,speed:t.speed,volume:Number($('backingVolume').value)});
+            const monitor=await EchoKaraoke.createMonitor({blob:ready.blob,video:v,start:ready.start,speed:t.speed,volume:replayMix().backing});
             if(token!==generation){monitor.dispose();return;}
             accompaniment=EchoKaraoke.followRecording({monitor,voice:a,take:t,enabled:$('replayWithBacking').checked,
-              onError:()=>{if(token===generation){$('replayWithBacking').disabled=true;status('伴奏无法播放，当前仅回听人声；可重新生成伴奏后再试。');}}});
-            replayMonitor=accompaniment;
+              onError:()=>{if(token===generation){replayBackingReady=false;renderMixControls();status('伴奏无法播放，当前仅回听人声；可重新生成伴奏后再试。');}}});
+            replayMonitor=accompaniment;replayBackingReady=true;
           } catch(error) {
             if(token!==generation)return;
             $('replayWithBacking').disabled=true;
@@ -822,7 +877,7 @@
         playback.timeout(resolvePlayback,Math.max(0,duration()-elapsed)*1000+15000);
         if(v.currentTime<t.end)await v.play();
       }});
-      $('replayMusicOption').hidden=!drySong;
+      renderMixControls();$('mixControls').open=true;
       playback.onCancel(resolvePlayback);
       if(!ended){
         await v.play();
@@ -838,8 +893,9 @@
     } finally {
       v.removeEventListener('waiting', onWaiting);v.removeEventListener('playing', onPlaying);
       accompaniment?.dispose();if(replayMonitor===accompaniment)replayMonitor=null;
+      voiceOutput?.dispose();if(replayVoiceOutput===voiceOutput)replayVoiceOutput=null;
     }
-    if (token === generation) { if (keepBusy) { cancelPlayback(); restoreVideo(); mode = 'practice'; controls(); } else finish(); }
+    if (token === generation) { if (keepBusy) { cancelPlayback(); restoreVideo(); mode = 'practice'; controls(); } else {finish();status('回听结束。');} }
   }
   async function analyzeTake(value) {
     const request = ++analysisRequest;
@@ -1136,6 +1192,7 @@
     savedBackings = [];
     $('karaokeScope').value = 'whole';
     $('backingVolume').value = 1;
+    $('replayVocalVolume').value=1;$('replayBackingVolume').value=1;$('replayWithBacking').checked=true;replayVoiceMax=2;
     setSongTake(null);
     $('useBacking').checked = false;
     $('karaokeInfo').textContent = '已切换视频，请为新片段生成伴奏。';
@@ -1159,6 +1216,6 @@
     if (id) void loadVideo(id);
     else restoring = false;
   });
-  window.addEventListener('pagehide',()=>{saveProgress();stop();detachCaptionVideo();if(songUrl)URL.revokeObjectURL(songUrl);});
+  window.addEventListener('pagehide',()=>{saveProgress();stop();detachCaptionVideo();});
   attachCaptionVideo(document.querySelector('video.html5-main-video'));renderActivity();controls(); if(videoId) void loadVideo(videoId); else restoring=false;
 })();

@@ -131,15 +131,17 @@ test('offline generation shows setup next to the button even while cache lookup 
 test('content script restores selected sentence, boundaries, settings and matching take',async()=>{
   const storage=createStorage(new IDBFactory());
   const first={start:0,end:2,text:'First sentence'},second={start:2.2,end:5.4,text:'Second sentence',key:cueKey({start:2,text:'Second sentence'})};
-  await storage.saveSession({videoId:'video',index:1,start:2.2,end:5.4,speed:'0.75',showChinese:true,hideText:false,cues:[first,second]});
+  await storage.saveSession({videoId:'video',index:1,start:2.2,end:5.4,speed:'0.75',showChinese:true,hideText:false,replayVocalVolume:1.4,replayBackingVolume:0.35,replayWithBacking:false,cues:[first,second]});
   await storage.saveTake({id:'one',videoId:'video',cueKey:second.key,start:2,end:5,speed:1,createdAt:1,blob:new Blob(['audio']),label:'第 2 句'});
   const {nodes}=await mount(storage);
+  assert.equal(nodes.get('replayVocalVolume').value,1.4);assert.equal(nodes.get('replayBackingVolume').value,0.35);assert.equal(nodes.get('replayWithBacking').checked,false);
+  nodes.get('replayVocalVolume').value='1.6';await nodes.get('replayVocalVolume').onchange();
   assert.equal(nodes.get('position').textContent,'2 / 2');assert.equal(nodes.get('start').value,2.2);
   assert.equal(nodes.get('speed').value,'0.75');assert.equal(nodes.get('showChinese').checked,true);
   assert.equal(nodes.get('recordingContent').hidden,false);assert.match(nodes.get('historyInfo').textContent,/2.0–5.0/);
   await nodes.get('startLater').onclick();
   const saved=await storage.getSession('video');assert.equal(saved.start,2.4);assert.equal(saved.cues[1].key,second.key);
-  assert.equal(saved.cues[1].start,2.2);
+  assert.equal(saved.cues[1].start,2.2);assert.equal(saved.replayVocalVolume,1.6);assert.equal(saved.replayBackingVolume,0.35);assert.equal(saved.replayWithBacking,false);
   // Changing boundaries keeps the same sentence's recording available.
   assert.equal(nodes.get('replay').disabled,false);
   (await storage.ready).close();
@@ -303,7 +305,7 @@ test('song replay starts at audio opening and shows progress from the audio cloc
 
 test('dry singing replay adds backing, seeks both tracks, toggles vocals only and cleans up on stop',async()=>{
   const storage=createStorage(new IDBFactory()),frames=new Map(),listeners=new Map();
-  let next=0,sound,position=0,disposed=0,pauses=0;
+  let next=0,sound,position=0,disposed=0,pauses=0,vocalGain=1,musicGain=1;
   await storage.saveTake({id:'vocal',videoId:'video',cueKey:'song:manual',kind:'song',capture:'vocal',vocalOffset:0.2,start:0,end:10,speed:1,createdAt:1,blob:new Blob(['voice'])});
   await storage.saveBacking({key:'music',videoId:'video',start:0,end:60,createdAt:1,blob:new Blob(['backing'])});
   const video={duration:60,currentTime:0,muted:false,playbackRate:1,pause(){},async play(){listeners.get('playing')?.();},
@@ -312,14 +314,19 @@ test('dry singing replay adds backing, seeks both tracks, toggles vocals only an
     constructor(){sound=this;this.currentTime=0;this.duration=10.2;this.paused=true;}
     async play(){this.paused=false;}pause(){this.paused=true;}
   }
-  const monitor={position:()=>position,async sync(value){position=value;},pause(){pauses++;},dispose(){disposed++;},setVolume(){}};
+  const monitor={position:()=>position,async sync(value){position=value;},pause(){pauses++;},dispose(){disposed++;},setVolume(value){musicGain=value;}};
   const {nodes}=await mount(storage,{video,globals:{Audio,
-    EchoKaraoke:{...require('../extension/karaoke.js'),async createMonitor(){return monitor;}},
+    EchoKaraoke:{...require('../extension/karaoke.js'),async createMonitor(){return monitor;},async createAudioOutput(){return {setVolume(value){vocalGain=value;},dispose(){}};}},
     requestAnimationFrame(fn){frames.set(++next,fn);return next;},cancelAnimationFrame:id=>frames.delete(id)}});
   nodes.get('activityMode').value='sing';nodes.get('activityMode').onchange();
   const replaying=nodes.get('songReplay').onclick();
   for(let i=0;i<30 && !nodes.get('transportProgress').oninput;i++)await Promise.resolve();
   assert.equal(nodes.get('replayMusicOption').hidden,false);assert.equal(nodes.get('replayWithBacking').disabled,false);
+  nodes.get('replayVocalVolume').value='1.5';nodes.get('replayVocalVolume').oninput();
+  nodes.get('replayBackingVolume').value='0.4';nodes.get('replayBackingVolume').oninput();
+  assert.equal(vocalGain,1.5);assert.equal(musicGain,0.4);assert.equal(sound.currentTime,0);
+  nodes.get('backingVolume').value='2';nodes.get('backingVolume').oninput();assert.equal(musicGain,0.4);
+  nodes.get('resetReplayMix').onclick();assert.equal(vocalGain,1);assert.equal(musicGain,1);
   sound.currentTime=1.2;const [frame,tick]=frames.entries().next().value;frames.delete(frame);tick();await Promise.resolve();
   assert.equal(position,1);
   nodes.get('transportProgress').value='0.5';await nodes.get('transportProgress').oninput();
@@ -330,7 +337,7 @@ test('dry singing replay adds backing, seeks both tracks, toggles vocals only an
   const paused=pauses;assert(paused>0);
   nodes.get('replayWithBacking').checked=true;nodes.get('replayWithBacking').onchange();await Promise.resolve();
   nodes.get('stop').onclick();await replaying;
-  assert.equal(disposed,1);assert.equal(nodes.get('replayMusicOption').hidden,true);assert.equal(frames.size,0);
+  assert.equal(disposed,1);assert.equal(nodes.get('mixControls').open,false);assert.equal(frames.size,0);
   (await storage.ready).close();
 });
 
@@ -354,7 +361,10 @@ test('dry vocal downloads can be mixed per take or assembled as a full song with
   const {nodes,downloads}=await mount(storage,{video:{duration:20},globals:{setTimeout:(fn,ms)=>setTimeout(fn,ms===30000?0:ms),
     EchoAudioExport:{...require('../extension/audio-export.js'),async render(options){exports.push(options);return {blob:new Blob(['wave']),gaps:[]};}}}});
   nodes.get('activityMode').value='sing';nodes.get('activityMode').onchange();
-  assert.equal(nodes.get('songMixDownload').hidden,false);await nodes.get('songMixDownload').onclick();
+  nodes.get('openSongRecording').onclick();assert.equal(nodes.get('recordingDetails').open,true);
+  nodes.get('replayVocalVolume').value='1.5';nodes.get('replayBackingVolume').value='0.4';
+  assert.equal(nodes.get('takeMixDownload').hidden,false);await nodes.get('takeMixDownload').onclick();
+  assert.equal(exports[0].vocalVolume,1.5);assert.equal(exports[0].volume,0.4);
   assert.equal(exports[0].origin,5);assert.equal(exports[0].duration,5);assert.equal(exports[0].backing.key,'backing');
   nodes.get('assemblyType').value='vocal';await nodes.get('assembleSong').onclick();
   assert.equal(exports[1].origin,0);assert.equal(exports[1].duration,20);assert.equal(exports[1].backing,null);
@@ -368,7 +378,9 @@ test('legacy mixed songs remain downloadable but never offer extraction of a non
   const storage=createStorage(new IDBFactory());
   await storage.saveTake({id:'legacy',kind:'song',withBacking:true,videoId:'video',cueKey:'song:manual',start:0,end:10,speed:1,createdAt:1,blob:new Blob(['mixed'])});
   const {nodes}=await mount(storage);
-  assert.match(nodes.get('songDownload').textContent,/旧版混合/);assert.equal(nodes.get('songMixDownload').hidden,true);
+  nodes.get('openSongRecording').onclick();
+  assert.match(nodes.get('download').textContent,/旧版混合/);assert.equal(nodes.get('replayBackingRow').hidden,true);
+  assert.match(nodes.get('replayVocalLabel').textContent,/总音量/);
   assert.equal(nodes.get('takeMixDownload').hidden,true);
   await nodes.get('assembleSong').onclick();assert.match(nodes.get('status').textContent,/旧版混合/);
   (await storage.ready).close();
@@ -381,7 +393,8 @@ test('selecting a lyric uses the main clip recording controls without a duplicat
   nodes.get('activityMode').value='sing';nodes.get('activityMode').onchange();
   nodes.get('transcriptSearch').value='second';nodes.get('transcriptSearch').oninput();
   assert.equal(nodes.get('list').children.length,1);nodes.get('list').children[0].onclick();
-  assert.equal(nodes.get('start').value,'2.00');assert.equal(nodes.get('position').textContent,'2 / 2');
+  assert.equal(nodes.get('start').value,'2.00');
+  assert.equal(nodes.get('position').textContent,'2 / 2');
   assert.equal(nodes.get('linePractice').hidden,true);assert.equal(nodes.get('karaokeScope').value,'clip');
   assert.equal(nodes.get('singActions').hidden,false);assert.equal(nodes.get('practiceTools').open,false);
   assert.match(nodes.get('songRangeInfo').textContent,/2.0–4.0/);
@@ -558,7 +571,7 @@ test('whole-song recording uses the full duration and offers replay, retry and d
   assert.match(takes[0].cueKey,/^song:/);
   assert.equal(takes[0].kind,'song');assert.equal(takes[0].start,0);assert.equal(takes[0].end,180);
   assert.equal(nodes.get('end').value,1);assert.equal(nodes.get('songResult').hidden,false);
-  assert.equal(nodes.get('recordSong').textContent,'● 再录一次');assert.match(nodes.get('songDownload').href,/^blob:/);
+  assert.equal(nodes.get('recordSong').textContent,'● 再录一次');assert.match(nodes.get('download').href,/^blob:/);
   nodes.get('karaokeScope').value='clip';nodes.get('karaokeScope').onchange();
   assert.equal(nodes.get('recordSong').textContent,'● 开始片段录唱');
   assert.equal(nodes.get('reuseSongRange').hidden,false);nodes.get('reuseSongRange').onclick();
