@@ -23,7 +23,8 @@
     #linePractice:not(.fold){margin-top:16px}#linePractice.fold .main-actions{margin-top:12px}#transcriptSearch{margin-top:14px}
     input[type="range"]{padding:0;border:0;border-radius:0;background:transparent;accent-color:#b3eedb;cursor:pointer}input[type="range"]:disabled{cursor:default}input[type="range"]:focus-visible{outline:2px solid #b3eedb;outline-offset:3px}
     @media(prefers-reduced-motion:reduce){.caption-context{transition:none}}
-  </style><div class="panel">
+    .panel{position:relative}.pages{flex:1 1 auto}.resize-handle{position:absolute;left:2px;bottom:2px;width:24px;height:24px;padding:0;border:0;border-radius:0 0 0 16px;background:transparent;color:#8199aa;cursor:nesw-resize;touch-action:none;user-select:none;font-size:16px}.resize-handle:hover{background:#2f4152;color:#b3eedb}footer{padding-left:30px}
+  </style><div class="panel" id="panel">
     <header><div><h1>Echo<small>配音与唱歌练习</small></h1></div><button class="close" id="close" aria-label="关闭">×</button></header>
     <nav class="tabs" role="tablist" aria-label="练习面板"><button id="tab-practice" role="tab" aria-selected="true" aria-controls="page-practice" tabindex="0">练习</button><button id="tab-transcript" role="tab" aria-selected="false" aria-controls="page-transcript" tabindex="-1">台词</button><button id="tab-recordings" role="tab" aria-selected="false" aria-controls="page-recordings" tabindex="-1">录音</button></nav>
     <div class="pages">
@@ -111,8 +112,10 @@
       </section>
     </div>
     <footer><div class="status" id="status" role="status">准备好了，从一句开始。</div><button id="stop" disabled hidden>■ 停止</button></footer>
+    <button class="resize-handle" id="resizePanel" aria-label="调整面板大小" title="拖动左下角调整大小；双击或按 Home 恢复默认。方向键微调，Shift 加速。">⤢</button>
   </div>`;
   const $ = id => root.getElementById(id);
+  EchoPanelSize.attach({panel:$('panel'),host,handle:$('resizePanel'),env:window});
   let cues = [], index = -1, take = null, mode = 'idle', generation = 0;
   let recorder = null, stream = null, audio = null, frame = 0, timer = 0, savedVideo = null;
   let pendingDone = null;
