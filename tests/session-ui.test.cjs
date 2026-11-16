@@ -226,14 +226,14 @@ test('legacy service warns about restart before submitting a long song',async()=
 test('song mode exposes main recording and guides missing accompaniment without requesting a microphone',async()=>{
   const storage=createStorage(new IDBFactory());let micRequests=0;
   const {nodes}=await mount(storage,{globals:{navigator:{mediaDevices:{async getUserMedia(){micRequests++;throw Error('unexpected');}}}}});
-  assert.equal(nodes.get('singActions').hidden,true);assert.equal(nodes.get('practiceDock').hidden,false);
+  assert.equal(nodes.get('scopeControls').hidden,false);assert.equal(nodes.get('practiceDock').hidden,false);
   nodes.get('activityMode').value='sing';nodes.get('activityMode').onchange();
-  assert.equal(nodes.get('singActions').hidden,false);assert.equal(nodes.get('practiceDock').hidden,false);
+  assert.equal(nodes.get('scopeControls').hidden,false);assert.equal(nodes.get('practiceDock').hidden,false);
   assert.equal(nodes.get('practiceTools').open,false);assert.equal(nodes.get('practiceToolsSummary').hidden,false);
   assert.equal(nodes.get('karaokeSettings').open,true);assert.equal(nodes.get('record').disabled,false);
   await nodes.get('record').onclick();assert.equal(micRequests,0);assert.equal(nodes.get('karaokeSettings').open,true);
   nodes.get('activityMode').value='speech';nodes.get('activityMode').onchange();
-  assert.equal(nodes.get('singActions').hidden,true);assert.equal(nodes.get('karaokeSettings').hidden,true);
+  assert.equal(nodes.get('scopeControls').hidden,false);assert.equal(nodes.get('karaokeSettings').hidden,true);
   assert.equal(nodes.get('practiceDock').hidden,false);assert.equal(nodes.get('practiceToolsSummary').hidden,false);
   (await storage.ready).close();
 });
@@ -399,7 +399,7 @@ test('selecting a lyric uses the main clip recording controls without a duplicat
   assert.equal(nodes.get('start').value,'2.00');
   assert.equal(nodes.get('position').textContent,'2 / 2');
   assert.equal(nodes.get('practiceDock').hidden,false);assert.equal(nodes.get('karaokeScope').value,'clip');
-  assert.equal(nodes.get('singActions').hidden,false);assert.equal(nodes.get('practiceTools').open,false);
+  assert.equal(nodes.get('scopeControls').hidden,false);assert.equal(nodes.get('practiceTools').open,false);
   assert.match(nodes.get('clipSummary').textContent,/2.0–4.0/);
   assert.match(nodes.get('record').textContent,/开始片段录唱/);
   assert.equal(nodes.get('clipCue').value,'1');
@@ -504,9 +504,9 @@ test('clip-only accompaniment must be regenerated when boundaries exceed its ran
     calls.push(message);
     return message.action==='audio'?{audio:'UklGRg==',mime:'audio/wav'}:{id:'a'.repeat(32),state:'ready'};
   }}}}});
-  nodes.get('karaokeScope').value='clip';
   assert.equal(nodes.get('previewBacking').disabled,true);
   nodes.get('activityMode').value='sing';nodes.get('activityMode').onchange();
+  nodes.get('karaokeScope').value='clip';nodes.get('karaokeScope').onchange();
   await nodes.get('prepareBacking').onclick();
   assert.equal(nodes.get('useBacking').checked,true);assert.equal(nodes.get('previewBacking').disabled,false);
   assert.deepEqual(calls.map(c=>c.action),['start','audio']);
@@ -582,6 +582,7 @@ test('whole-song recording uses the full duration and offers replay, retry and d
   assert.equal(nodes.get('record').textContent,'● 再录一次');assert.match(nodes.get('download').href,/^blob:/);
   nodes.get('karaokeScope').value='clip';nodes.get('karaokeScope').onchange();
   assert.equal(nodes.get('record').textContent,'● 开始片段录唱');
+  nodes.get('tab-recordings').onclick();
   assert.equal(nodes.get('reuseSongRange').hidden,false);nodes.get('reuseSongRange').onclick();
   assert.equal(nodes.get('start').value,0);assert.equal(nodes.get('end').value,180);
   assert.equal(nodes.get('record').textContent,'● 再录一次');
@@ -599,8 +600,9 @@ test('default generation covers the whole song and reuses it for different sente
   const {nodes}=await mount(storage,{video:{duration:180,pause(){}},globals:{chrome:{runtime:{onMessage:{addListener(){}},async sendMessage(message){
     calls.push(message);return message.action==='audio'?{audio:'UklGRg==',mime:'audio/wav'}:{id:'d'.repeat(32),state:'ready'};
   }}}}});
-  assert.equal(nodes.get('karaokeScope').value,'whole');assert.equal(nodes.get('record').disabled,false);
+  assert.equal(nodes.get('karaokeScope').value,'clip');assert.equal(nodes.get('record').disabled,false);
   nodes.get('activityMode').value='sing';nodes.get('activityMode').onchange();
+  assert.equal(nodes.get('karaokeScope').value,'whole');
   await nodes.get('prepareBacking').onclick();
   assert.equal(calls[0].start,0);assert.equal(calls[0].end,180);
   assert.equal(nodes.get('start').value,10);assert.equal(nodes.get('end').value,12);
@@ -1180,5 +1182,50 @@ test('unsupported lossless recording stops before requesting microphone permissi
   nodes.get('recordingQuality').value='lossless';nodes.get('recordingQuality').onchange();
   assert.equal(nodes.get('losslessQuality').disabled,true);
   await nodes.get('record').onclick();assert.equal(requests,0);assert.match(nodes.get('status').textContent,/不支持无损/);
+  (await storage.ready).close();
+});
+
+for(const [scope,start,end] of [['whole',0,12],['paragraph',4,10],['clip',4,6]])test(`speech ${scope} scope controls listening, recording, auto practice and restoration`,async()=>{
+  const storage=createStorage(new IDBFactory()),video=leadInVideo();let advances=0;
+  video.duration=12;video.play=async function(){this.plays.push({at:this.currentTime,muted:this.muted});this.currentTime=end;};
+  const cues=[0,4,8].map((start,i)=>({start,end:start+2,text:'Line '+i}));
+  await storage.saveSession({videoId:'video',activity:'speech',speechScope:scope,karaokeScope:'whole',start:4,end:6,index:1,cues,speed:'1',paragraphFirst:1,paragraphLast:2,prepSeconds:'0',autoNext:true});
+  class MediaRecorder{static isTypeSupported(){return true;}constructor(){this.state='inactive';this.mimeType='audio/webm;codecs=opus';}start(){this.state='recording';}stop(){this.state='inactive';this.ondataavailable({data:new Blob(['speech-range'])});queueMicrotask(()=>this.onstop());}}
+  const globals={MediaRecorder,navigator:{mediaDevices:{async getUserMedia(){return {getTracks:()=>[{stop(){}}]};}}},requestAnimationFrame:fn=>setTimeout(fn,1),cancelAnimationFrame:clearTimeout,
+    EchoPractice:{...require('../extension/practice.js'),async runPractice({listen,record,advance}){await listen();await record();advances+=Number(advance());}}};
+  const {nodes}=await mount(storage,{video,globals});
+  assert.equal(nodes.get('scopeControls').hidden,false);assert.equal(nodes.get('karaokeScope').disabled,false);
+  assert.equal(nodes.get('karaokeScope').value,scope);assert.equal(nodes.get('clipBounds').hidden,scope!=='clip');
+  assert.equal(nodes.get('autoNext').disabled,scope!=='clip');
+  await nodes.get('original').onclick();assert.equal(video.plays[0].at,start);
+  await nodes.get('record').onclick();
+  let [take]=await storage.listTakes('video');assert.equal(take.start,start);assert.equal(take.end,end);assert.equal(take.kind,undefined);
+  assert.equal(take.cueKey,scope==='clip'?cueKey(cues[1]):cueKey(null,start,end));
+  if(scope!=='clip'){
+    await nodes.get('autoPractice').onclick();assert.equal(advances,0);
+    [take]=await storage.listTakes('video');assert.equal(take.start,start);assert.equal(take.end,end);
+  }
+  nodes.get('activityMode').value='sing';nodes.get('activityMode').onchange();assert.equal(nodes.get('karaokeScope').value,'whole');
+  nodes.get('activityMode').value='speech';nodes.get('activityMode').onchange();assert.equal(nodes.get('karaokeScope').value,scope);
+  await new Promise(r=>setTimeout(r,5));
+  const restored=await mount(storage,{video,globals});assert.equal(restored.nodes.get('karaokeScope').value,scope);
+  (await storage.ready).close();
+});
+test('legacy speech sessions keep clip mode and whole-video scope rejects videos over ten minutes',async()=>{
+  const storage=createStorage(new IDBFactory());let requests=0;
+  await storage.saveSession({videoId:'video',activity:'speech',karaokeScope:'whole',start:3,end:5,cues:[],index:-1});
+  const {nodes}=await mount(storage,{video:{duration:601,pause(){}},globals:{navigator:{mediaDevices:{async getUserMedia(){requests++;}}}}});
+  assert.equal(nodes.get('karaokeScope').value,'clip');
+  nodes.get('karaokeScope').value='whole';nodes.get('karaokeScope').onchange();await nodes.get('record').onclick();
+  assert.equal(requests,0);assert.match(nodes.get('status').textContent,/10 分钟/);
+  (await storage.ready).close();
+});
+
+test('reusing a saved recording switches paragraph practice to its exact clip bounds',async()=>{
+  const storage=createStorage(new IDBFactory()),cues=[0,4,8].map((start,i)=>({start,end:start+2,text:'Line '+i}));
+  await storage.saveSession({videoId:'video',activity:'speech',speechScope:'paragraph',start:0,end:10,cues,index:0,paragraphFirst:0,paragraphLast:2});
+  await storage.saveTake({id:'saved-range',videoId:'video',cueKey:cueKey(null,4,6),start:4,end:6,speed:1,createdAt:1,blob:new Blob(['voice'])});
+  const {nodes}=await mount(storage);nodes.get('tab-recordings').onclick();nodes.get('reuseSongRange').onclick();
+  assert.equal(nodes.get('karaokeScope').value,'clip');assert.equal(Number(nodes.get('start').value),4);assert.equal(Number(nodes.get('end').value),6);
   (await storage.ready).close();
 });
