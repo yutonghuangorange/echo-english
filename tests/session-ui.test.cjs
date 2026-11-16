@@ -156,14 +156,15 @@ test('legacy service warns about restart before submitting a long song',async()=
 test('song mode exposes main recording and guides missing accompaniment without requesting a microphone',async()=>{
   const storage=createStorage(new IDBFactory());let micRequests=0;
   const {nodes}=await mount(storage,{globals:{navigator:{mediaDevices:{async getUserMedia(){micRequests++;throw Error('unexpected');}}}}});
-  assert.equal(nodes.get('singActions').hidden,true);assert.equal(nodes.get('linePractice').open,true);
+  assert.equal(nodes.get('singActions').hidden,true);assert.equal(nodes.get('linePractice').hidden,false);
   nodes.get('activityMode').value='sing';nodes.get('activityMode').onchange();
-  assert.equal(nodes.get('singActions').hidden,false);assert.equal(nodes.get('linePractice').open,false);
+  assert.equal(nodes.get('singActions').hidden,false);assert.equal(nodes.get('linePractice').hidden,true);
+  assert.equal(nodes.get('practiceTools').open,false);assert.equal(nodes.get('practiceToolsSummary').hidden,false);
   assert.equal(nodes.get('karaokeSettings').open,false);assert.equal(nodes.get('recordSong').disabled,false);
   await nodes.get('recordSong').onclick();assert.equal(micRequests,0);assert.equal(nodes.get('karaokeSettings').open,true);
   nodes.get('activityMode').value='speech';nodes.get('activityMode').onchange();
   assert.equal(nodes.get('singActions').hidden,true);assert.equal(nodes.get('karaokeSettings').hidden,true);
-  assert.equal(nodes.get('linePractice').open,true);assert.equal(nodes.get('linePracticeSummary').hidden,true);
+  assert.equal(nodes.get('linePractice').hidden,false);assert.equal(nodes.get('practiceToolsSummary').hidden,true);
   (await storage.ready).close();
 });
 
@@ -308,7 +309,7 @@ test('legacy mixed songs remain downloadable but never offer extraction of a non
   (await storage.ready).close();
 });
 
-test('searching lyrics preserves original cue selection and reveals optional line practice',async()=>{
+test('selecting a lyric uses the main clip recording controls without a duplicate recording section',async()=>{
   const storage=createStorage(new IDBFactory());
   await storage.saveSession({videoId:'video',index:0,start:0,end:2,speed:'1',cues:[{start:0,end:2,text:'First line'},{start:2,end:4,text:'Second line'}]});
   const {nodes}=await mount(storage);assert.equal(nodes.get('captionSetup').open,false);
@@ -316,7 +317,12 @@ test('searching lyrics preserves original cue selection and reveals optional lin
   nodes.get('transcriptSearch').value='second';nodes.get('transcriptSearch').oninput();
   assert.equal(nodes.get('list').children.length,1);nodes.get('list').children[0].onclick();
   assert.equal(nodes.get('start').value,'2.00');assert.equal(nodes.get('position').textContent,'2 / 2');
-  assert.equal(nodes.get('linePractice').open,true);assert.equal(nodes.get('karaokeScope').value,'whole');
+  assert.equal(nodes.get('linePractice').hidden,true);assert.equal(nodes.get('karaokeScope').value,'clip');
+  assert.equal(nodes.get('singActions').hidden,false);assert.equal(nodes.get('practiceTools').open,false);
+  assert.match(nodes.get('songRangeInfo').textContent,/2.0–4.0/);
+  assert.match(nodes.get('recordSong').textContent,/开始片段录唱/);
+  nodes.get('prev').onclick();assert.equal(nodes.get('start').value,'0.00');
+  assert.equal(nodes.get('karaokeScope').value,'clip');
   nodes.get('transcriptSearch').value='no match';nodes.get('transcriptSearch').oninput();
   assert.equal(nodes.get('transcriptNoMatches').hidden,false);assert.equal(nodes.get('list').children.length,0);
   (await storage.ready).close();
@@ -569,7 +575,7 @@ test('ordinary dubbing records the microphone directly with the accompaniment se
   (await storage.ready).close();
 });
 
-test('singing a single line without backing also disables speech processing',async()=>{
+test('the main singing button records a selected clip without backing and disables speech processing',async()=>{
   const storage=createStorage(new IDBFactory());
   const cue={start:0,end:1,text:'Sustained note'};
   await storage.saveSession({videoId:'video',index:0,start:0,end:1,speed:'1',cues:[cue]});
@@ -587,10 +593,15 @@ test('singing a single line without backing also disables speech processing',asy
     requestAnimationFrame:fn=>setTimeout(fn,0),cancelAnimationFrame:clearTimeout}});
   nodes.get('activityMode').value='sing';nodes.get('activityMode').onchange();
   nodes.get('useBacking').checked=false;
-  await nodes.get('record').onclick();
+  nodes.get('useBacking').onchange();
+  nodes.get('karaokeScope').value='clip';nodes.get('karaokeScope').onchange();
+  assert.match(nodes.get('songReadiness').textContent,/清唱/);
+  await nodes.get('recordSong').onclick();
   assert.deepEqual({...requested.audio},{echoCancellation:false,noiseSuppression:false,autoGainControl:false});
   assert.equal(requested.video,false);
-  assert.equal((await storage.listTakes('video')).length,1);
+  const takes=await storage.listTakes('video');assert.equal(takes.length,1);
+  assert.equal(takes[0].kind,'song');assert.equal(takes[0].start,0);assert.equal(takes[0].end,1);
+  assert.equal(nodes.get('useBacking').checked,false);
   (await storage.ready).close();
 });
 

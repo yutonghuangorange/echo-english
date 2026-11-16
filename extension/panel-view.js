@@ -26,7 +26,7 @@
       <section id="page-practice" role="tabpanel" aria-labelledby="tab-practice">
         <select id="activityMode" aria-label="练习模式"><option value="speech" selected>说对白 · 配音跟读</option><option value="sing">唱歌曲 · 伴奏监听</option></select>
         <div id="singActions" hidden>
-          <div class="row"><label class="hint" for="karaokeScope">录唱范围</label><select id="karaokeScope" aria-label="唱歌范围"><option value="whole" selected>整首歌曲</option><option value="clip">当前练习片段</option></select></div>
+          <div class="row"><label class="hint" for="karaokeScope">录唱范围</label><select id="karaokeScope" aria-label="唱歌范围"><option value="whole" selected>整首歌曲</option><option value="clip">当前片段</option></select></div><small id="songRangeInfo"></small>
           <div class="main-actions"><button id="songOriginal">▶ 听原曲</button><button id="songReplay" disabled>▷ 回听演唱</button><button class="primary" id="recordSong">● 开始整首录唱</button></div>
           <div class="row"><span class="hint" id="songReadiness" role="status">先准备伴奏，再开始录唱</span><button id="openBacking">准备伴奏 →</button></div>
           <div id="karaokeNotice" role="alert" style="padding:10px 12px;border:1px solid #d8aa69;border-radius:10px;color:#ffe0ac;font-size:13px;overflow-wrap:anywhere" hidden></div>
@@ -46,13 +46,15 @@
         <div id="practiceSetup" class="hint">直接读取视频台词，或导入 SRT / VTT 字幕后开始练习。也可在下方标记片段。</div>
         </div></details>
         <div id="wordcard" class="wordcard" hidden><div class="row"><strong id="wordTitle"></strong><button id="speakWord">▶ 朗读</button><button id="closeWord" aria-label="关闭词卡">×</button></div><small id="phonetic"></small><div id="definitions" role="status"></div><small>释义：Free Dictionary API · 查询时仅发送所选单词</small></div>
-        <details id="linePractice" open><summary id="linePracticeSummary" hidden>逐句练唱（可选）</summary>
-          <label class="check" id="lineBackingOption" hidden><input id="useBacking" type="checkbox">逐句练唱时监听伴奏（仅录人声）</label>
+        <div id="linePractice">
         <div class="main-actions"><button id="original">▶ 听原声</button><button id="replay" disabled>▷ 我的配音</button><button class="primary" id="record">● 开始配音</button></div>
-        <div class="secondary-actions"><button id="loop">↻ 单句循环</button><button id="autoPractice">▶ 自动跟读</button></div>
+        </div>
+        <details id="practiceTools" open><summary id="practiceToolsSummary" hidden>循环与自动练习</summary>
+          <div class="secondary-actions"><button id="loop">↻ 单句循环</button><button id="autoPractice">▶ 自动跟读</button></div>
         </details>
         <details class="fold" id="karaokeSettings" hidden><summary>伴奏设置</summary><div class="fold-content">
           <p class="hint">按上方录唱范围生成，最长 10 分钟。准备好后回到主区录唱。</p>
+          <label class="check"><input id="useBacking" type="checkbox">录唱时播放伴奏（仅录人声）</label>
           <div class="row"><span class="hint" id="karaokeService" role="status">伴奏服务 · 尚未检测</span><button id="checkKaraoke">重新检测</button></div>
           <div class="row"><button id="prepareBacking">生成整首伴奏</button><button id="previewBacking" disabled>▷ 试听伴奏</button></div>
           <label class="hint">伴奏音量 · <output id="backingVolumeValue" for="backingVolume">100%</output><input id="backingVolume" type="range" min="0" max="2" step="0.05" value="1" aria-label="伴奏音量"></label><div class="hint">100% 为原始音量，可提升至 200%。</div>
