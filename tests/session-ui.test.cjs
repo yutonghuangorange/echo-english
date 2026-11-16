@@ -94,7 +94,10 @@ test('plain recording pauses for buffering and saves to its original video after
   const {nodes,events}=await mount(storage,{video,globals:{location,MediaRecorder:Recorder,navigator:{mediaDevices:{async getUserMedia(){return {getTracks:()=>[{stop(){stopped++;}}]};}}}}});
   const recording=nodes.get('record').onclick();
   for(let i=0;i<10 && instance?.state!=='recording';i++)await new Promise(r=>setTimeout(r,1));
-  assert.equal(instance.state,'recording');listeners.get('waiting')();assert.equal(instance.state,'paused');
+  assert.equal(instance.state,'recording');
+  assert.equal(nodes.get('activityMode').hidden,true);assert.equal(nodes.get('linePractice').hidden,true);
+  assert.equal(nodes.get('stop').textContent,'■ 结束录音');
+  listeners.get('waiting')();assert.equal(instance.state,'paused');
   listeners.get('playing')();await Promise.resolve();assert.equal(instance.state,'recording');
   location.href='https://www.youtube.com/watch?v=other';events.get('yt-navigate-finish')();
   await recording;
@@ -131,6 +134,34 @@ test('legacy service warns about restart before submitting a long song',async()=
   nodes.get('activityMode').value='sing';nodes.get('activityMode').onchange();await nodes.get('checkKaraoke').onclick();
   assert.match(nodes.get('karaokeService').textContent,/旧版/);await nodes.get('prepareBacking').onclick();
   assert.equal(starts,0);assert.match(nodes.get('karaokeNotice').textContent,/Ctrl\+C/);
+  (await storage.ready).close();
+});
+
+test('song mode exposes main recording and guides missing accompaniment without requesting a microphone',async()=>{
+  const storage=createStorage(new IDBFactory());let micRequests=0;
+  const {nodes}=await mount(storage,{globals:{navigator:{mediaDevices:{async getUserMedia(){micRequests++;throw Error('unexpected');}}}}});
+  assert.equal(nodes.get('singActions').hidden,true);assert.equal(nodes.get('linePractice').open,true);
+  nodes.get('activityMode').value='sing';nodes.get('activityMode').onchange();
+  assert.equal(nodes.get('singActions').hidden,false);assert.equal(nodes.get('linePractice').open,false);
+  assert.equal(nodes.get('karaokeSettings').open,false);assert.equal(nodes.get('recordSong').disabled,false);
+  await nodes.get('recordSong').onclick();assert.equal(micRequests,0);assert.equal(nodes.get('karaokeSettings').open,true);
+  nodes.get('activityMode').value='speech';nodes.get('activityMode').onchange();
+  assert.equal(nodes.get('singActions').hidden,true);assert.equal(nodes.get('karaokeSettings').hidden,true);
+  assert.equal(nodes.get('linePractice').open,true);assert.equal(nodes.get('linePracticeSummary').hidden,true);
+  (await storage.ready).close();
+});
+
+test('searching lyrics preserves original cue selection and reveals optional line practice',async()=>{
+  const storage=createStorage(new IDBFactory());
+  await storage.saveSession({videoId:'video',index:0,start:0,end:2,speed:'1',cues:[{start:0,end:2,text:'First line'},{start:2,end:4,text:'Second line'}]});
+  const {nodes}=await mount(storage);assert.equal(nodes.get('captionSetup').open,false);
+  nodes.get('activityMode').value='sing';nodes.get('activityMode').onchange();
+  nodes.get('transcriptSearch').value='second';nodes.get('transcriptSearch').oninput();
+  assert.equal(nodes.get('list').children.length,1);nodes.get('list').children[0].onclick();
+  assert.equal(nodes.get('start').value,'2.00');assert.equal(nodes.get('position').textContent,'2 / 2');
+  assert.equal(nodes.get('linePractice').open,true);assert.equal(nodes.get('karaokeScope').value,'whole');
+  nodes.get('transcriptSearch').value='no match';nodes.get('transcriptSearch').oninput();
+  assert.equal(nodes.get('transcriptNoMatches').hidden,false);assert.equal(nodes.get('list').children.length,0);
   (await storage.ready).close();
 });
 test('recording history deletion and undo operate without adding practice-page controls',async()=>{
@@ -328,7 +359,7 @@ test('long videos require choosing a clip rather than silently truncating a song
   nodes.get('activityMode').value='sing';nodes.get('activityMode').onchange();
   await nodes.get('prepareBacking').onclick();
   assert.equal(requests,0);assert.match(nodes.get('status').textContent,/超过 10 分钟/);
-  assert.equal(nodes.get('recordSong').disabled,true);
+  assert.equal(nodes.get('recordSong').disabled,false);
   (await storage.ready).close();
 });
 
@@ -443,7 +474,7 @@ test('older server-cached accompaniment is recovered without starting separation
   const {nodes}=await mount(storage,{video:{duration:60},cachedBackings:{backings:[{id:'a'.repeat(32),videoId:'video',start:0,end:60,state:'ready'}]},
     globals:{chrome:{runtime:{onMessage:{addListener(){}},async sendMessage(message){calls.push(message.action);return {audio:'UklGRg==',mime:'audio/wav'};}}}}});
   nodes.get('activityMode').value='sing';nodes.get('activityMode').onchange();
-  for(let i=0;i<20 && nodes.get('recordSong').disabled;i++)await new Promise(r=>setTimeout(r,2));
+  for(let i=0;i<20 && nodes.get('previewBacking').disabled;i++)await new Promise(r=>setTimeout(r,2));
   assert.deepEqual(calls,['audio']);assert.equal(nodes.get('recordSong').disabled,false);
   assert.equal((await storage.listBackings('video')).length,1);
   (await storage.ready).close();
