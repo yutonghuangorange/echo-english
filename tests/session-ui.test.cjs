@@ -80,7 +80,7 @@ test('content script restores selected sentence, boundaries, settings and matchi
 });
 
 test('plain recording pauses for buffering and saves to its original video after navigation',async()=>{
-  const storage=createStorage(new IDBFactory()),listeners=new Map();let instance,stopped=0;
+  const storage=createStorage(new IDBFactory()),listeners=new Map(),frames=new Map();let instance,stopped=0,frameId=0;
   const location={href:'https://www.youtube.com/watch?v=video',pathname:'/watch'};
   const video={duration:60,currentTime:0,muted:false,playbackRate:1,pause(){},async play(){},
     addEventListener(name,fn){listeners.set(name,fn);},removeEventListener(name){listeners.delete(name);}};
@@ -92,18 +92,24 @@ test('plain recording pauses for buffering and saves to its original video after
     resume(){this.state='recording';}
     stop(){this.state='inactive';this.ondataavailable({data:new Blob(['recorded'])});setTimeout(()=>this.onstop(),0);}
   }
-  const {nodes,events}=await mount(storage,{video,globals:{location,MediaRecorder:Recorder,navigator:{mediaDevices:{async getUserMedia(){return {getTracks:()=>[{stop(){stopped++;}}]};}}}}});
+  const {nodes,events}=await mount(storage,{video,globals:{location,requestAnimationFrame(fn){frames.set(++frameId,fn);return frameId;},cancelAnimationFrame(id){frames.delete(id);},MediaRecorder:Recorder,navigator:{mediaDevices:{async getUserMedia(){return {getTracks:()=>[{stop(){stopped++;}}]};}}}}});
   const recording=nodes.get('record').onclick();
   for(let i=0;i<10 && instance?.state!=='recording';i++)await new Promise(r=>setTimeout(r,1));
   assert.equal(instance.state,'recording');
   assert.equal(nodes.get('activityMode').hidden,true);assert.equal(nodes.get('linePractice').hidden,true);
   assert.equal(nodes.get('stop').textContent,'■ 结束录音');
+  assert.equal(nodes.get('transport').hidden,false);
+  assert.equal(nodes.get('transportTime').textContent,'0:00 / 0:05');
+  video.currentTime=2;frames.values().next().value();
+  assert.equal(nodes.get('transportProgress').value,0.4);
+  assert.equal(nodes.get('transportTime').textContent,'0:02 / 0:05');
   listeners.get('waiting')();assert.equal(instance.state,'paused');
   listeners.get('playing')();await Promise.resolve();assert.equal(instance.state,'recording');
   location.href='https://www.youtube.com/watch?v=other';events.get('yt-navigate-finish')();
   await recording;
   assert.equal((await storage.listTakes('video')).length,1);assert.equal((await storage.listTakes('other')).length,0);
   assert.equal(stopped,1);assert.equal(nodes.get('recordingContent').hidden,true);
+  assert.equal(nodes.get('transport').hidden,true);
   (await storage.ready).close();
 });
 
@@ -169,8 +175,8 @@ test('volume remains adjustable during accompaniment preview and saves the chose
   (await storage.ready).close();
 });
 
-test('song replay starts at audio opening and buffering moves video instead of skipping recorded audio',async()=>{
-  const storage=createStorage(new IDBFactory()),listeners=new Map(),calls=[],audioSeeks=[];let sound;
+test('song replay starts at audio opening and shows progress from the audio clock',async()=>{
+  const storage=createStorage(new IDBFactory()),listeners=new Map(),calls=[],audioSeeks=[],frames=new Map();let sound,frameId=0;
   await storage.saveTake({id:'song',kind:'song',videoId:'video',cueKey:'song:manual',start:0,end:10,speed:1,createdAt:1,blob:new Blob(['song'])});
   const video={duration:60,currentTime:0,muted:false,playbackRate:1,pause(){},
     addEventListener(name,fn){listeners.set(name,fn);},removeEventListener(name){listeners.delete(name);},
@@ -180,15 +186,20 @@ test('song replay starts at audio opening and buffering moves video instead of s
     get currentTime(){return this.elapsed;}set currentTime(value){audioSeeks.push(value);this.elapsed=value;}
     pause(){}async play(){calls.push('audio');}
   }
-  const {nodes}=await mount(storage,{video,globals:{Audio}});
+  const {nodes}=await mount(storage,{video,globals:{Audio,requestAnimationFrame(fn){frames.set(++frameId,fn);return frameId;},cancelAnimationFrame(id){frames.delete(id);}}});
   nodes.get('activityMode').value='sing';nodes.get('activityMode').onchange();
   const replaying=nodes.get('songReplay').onclick();
   for(let i=0;i<10 && !calls.includes('video');i++)await Promise.resolve();
   await new Promise(resolve=>setTimeout(resolve,0));assert.deepEqual(calls.slice(0,2),['audio','video']);assert.deepEqual(audioSeeks,[]);
   assert.equal(video.currentTime,0);
+  assert.equal(nodes.get('transport').hidden,false);
+  assert.equal(nodes.get('transportTime').textContent,'0:00 / 0:10');
+  sound.duration=2;sound.elapsed=0.5;frames.values().next().value();
+  assert.equal(nodes.get('transportProgress').value,0.25);
+  assert.equal(nodes.get('transportTime').textContent,'0:00 / 0:02');
   sound.elapsed=0.6;listeners.get('waiting')();video.currentTime=4;listeners.get('playing')();
   assert.equal(video.currentTime,0.6);assert.deepEqual(audioSeeks,[]);
-  sound.onended();await replaying;(await storage.ready).close();
+  sound.onended();await replaying;assert.equal(nodes.get('transport').hidden,true);(await storage.ready).close();
 });
 
 test('dry vocal downloads can be mixed per take or assembled as a full song without starting recording',async()=>{

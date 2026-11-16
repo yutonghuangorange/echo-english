@@ -118,6 +118,10 @@
         </div></details>
       </section>
     </div>
+    <div id="transport" hidden style="padding:8px 20px 0;flex-shrink:0;background:#111b24">
+      <div style="display:flex;justify-content:space-between;font-size:11px;color:#9ab2c1"><span id="transportLabel"></span><span id="transportTime"></span></div>
+      <progress id="transportProgress" max="1" value="0" aria-label="播放或录音进度" style="display:block;width:100%;height:6px;margin:6px 0;accent-color:#b3eedb"></progress>
+    </div>
     <footer><div class="status" id="status" role="status">准备好了，从一句开始。</div><button id="stop" disabled hidden>■ 停止</button></footer>
     <button class="resize-handle" id="resizePanel" aria-label="调整面板大小" title="拖动左下角调整大小；双击或按 Home 恢复默认。方向键微调，Shift 加速。">⤢</button>
   </div>`;
@@ -126,6 +130,7 @@
   let cues = [], index = -1, take = null, mode = 'idle', generation = 0;
   let recorder = null, stream = null, audio = null, frame = 0, timer = 0, savedVideo = null;
   let pendingDone = null;
+  let progressFrame = 0;
   let activity = 'speech';
   let captionVideo = null, captionSignature = '', captionGhost = null;
   const captionEvents = ['timeupdate','seeking','seeked','play','pause','ended'];
@@ -295,6 +300,7 @@
   }
   function cancelPlayback() {
     cancelAnimationFrame(frame); clearTimeout(timer);
+    cancelAnimationFrame(progressFrame);progressFrame=0;$('transport').hidden=true;
     if (pendingDone) { const done = pendingDone; pendingDone = null; done(); }
     if (audio) { audio.pause(); audio.src = ''; audio = null; }
     recordMonitor?.pause();
@@ -320,6 +326,21 @@
     };
     frame = requestAnimationFrame(tick);
   }
+  function showTransport(label, position, duration) {
+    cancelAnimationFrame(progressFrame);
+    $('transport').hidden=false;$('transportLabel').textContent=label;
+    const tick=()=>{
+      const total=Math.max(0,Number(duration()) || 0);
+      const elapsed=Math.min(total,Math.max(0,Number(position()) || 0));
+      $('transportProgress').value=total>0?elapsed/total:0;
+      $('transportTime').textContent=`${recordingTime(elapsed)} / ${recordingTime(total)}`;
+      progressFrame=requestAnimationFrame(tick);
+    };
+    tick();
+  }
+  function showVideoTransport(label,v,r) {
+    showTransport(label,()=>(v.currentTime-r.start)/r.speed,()=>(r.end-r.start)/r.speed);
+  }
   async function seek(v, at, token) {
     v.pause();
     if (token !== generation) throw Error('操作已停止。');
@@ -339,6 +360,7 @@
     if (token !== generation) return;
     await v.play();
     if (token !== generation) return;
+    showVideoTransport('原声',v,r);
     await new Promise(resolve => {
       pendingDone = resolve;
       watchEnd(v, r.end, () => { v.pause(); resolve(); });
@@ -678,6 +700,7 @@
         if(token!==generation)return;
         backingOutput=output;
         status('正在试听去原唱伴奏…');await v.play();if(token!==generation)return;sync();
+        showVideoTransport('伴奏试听',v,r);
         await new Promise(resolve=>{pendingDone=resolve;a.onended=resolve;watchEnd(v,r.end,resolve);timer=setTimeout(resolve,EchoPractice.playbackTimeout(r));});
       } finally {v.removeEventListener('waiting',wait);v.removeEventListener('playing',sync);output?.dispose();if(backingOutput===output)backingOutput=null;}
       if(token===generation){finish();status('伴奏试听完成。');}
@@ -787,6 +810,7 @@
     const position=mix?.position?.();
     if(Number.isFinite(position) && Math.abs(v.currentTime-position)>0.15)v.currentTime=position;
     status(mix?'● 正在录制人声，伴奏仅在耳机播放…':'● 正在配音，视频原声已静音…');
+    showVideoTransport('录音',v,r);
     const endRecording = () => {
       if (token !== generation) return;
       cancelPlayback(); restoreVideo(); mode = 'saving'; controls();
@@ -823,6 +847,7 @@
       a.preload='auto';
       await a.play();
       if (token !== generation) return;
+      showTransport('录音回放',()=>a.currentTime,()=>Number.isFinite(a.duration) && a.duration>0?a.duration:((t.capturedEnd ?? t.end)-t.start)/t.speed+(t.vocalOffset || 0));
       pendingDone=resolvePlayback;
       if(!ended){
         await v.play();
