@@ -55,3 +55,9 @@ test('export applies independent vocal and backing gains including mute',async()
     const view=new DataView(await result.blob.arrayBuffer());assert(Math.abs(view.getInt16(44,true)/32767-expected)<0.001);
   }
 });
+
+test('a new sentence replaces only its overlap within an older paragraph and keeps timeline gaps',()=>{
+  const result=plan([voice('paragraph',10,30,1),voice('sentence',18,22,2),voice('next-paragraph',35,45,3)],50);
+  assert.deepEqual(result.segments.map(s=>[s.start,s.end,s.take.id]),[[10,18,'paragraph'],[18,22,'sentence'],[22,30,'paragraph'],[35,45,'next-paragraph']]);
+  assert.deepEqual(result.gaps,[{start:0,end:10},{start:30,end:35},{start:45,end:50}]);
+});

@@ -85,3 +85,11 @@ test('previous sentence lead-in handles first sentences, gaps and manually adjus
   assert.equal(leadInStart(10,3,{mode:'previous'}),10);
   assert.equal(leadInStart(10,3,{mode:'none',cues}),10);
 });
+
+test('paragraph ranges include all selected sentences and their intervening gaps',()=>{
+  const {paragraphRange}=require('../extension/practice.js');
+  const cues=[{start:1,end:4},{start:5,end:12},{start:8,end:10},{start:15,end:17}];
+  assert.deepEqual(paragraphRange(cues,1,2),{start:5,end:12});
+  assert.deepEqual(paragraphRange(cues,0,3),{start:1,end:17});
+  for(const bounds of [[0,0],[-1,2],[0,4],[1.5,2]])assert.throws(()=>paragraphRange(cues,...bounds),/至少两句/);
+});

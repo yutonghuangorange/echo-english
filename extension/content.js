@@ -17,6 +17,7 @@
     onError: error => { stop(); status(error.message || String(error)); }
   });
   let activity = 'speech';
+  let paragraphFirst=0,paragraphLast=1;
   const microphonePreferenceKey='echo-microphone-v1';
   const echoPreferences={speech:true,sing:false};
   const gainPreferences={speech:true,sing:false};
@@ -148,10 +149,37 @@
     if(isSinging()){void checkKaraokeService();void restoreServerBacking();}
   };
   function backingFor(r) {return savedBackings.find(value=>EchoKaraoke.covers(value,videoId,r)) || null;}
+  function isParagraph(){return isSinging() && $('karaokeScope').value==='paragraph';}
+  function renderParagraphOptions(){
+    paragraphFirst=Math.max(0,Math.min(Number.isInteger(paragraphFirst)?paragraphFirst:0,Math.max(0,cues.length-2)));
+    paragraphLast=Math.max(paragraphFirst+1,Math.min(Number.isInteger(paragraphLast)?paragraphLast:paragraphFirst+1,Math.max(1,cues.length-1)));
+    for(const id of ['paragraphFirst','paragraphLast']){
+      $(id).replaceChildren();
+      cues.forEach((cue,i)=>{
+        const option=document.createElement('option');option.value=String(i);
+        option.textContent=`第 ${i+1} 句 · ${recordingTime(cue.start)} · ${captionText(cue).slice(0,50)}`;
+        option.disabled=id==='paragraphFirst'?i>=cues.length-1:i<=paragraphFirst;
+        $(id).append(option);
+      });
+    }
+    $('paragraphFirst').value=String(paragraphFirst);$('paragraphLast').value=String(paragraphLast);
+  }
+  function syncParagraphBounds(){
+    if(!isParagraph() || cues.length<2)return;
+    const r=EchoPractice.paragraphRange(cues,paragraphFirst,paragraphLast);
+    $('start').value=r.start.toFixed(2);$('end').value=r.end.toFixed(2);
+  }
+  for(const id of ['paragraphFirst','paragraphLast'])$(id).onchange=()=>{
+    if(mode!=='idle')return;
+    if(id==='paragraphFirst')paragraphFirst=Number($(id).value);else paragraphLast=Number($(id).value);
+    renderParagraphOptions();syncParagraphBounds();index=paragraphFirst;karaokeIssue='';
+    updateCaption();chooseCurrentTake();controls();saveProgress();if(isParagraph())void restoreServerBacking();
+  };
   function songRange() {
+    if(isParagraph()){EchoPractice.paragraphRange(cues,paragraphFirst,paragraphLast);syncParagraphBounds();return range();}
     if($('karaokeScope').value==='clip')return range();
     const v=video();
-    if(v.duration>600)throw Error('视频超过 10 分钟，请选择「当前片段」并设置歌曲起止时间。');
+    if(v.duration>600)throw Error('视频超过 10 分钟，请选择「当前片段」或「段落（多句）」。');
     if(v.duration<=0)throw Error('请等待视频加载。');
     return {start:0,end:v.duration,speed:Number($('speed').value)};
   }
@@ -160,10 +188,10 @@
       for(const id of ['previewBacking','recordSong','prepareBacking','songReplay','songOriginal'])$(id).disabled=true;
       return;
     }
-    const busy=mode!=='idle', whole=$('karaokeScope').value!=='clip';
+    const busy=mode!=='idle', whole=$('karaokeScope').value==='whole',paragraph=isParagraph();
     let target=null,error='';try{target=songRange();}catch(e){error=e.message;}
     const ready=target && backingFor(target);
-    $('songRangeInfo').textContent=target?`${whole?'整首':'当前片段'} · ${target.start.toFixed(1)}–${target.end.toFixed(1)} 秒`:'';
+    $('songRangeInfo').textContent=target?`${whole?'整首':paragraph?`第 ${paragraphFirst+1}–${paragraphLast+1} 句`:'当前片段'} · ${target.start.toFixed(1)}–${target.end.toFixed(1)} 秒`:'';
     $('previewBacking').disabled=busy || !ready;
     // A missing prerequisite should lead to preparation instead of a dead button.
     $('recordSong').disabled=busy;
@@ -173,9 +201,9 @@
     $('prepareBacking').disabled=busy || !!ready;
     $('karaokeNotice').hidden=!karaokeIssue;
     $('karaokeNotice').textContent=karaokeIssue;
-    $('prepareBacking').textContent=mode==='separating'?'正在生成伴奏…':ready?'伴奏已就绪':whole?'生成整首伴奏':'生成片段伴奏';
+    $('prepareBacking').textContent=mode==='separating'?'正在生成伴奏…':ready?'伴奏已就绪':whole?'生成整首伴奏':paragraph?'生成段落伴奏':'生成片段伴奏';
     const recorded=target && videoHistory.some(t=>t.kind==='song' && Math.abs(t.start-target.start)<0.01 && Math.abs(t.end-target.end)<0.01 && t.speed===target.speed);
-    $('recordSong').textContent=recorded?'● 再录一次':whole?'● 开始整首录唱':'● 开始片段录唱';
+    $('recordSong').textContent=recorded?'● 再录一次':whole?'● 开始整首录唱':paragraph?'● 开始段落录唱':'● 开始片段录唱';
     $('recordSong').title='使用当前范围和速度录唱，保留之前的版本。';
     $('songReplay').disabled=busy || !songTake;
     if(busy)return;
@@ -266,20 +294,30 @@
     $('playAll').hidden=!videoHistory.length;
     $('recordingDetails').hidden=!take;
     const voices=videoHistory.filter(t=>t.kind==='song' && t.capture==='vocal' && !t.withBacking);
-    let assemblyError='';
-    if(voices.length){try{EchoAudioExport.plan(videoHistory,document.querySelector('video.html5-main-video')?.duration);}catch(error){assemblyError=error.message;}}
+    let assemblyError='',assemblyPlan=null;
+    if(voices.length){try{assemblyPlan=EchoAudioExport.plan(videoHistory,document.querySelector('video.html5-main-video')?.duration);}catch(error){assemblyError=error.message;}}
     $('assembleSong').disabled=busy || !voices.length || !!assemblyError;
     $('assembleSong').title=assemblyError;
     $('assemblyWarning').textContent=assemblyError;$('assemblyWarning').hidden=!assemblyError;
+    $('assemblyPlanDetails').hidden=!assemblyPlan;
+    if(assemblyPlan){
+      const covered=assemblyPlan.segments.reduce((sum,s)=>sum+s.end-s.start,0);
+      $('assemblyInfo').textContent=`${EchoPractice.recordingQueue(voices).length} 段独立人声 · 已覆盖 ${covered.toFixed(1)} / ${assemblyPlan.duration.toFixed(1)} 秒。`;
+      const pieces=[...assemblyPlan.segments,...assemblyPlan.gaps].sort((a,b)=>a.start-b.start);
+      $('assemblyPlan').textContent=pieces.map(s=>`${s.start.toFixed(1)}–${s.end.toFixed(1)} 秒 · ${s.take?`${s.take.label || '人声录音'} · ${new Date(s.take.createdAt).toLocaleTimeString('zh-CN')}`:'未录人声（保留空白）'}`).join('\n');
+    }else $('assemblyPlan').textContent='';
     $('activityMode').hidden=recording;
     $('singActions').hidden=!isSinging() || recording;
+    $('paragraphSelection').hidden=!isParagraph();$('paragraphScopeOption').disabled=cues.length<2;
+    $('autoPractice').textContent=isParagraph()?'▶ 自动练当前段落':isSinging()?'▶ 自动练当前片段':'▶ 自动跟读';
     $('singDetails').hidden=!isSinging() || recording;
     $('karaokeSettings').hidden=!isSinging() || recording;
     for(const id of ['practiceTools','practiceSettings'])$(id).hidden=recording;
     $('captionSetup').hidden=recording || cues.length>0;
-    $('clipSettings').hidden=recording || (isSinging() && $('karaokeScope').value!=='clip');
+    $('clipSettings').hidden=recording || (isSinging() && $('karaokeScope').value==='whole');
     $('linePractice').hidden=isSinging() || recording;
-    for (const id of ['echoCancellation','autoGainControl','manualGainDb','captionSource','refreshCaptionTracks','contentLanguage','captionLayout','activityMode','read','import','transcriptRead','transcriptImport','prepareBacking','karaokeScope','useBacking','backingVolume','prev','next','markStart','markEnd','original','speed','start','end','leadInMode','leadInSeconds','record','startEarlier','startLater','endEarlier','endLater','loop','loopCount','autoPractice','prepSeconds','autoNext']) $(id).disabled = busy;
+    for (const id of ['paragraphFirst','paragraphLast','echoCancellation','autoGainControl','manualGainDb','captionSource','refreshCaptionTracks','contentLanguage','captionLayout','activityMode','read','import','transcriptRead','transcriptImport','prepareBacking','karaokeScope','useBacking','backingVolume','prev','next','markStart','markEnd','original','speed','start','end','leadInMode','leadInSeconds','record','startEarlier','startLater','endEarlier','endLater','loop','loopCount','autoPractice','prepSeconds','autoNext']) $(id).disabled = busy;
+    if(isParagraph())for(const id of ['start','end','markStart','markEnd','startEarlier','startLater','endEarlier','endLater','autoNext'])$(id).disabled=true;
     for(const id of ['karaokeScope','useBacking'])$(id).disabled=busy || !isSinging();
     $('backingVolume').disabled=!isSinging() || !['idle','backing','recording'].includes(mode);
     $('backingVolumeValue').textContent=`${Math.round(Number($('backingVolume').value)*100)}%`;
@@ -422,6 +460,7 @@
     if($('recordingDetails').open)void analyzeTake(take);
   }
   function currentCueKey() {
+    if(isParagraph())return EchoStorage.cueKey(null,Number($('start').value),Number($('end').value));
     return EchoStorage.cueKey(cues[index], Number($('start').value), Number($('end').value));
   }
   function saveProgress() {
@@ -429,7 +468,7 @@
     const start = Number($('start').value), end = Number($('end').value);
     if (!Number.isFinite(start) || !Number.isFinite(end) || start < 0 || end <= start) return;
     const title=(document.querySelector('ytd-watch-metadata h1')?.textContent || document.title || '').replace(/\s*[-–]\s*YouTube\s*$/,'').trim();
-    const session = {title:title || videoId,leadInMode:$('leadInMode').value,leadInSeconds:EchoPractice.leadInSeconds($('leadInSeconds').value),activity,useBacking:$('useBacking').checked,captionSource,captionSourceName,loadedCaptionSource,replayVocalVolume:replayMix().vocal,replayBackingVolume:replayMix().backing,replayWithBacking:$('replayWithBacking').checked,backingVolume:Number($('backingVolume').value),contentLanguage:$('contentLanguage').value,captionLayout:$('captionLayout').value,videoId,cues:cues.map(c=>({...c})),index,start,end,speed:$('speed').value,showChinese:$('showChinese').checked,hideText:$('hideText').checked,followCaptions:$('followCaptions').checked,karaokeScope:$('karaokeScope').value,selectedTakeId:take?.id,updatedAt:Date.now()};
+    const session = {title:title || videoId,leadInMode:$('leadInMode').value,leadInSeconds:EchoPractice.leadInSeconds($('leadInSeconds').value),activity,paragraphFirst,paragraphLast,useBacking:$('useBacking').checked,captionSource,captionSourceName,loadedCaptionSource,replayVocalVolume:replayMix().vocal,replayBackingVolume:replayMix().backing,replayWithBacking:$('replayWithBacking').checked,backingVolume:Number($('backingVolume').value),contentLanguage:$('contentLanguage').value,captionLayout:$('captionLayout').value,videoId,cues:cues.map(c=>({...c})),index,start,end,speed:$('speed').value,showChinese:$('showChinese').checked,hideText:$('hideText').checked,followCaptions:$('followCaptions').checked,karaokeScope:$('karaokeScope').value,selectedTakeId:take?.id,updatedAt:Date.now()};
     void storage.saveSession(session).catch(()=>{
       if (!progressWarning && session.videoId === videoId) { progressWarning=true; status('练习位置未能保存，请检查本地存储空间。录音仍可下载。'); }
     });
@@ -520,14 +559,15 @@
         $('speed').value=['0.75','1','1.25'].includes(session.speed)?session.speed:'1';
         $('leadInSeconds').value=session.leadInSeconds===undefined?3:EchoPractice.leadInSeconds(session.leadInSeconds);
         $('leadInMode').value=['none','seconds','previous'].includes(session.leadInMode)?session.leadInMode:EchoPractice.leadInSeconds(session.leadInSeconds)>0?'seconds':'none';
-        $('karaokeScope').value=session.karaokeScope==='clip'?'clip':'whole';
+        paragraphFirst=Number.isInteger(session.paragraphFirst)?session.paragraphFirst:0;paragraphLast=Number.isInteger(session.paragraphLast)?session.paragraphLast:1;
+        $('karaokeScope').value=['clip','paragraph'].includes(session.karaokeScope)?session.karaokeScope:'whole';
         $('backingVolume').value=Number.isFinite(session.backingVolume)?Math.max(0,Math.min(2,session.backingVolume)):1;
         $('replayVocalVolume').value=clampGain(session.replayVocalVolume);
         $('replayBackingVolume').value=clampGain(session.replayBackingVolume);
         $('replayWithBacking').checked=session.replayWithBacking!==false;
         $('showChinese').checked=!!session.showChinese; $('hideText').checked=!!session.hideText; $('followCaptions').checked=session.followCaptions!==false;
         displayCues(session.cues || [],session.index);
-        $('start').value=session.start; $('end').value=session.end; index=session.index>=0 && session.index<cues.length?session.index:-1;
+        $('start').value=session.start; $('end').value=session.end; index=session.index>=0 && session.index<cues.length?session.index:-1;syncParagraphBounds();
         updateCaption(); $('list').style.display=$('hideText').checked?'none':'';
         status(index>=0 ? `已回到上次练习的第 ${index+1} 句。` : '已恢复上次的手动片段。');
       } else if(values.length) {
@@ -616,7 +656,7 @@
   };
   $('backingVolume').onchange=saveProgress;
   $('useBacking').onchange=()=>{controls();saveProgress();};
-  $('karaokeScope').onchange=()=>{karaokeIssue='';controls();saveProgress();if(!restoringBacking)void restoreServerBacking();};
+  $('karaokeScope').onchange=()=>{karaokeIssue='';if(isParagraph()){renderParagraphOptions();syncParagraphBounds();index=paragraphFirst;updateCaption();chooseCurrentTake();}controls();saveProgress();if(!restoringBacking)void restoreServerBacking();};
   $('openBacking').onclick=()=>{
     $('karaokeSettings').open=true;
     $('karaokeSettings').scrollIntoView?.({block:'nearest'});
@@ -826,7 +866,7 @@
     recorder = mimeType ? new MediaRecorder(input.stream, { mimeType }) : new MediaRecorder(input.stream);
     const singingTake=options.song || isSinging();
     const recordedKey=singingTake ? `song:${options.song?EchoStorage.cueKey(null,r.start,r.end):currentCueKey()}` : currentCueKey();
-    const recordedLabel=options.song ? (r.start===0 && Math.abs(r.end-v.duration)<0.01?'整首演唱':'片段演唱') : index>=0 ? `第 ${index+1} 句` : '手动片段';
+    const recordedLabel=isParagraph()?`第 ${paragraphFirst+1}–${paragraphLast+1} 句 · 段落`:options.song ? (r.start===0 && Math.abs(r.end-v.duration)<0.01?'整首演唱':'片段演唱') : index>=0 ? `第 ${index+1} 句` : '手动片段';
     const currentRecorder = recorder, chunks = [];
     const clock=()=>globalThis.performance?.now?.() ?? Date.now();
     let meter=null;
@@ -1091,7 +1131,7 @@
   }
   $('transcriptSearch').oninput=renderCueList;
   function languageChanged(){
-    updateLanguageInfo();updateCaption();renderCueList();renderHistory();
+    renderParagraphOptions();updateLanguageInfo();updateCaption();renderCueList();renderHistory();
     if(take)$('recordingText').textContent=recordingText(take);
     saveProgress();
   }
@@ -1171,13 +1211,14 @@
   },true);
   function select(i, fromList=false) {
     if (mode !== 'idle' || !cues[i]) return;
-    index = i; $('start').value = cues[i].start.toFixed(2); $('end').value = cues[i].end.toFixed(2);
-    if(fromList && isSinging()){$('karaokeScope').value='clip';karaokeIssue='';}
+    index = i; if(isParagraph())syncParagraphBounds();else{$('start').value = cues[i].start.toFixed(2); $('end').value = cues[i].end.toFixed(2);}
+    if(fromList && isSinging() && !isParagraph()){$('karaokeScope').value='clip';karaokeIssue='';}
     updateCaption(); chooseCurrentTake();updateSummaries();saveProgress();showPage('practice');renderCueList();
     if(fromList){$(isSinging()?'recordSong':'record').focus();}
   }
   function displayCues(next, preferredIndex = 0) {
     cues = next.map(c=>({...c,key:EchoStorage.cueKey(c)})); index = -1; $('list').replaceChildren();
+    renderParagraphOptions();
     $('transcriptSearch').value='';
     $('captionSetup').open=!cues.length;
     $('captionSetupTitle').textContent=cues.length?`字幕 · ${cues.length} 句`:'准备字幕 · 读取或导入';
@@ -1211,7 +1252,7 @@
     if (token === generation) { finish(); status('单句循环完成。'); }
   });
   $('autoPractice').onclick = guarded(async () => {
-    range(); const token = ++generation, autoNext = $('autoNext').checked, seconds = Number($('prepSeconds').value);
+    range(); const token = ++generation, autoNext = !isParagraph() && $('autoNext').checked, seconds = Number($('prepSeconds').value);
     closeWord(); mode = 'practice'; controls(); status('首次练习：正在检查麦克风权限…');
     // Obtain permission before the listening/preparation stages so its dialog
     // cannot consume the learner's preparation time. Release immediately.
@@ -1333,7 +1374,7 @@
     backingRestoreRequest++;
     restoringBacking = false;
     karaokeIssue = '';
-    activity = 'speech';
+    activity = 'speech';paragraphFirst=0;paragraphLast=1;
     captionTracks=[];captionListRequest++;captionSource='auto';captionSourceName='';loadedCaptionSource='';renderCaptionSources();
     $('contentLanguage').value = 'auto';
     $('captionLayout').value = 'original';

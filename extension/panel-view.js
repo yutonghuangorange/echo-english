@@ -47,7 +47,8 @@
       <section id="page-practice" role="tabpanel" aria-labelledby="tab-practice">
         <select id="activityMode" aria-label="练习模式"><option value="speech" selected>说对白 · 配音跟读</option><option value="sing">唱歌曲 · 伴奏监听</option></select>
         <div id="singActions" hidden>
-          <div class="row"><label class="hint" for="karaokeScope">录唱范围</label><select id="karaokeScope" aria-label="唱歌范围"><option value="whole" selected>整首歌曲</option><option value="clip">当前片段</option></select></div><small id="songRangeInfo"></small>
+          <div class="row"><label class="hint" for="karaokeScope">录唱范围</label><select id="karaokeScope" aria-label="唱歌范围"><option value="whole" selected>整首歌曲</option><option value="clip">当前片段</option><option id="paragraphScopeOption" value="paragraph">段落（多句）</option></select></div><small id="songRangeInfo"></small>
+          <div id="paragraphSelection" hidden><div class="row"><label class="hint" for="paragraphFirst">起句</label><select id="paragraphFirst" aria-label="段落起句"></select></div><div class="row"><label class="hint" for="paragraphLast">止句</label><select id="paragraphLast" aria-label="段落止句"></select></div><p class="hint">连续录下所选多句及句间间隔。段落边界由起止句决定，微调时间可切换「当前片段」。</p></div>
           <div class="row readiness-row"><span class="hint" id="songReadiness">先准备伴奏，再开始录唱</span><button id="openBacking" class="text-button">准备伴奏 →</button></div>
         </div>
         <div class="cue-card"><div class="cue-nav"><span class="eyebrow" id="cueHeading">当前台词</span><button id="openTranscript" class="text-button">选句</button><span><button id="prev" aria-label="上一句">‹</button><span aria-label="当前练习句">练习 <span id="position">手动片段</span></span><button id="next" aria-label="下一句">›</button></span></div>
@@ -132,7 +133,7 @@
         </div></details>
         </div>
         <details class="fold" id="songAssembly" hidden><summary>分段合成整首</summary><div class="fold-content">
-          <p class="hint" id="assemblyInfo"></p><p class="hint" id="assemblyWarning" hidden></p>
+          <p class="hint" id="assemblyInfo"></p><details class="fold" id="assemblyPlanDetails"><summary>查看拼接安排</summary><div id="assemblyPlan" class="hint" style="white-space:pre-line;max-height:180px;overflow:auto"></div></details><p class="hint" id="assemblyWarning" hidden></p>
           <select id="assemblyType" aria-label="整首下载内容"><option value="vocal">仅人声</option><option value="mixed">人声＋整首伴奏</option></select>
           <p class="hint">按视频时间轴合成，重叠处用最新录音，未录处保留空白。暂支持 1× 录唱；WAV 文件约 10 MB / 分钟。合成采用底部的回听音量比例。</p>
           <button id="assembleSong">合成并下载整首</button>

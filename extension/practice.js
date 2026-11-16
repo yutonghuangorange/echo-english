@@ -50,6 +50,12 @@
     }
     return Math.max(0,start-leadInSeconds(seconds));
   }
+  function paragraphRange(cues,first,last){
+    if(!Number.isInteger(first) || !Number.isInteger(last) || first<0 || last>=cues.length || last<=first)throw Error('请选择至少两句连续歌词作为段落。');
+    const start=cues[first].start,end=Math.max(...cues.slice(first,last+1).map(c=>c.end));
+    if(!Number.isFinite(start) || !Number.isFinite(end) || end<=start)throw Error('所选段落缺少有效时间轴，请重新读取或导入字幕。');
+    return {start,end};
+  }
   function playbackTimeout(range) {return Math.ceil((range.end-range.start)/range.speed*1000)+15000;}
   function recordingQueue(takes) {
     const latest=new Map();
@@ -64,6 +70,6 @@
   async function playQueue({queue,active,play}) {
     for(let i=0;i<queue.length && active();i++)await play(queue[i],i,queue.length);
   }
-  const api = {leadInSeconds,leadInStart,splitCaption,captionFrame,nudge,runLoop,runPractice,recordingQueue,playQueue,playbackTimeout};
+  const api = {paragraphRange,leadInSeconds,leadInStart,splitCaption,captionFrame,nudge,runLoop,runPractice,recordingQueue,playQueue,playbackTimeout};
   if (typeof module !== 'undefined') module.exports = api; else root.EchoPractice = api;
 })(globalThis);

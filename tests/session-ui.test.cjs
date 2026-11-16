@@ -1029,3 +1029,34 @@ test('listening includes the configured context while recorded comparison keeps 
   await nodes.get('compare').onclick();assert.equal(video.plays[1].at,10);
   (await storage.ready).close();
 });
+
+test('paragraph mode restores, keeps multi-sentence bounds during browsing, records as one take and previews assembly',async()=>{
+  const storage=createStorage(new IDBFactory());
+  const cues=[0,1,2,3].map(i=>({start:i*3,end:i*3+2.8,text:`Line ${i+1}`}));
+  await storage.saveSession({videoId:'video',activity:'sing',useBacking:false,cues,index:1,start:3,end:11.8,speed:'1',karaokeScope:'paragraph',paragraphFirst:1,paragraphLast:3});
+  const video=leadInVideo();video.duration=30;video.play=async function(){this.currentTime=11.8;};
+  class MediaRecorder{
+    static isTypeSupported(){return true;}
+    constructor(){this.state='inactive';this.mimeType='audio/webm';}
+    start(){this.state='recording';}
+    stop(){this.state='inactive';this.ondataavailable({data:new Blob(['whole-paragraph'])});queueMicrotask(()=>this.onstop());}
+  }
+  const {nodes}=await mount(storage,{video,globals:{MediaRecorder,
+    navigator:{mediaDevices:{async getUserMedia(){return {getTracks:()=>[{stop(){}}]};}}},
+    requestAnimationFrame:fn=>setTimeout(fn,1),cancelAnimationFrame:clearTimeout}});
+  assert.equal(nodes.get('karaokeScope').value,'paragraph');assert.equal(nodes.get('paragraphSelection').hidden,false);
+  assert.equal(nodes.get('paragraphFirst').value,'1');assert.equal(nodes.get('paragraphLast').value,'3');
+  assert.match(nodes.get('recordSong').textContent,/开始段落录唱/);assert.match(nodes.get('songRangeInfo').textContent,/第 2–4 句/);
+  assert.equal(nodes.get('start').disabled,true);assert.equal(nodes.get('autoNext').disabled,true);
+  nodes.get('next').onclick();assert.equal(Number(nodes.get('start').value),3);assert.equal(Number(nodes.get('end').value),11.8);
+  await nodes.get('recordSong').onclick();
+  const [take]=await storage.listTakes('video');assert.equal(take.start,3);assert.equal(take.end,11.8);assert.equal(take.kind,'song');
+  assert.match(take.label,/第 2–4 句/);assert.equal(await take.blob.text(),'whole-paragraph');
+  assert.match(nodes.get('assemblyInfo').textContent,/已覆盖 8.8 \/ 30.0 秒/);
+  assert.match(nodes.get('assemblyPlan').textContent,/3.0–11.8 秒 · 第 2–4 句/);assert.match(nodes.get('assemblyPlan').textContent,/未录人声/);
+  nodes.get('paragraphFirst').value='0';nodes.get('paragraphFirst').onchange();
+  nodes.get('paragraphLast').value='2';nodes.get('paragraphLast').onchange();
+  await new Promise(r=>setTimeout(r,5));const session=await storage.getSession('video');assert.equal(session.paragraphFirst,0);assert.equal(session.paragraphLast,2);assert.equal(session.end,8.8);
+  const restored=(await mount(storage)).nodes;assert.equal(restored.get('karaokeScope').value,'paragraph');assert.equal(Number(restored.get('end').value),8.8);
+  (await storage.ready).close();
+});
