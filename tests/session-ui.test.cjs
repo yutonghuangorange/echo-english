@@ -423,7 +423,11 @@ test('whole-song recording uses the full duration and offers replay, retry and d
     stop(){this.state='inactive';this.ondataavailable({data:new Blob(['mixed-audio'])});queueMicrotask(()=>this.onstop());}
   }
   const mix={stream:mixedStream,async sync(position){assert.equal(position,0);events.push('sync');},pause(){events.push('pause');},dispose(){events.push('dispose');}};
-  const {nodes}=await mount(storage,{video,globals:{MediaRecorder,navigator:{mediaDevices:{getUserMedia:async()=>mic}},
+  const {nodes}=await mount(storage,{video,globals:{MediaRecorder,navigator:{mediaDevices:{getUserMedia:async constraints=>{
+      assert.equal(constraints.video,false);
+      assert.deepEqual({...constraints.audio},{echoCancellation:false,noiseSuppression:false,autoGainControl:false});
+      return mic;
+    }}},
     EchoKaraoke:{...require('../extension/karaoke.js'),createMonitor:async options=>{assert.equal(options.video,video);return mix;}},
     requestAnimationFrame:fn=>setTimeout(fn,0),cancelAnimationFrame:clearTimeout,
     chrome:{runtime:{onMessage:{addListener(){}},async sendMessage(message){return message.action==='audio'?{audio:'UklGRg==',mime:'audio/wav'}:{id:'c'.repeat(32),state:'ready'};}}}}});
@@ -491,7 +495,11 @@ test('ordinary dubbing records the microphone directly with the accompaniment se
     start(){this.state='recording';}
     stop(){this.state='inactive';this.ondataavailable({data:new Blob(['voice-only'])});queueMicrotask(()=>this.onstop());}
   }
-  const {nodes}=await mount(storage,{video,globals:{MediaRecorder,navigator:{mediaDevices:{getUserMedia:async()=>mic}},
+  const {nodes}=await mount(storage,{video,globals:{MediaRecorder,navigator:{mediaDevices:{getUserMedia:async constraints=>{
+      assert.equal(constraints.video,false);
+      assert.deepEqual({...constraints.audio},{echoCancellation:true});
+      return mic;
+    }}},
     EchoKaraoke:{...require('../extension/karaoke.js'),createMonitor:async()=>{mixes++;throw Error('Must not monitor ordinary dubbing');}},
     requestAnimationFrame:fn=>setTimeout(fn,0),cancelAnimationFrame:clearTimeout,
     chrome:{runtime:{onMessage:{addListener(){}},async sendMessage(){requests++;throw Error('offline');}}}}});
@@ -510,6 +518,31 @@ test('ordinary dubbing records the microphone directly with the accompaniment se
   assert.equal(take.cueKey,cueKey(cue));assert.equal(take.start,0);assert.equal(take.end,1);
   assert.equal(requests,0);assert.equal(mixes,0);assert.equal(video.muted,false);
   assert.equal(nodes.get('record').disabled,false);
+  (await storage.ready).close();
+});
+
+test('singing a single line without backing also disables speech processing',async()=>{
+  const storage=createStorage(new IDBFactory());
+  const cue={start:0,end:1,text:'Sustained note'};
+  await storage.saveSession({videoId:'video',index:0,start:0,end:1,speed:'1',cues:[cue]});
+  const mic={getTracks:()=>[{stop(){}}]};
+  const video={duration:60,currentTime:0,muted:false,playbackRate:1,pause(){},async play(){this.currentTime=1;},addEventListener(){},removeEventListener(){}};
+  let requested;
+  class MediaRecorder {
+    static isTypeSupported(){return true;}
+    constructor(source){assert.equal(source,mic);this.state='inactive';this.mimeType='audio/webm';}
+    start(){this.state='recording';}
+    stop(){this.state='inactive';this.ondataavailable({data:new Blob(['vocal'])});queueMicrotask(()=>this.onstop());}
+  }
+  const {nodes}=await mount(storage,{video,globals:{MediaRecorder,
+    navigator:{mediaDevices:{async getUserMedia(constraints){requested=constraints;return mic;}}},
+    requestAnimationFrame:fn=>setTimeout(fn,0),cancelAnimationFrame:clearTimeout}});
+  nodes.get('activityMode').value='sing';nodes.get('activityMode').onchange();
+  nodes.get('useBacking').checked=false;
+  await nodes.get('record').onclick();
+  assert.deepEqual({...requested.audio},{echoCancellation:false,noiseSuppression:false,autoGainControl:false});
+  assert.equal(requested.video,false);
+  assert.equal((await storage.listTakes('video')).length,1);
   (await storage.ready).close();
 });
 

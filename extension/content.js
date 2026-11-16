@@ -633,7 +633,12 @@
     if(usesBacking() && !ready)throw Error('请先为当前片段生成伴奏，或关闭「逐句练唱时监听伴奏」。');
     deletedTake=null;$('undoDelete').hidden=true;
     mode = 'permission'; controls(); status('正在请求麦克风权限…');
-    const mic = await navigator.mediaDevices.getUserMedia({ audio: { echoCancellation: true }, video: false });
+    // Speech processing can pump or suppress sustained vocals while backing is
+    // playing. Singing uses headphone monitoring and requests unprocessed input.
+    const microphoneAudio = isSinging() || options.song
+      ? {echoCancellation: false, noiseSuppression: false, autoGainControl: false}
+      : {echoCancellation: true};
+    const mic = await navigator.mediaDevices.getUserMedia({audio: microphoneAudio, video: false});
     if (token !== generation) { mic.getTracks().forEach(t => t.stop()); return; }
     stream = mic;
     const monitor=ready ? await EchoKaraoke.createMonitor({blob:ready.blob,video:v,start:ready.start,speed:r.speed,volume:Number($('backingVolume').value)}) : null;
