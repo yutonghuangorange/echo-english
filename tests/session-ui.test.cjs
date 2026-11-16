@@ -887,3 +887,30 @@ test('practice library is separate, can resume a video, and requires confirmatio
   root.onkeydown({key:'Escape',preventDefault(){},stopPropagation(){}});assert.equal(nodes.get('libraryDialog').open,false);
   (await storage.ready).close();
 });
+
+test('echo cancellation is remembered per activity and applied to microphone requests',async()=>{
+  const storage=createStorage(new IDBFactory()),preferences=new Map(),requests=[];
+  const localStorage={getItem:key=>preferences.get(key) || null,setItem:(key,value)=>preferences.set(key,value)};
+  const globals={window:{localStorage,addEventListener(){},speechSynthesis:{cancel(){}}},
+    navigator:{mediaDevices:{async getUserMedia(options){requests.push(options);throw Error('Microphone unavailable in fixture');}}}};
+  const {nodes}=await mount(storage,{globals});
+  const checkbox=nodes.get('echoCancellation');
+  assert.equal(checkbox.checked,true);
+  checkbox.checked=false;checkbox.onchange();
+  await nodes.get('record').onclick();
+  assert.deepEqual({...requests.at(-1).audio},{echoCancellation:false});
+  nodes.get('activityMode').value='sing';nodes.get('activityMode').onchange();
+  assert.equal(checkbox.checked,false);
+  checkbox.checked=true;checkbox.onchange();
+  nodes.get('useBacking').checked=false;nodes.get('useBacking').onchange();
+  await nodes.get('record').onclick();
+  assert.deepEqual({...requests.at(-1).audio},{echoCancellation:true,noiseSuppression:false,autoGainControl:false});
+  nodes.get('activityMode').value='speech';nodes.get('activityMode').onchange();
+  assert.equal(checkbox.checked,false);
+  const refreshed=await mount(storage,{globals});
+  refreshed.nodes.get('activityMode').value='speech';refreshed.nodes.get('activityMode').onchange();
+  assert.equal(refreshed.nodes.get('echoCancellation').checked,false);
+  refreshed.nodes.get('activityMode').value='sing';refreshed.nodes.get('activityMode').onchange();
+  assert.equal(refreshed.nodes.get('echoCancellation').checked,true);
+  (await storage.ready).close();
+});

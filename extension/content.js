@@ -17,6 +17,24 @@
     onError: error => { stop(); status(error.message || String(error)); }
   });
   let activity = 'speech';
+  const microphonePreferenceKey='echo-microphone-v1';
+  const echoPreferences={speech:true,sing:false};
+  try {
+    const saved=JSON.parse(window.localStorage.getItem(microphonePreferenceKey));
+    for(const key of ['speech','sing'])if(typeof saved?.[key]==='boolean')echoPreferences[key]=saved[key];
+  } catch {} // Recording remains available when local preferences are blocked.
+  function microphoneConstraints(song=isSinging()) {
+    const echoCancellation=echoPreferences[song?'sing':'speech'];
+    // Keep suppression and automatic gain disabled for sustained singing,
+    // independently of the user's echo cancellation preference.
+    return song?{echoCancellation,noiseSuppression:false,autoGainControl:false}:{echoCancellation};
+  }
+  $('echoCancellation').onchange=()=>{
+    if(mode!=='idle'){$('echoCancellation').checked=echoPreferences[activity];return;}
+    echoPreferences[activity]=$('echoCancellation').checked;
+    try {window.localStorage.setItem(microphonePreferenceKey,JSON.stringify(echoPreferences));}
+    catch {status('回声消除已调整，但无法保存设置；刷新后将恢复默认值。');}
+  };
   let captionTracks=[],captionListRequest=0,captionSource='auto',captionSourceName='',loadedCaptionSource='';
   const captionClient=EchoCaptionTracks.createClient();
   let captionVideo = null, captionSignature = '', captionGhost = null;
@@ -80,6 +98,7 @@
   function usesBacking() {return isSinging() && $('useBacking').checked;}
   function renderActivity() {
     $('activityMode').value=activity;
+    $('echoCancellation').checked=echoPreferences[activity];
     const singing=isSinging();
     $('singActions').hidden=!singing;$('karaokeSettings').hidden=!singing;
     $('karaokeSettings').open=false;
@@ -228,7 +247,7 @@
     $('captionSetup').hidden=recording || cues.length>0;
     $('clipSettings').hidden=recording || (isSinging() && $('karaokeScope').value!=='clip');
     $('linePractice').hidden=isSinging() || recording;
-    for (const id of ['captionSource','refreshCaptionTracks','contentLanguage','captionLayout','activityMode','read','import','transcriptRead','transcriptImport','prepareBacking','karaokeScope','useBacking','backingVolume','prev','next','markStart','markEnd','original','speed','start','end','record','startEarlier','startLater','endEarlier','endLater','loop','loopCount','autoPractice','prepSeconds','autoNext']) $(id).disabled = busy;
+    for (const id of ['echoCancellation','captionSource','refreshCaptionTracks','contentLanguage','captionLayout','activityMode','read','import','transcriptRead','transcriptImport','prepareBacking','karaokeScope','useBacking','backingVolume','prev','next','markStart','markEnd','original','speed','start','end','record','startEarlier','startLater','endEarlier','endLater','loop','loopCount','autoPractice','prepSeconds','autoNext']) $(id).disabled = busy;
     for(const id of ['karaokeScope','useBacking'])$(id).disabled=busy || !isSinging();
     $('backingVolume').disabled=!isSinging() || !['idle','backing','recording'].includes(mode);
     $('backingVolumeValue').textContent=`${Math.round(Number($('backingVolume').value)*100)}%`;
@@ -733,11 +752,7 @@
     if(usesBacking() && !ready)throw Error('请先为当前片段生成伴奏，或关闭「录唱时播放伴奏」。');
     deletedTake=null;$('undoDelete').hidden=true;
     mode = 'permission'; controls(); status('正在请求麦克风权限…');
-    // Speech processing can pump or suppress sustained vocals while backing is
-    // playing. Singing uses headphone monitoring and requests unprocessed input.
-    const microphoneAudio = isSinging() || options.song
-      ? {echoCancellation: false, noiseSuppression: false, autoGainControl: false}
-      : {echoCancellation: true};
+    const microphoneAudio = microphoneConstraints(isSinging() || options.song);
     const mic = await navigator.mediaDevices.getUserMedia({audio: microphoneAudio, video: false});
     if (token !== generation) { mic.getTracks().forEach(t => t.stop()); return; }
     stream = mic;
@@ -1133,7 +1148,7 @@
     closeWord(); mode = 'practice'; controls(); status('首次练习：正在检查麦克风权限…');
     // Obtain permission before the listening/preparation stages so its dialog
     // cannot consume the learner's preparation time. Release immediately.
-    const mic = await navigator.mediaDevices.getUserMedia({audio:true});
+    const mic = await navigator.mediaDevices.getUserMedia({audio:microphoneConstraints(),video:false});
     mic.getTracks().forEach(track=>track.stop());
     if (token !== generation) return;
     await EchoPractice.runPractice({active:()=>token === generation,

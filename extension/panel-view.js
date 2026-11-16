@@ -89,8 +89,10 @@
             <p>建议戴耳机录唱。分离结果可能残留原唱。</p>
           </div></details>
         </div></details>
-        <details class="fold" id="practiceSettings"><summary>播放速度<span id="speedSummary">1×</span></summary><div class="fold-content">
+        <details class="fold" id="practiceSettings"><summary>播放与录音设置<span id="speedSummary">1×</span></summary><div class="fold-content">
           <div class="row"><label class="hint" for="speed">播放速度</label><select id="speed" aria-label="练习速度"><option value="0.75">0.75× 慢速</option><option value="1" selected>1× 原速</option><option value="1.25">1.25×</option></select></div>
+          <label class="hint"><input id="echoCancellation" type="checkbox" aria-describedby="echoCancellationHint"> 录音时启用回声消除</label>
+          <p class="hint" id="echoCancellationHint">外放时可尝试开启；戴耳机唱歌建议关闭，避免人声忽大忽小。配音与唱歌分别记忆，下次录音生效。</p>
         </div></details>
         <details class="fold" id="clipSettings"><summary>片段与边界<span id="clipSummary">0.0–5.0 秒</span></summary><div class="fold-content">
           <div class="row"><label><small>起点</small><input id="start" aria-label="片段起点（秒）" type="number" min="0" step="0.1" value="0"></label><label><small>终点</small><input id="end" aria-label="片段终点（秒）" type="number" min="0" step="0.1" value="5"></label></div>
