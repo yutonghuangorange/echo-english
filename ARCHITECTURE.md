@@ -14,6 +14,8 @@
 | `extension/karaoke.js` | 伴奏覆盖范围、服务状态格式化、耳机监听、演唱回放伴奏同步与 Web Audio 音量 |
 | `extension/audio-export.js` | 分段取舍、时间轴对齐、人声与伴奏混合、WAV 导出 |
 | `extension/storage.js` | IndexedDB 迁移、练习会话、录音版本与伴奏缓存 |
+| `extension/caption-tracks.js` | 字幕轨道元数据、后台定域请求、JSON3 时间轴解析和当前轨道查询客户端 |
+| `extension/caption-current.js` | MAIN 环境只读桥接，仅返回当前视频选中字幕的语言和轨道标识；不改变播放器 |
 | `extension/subtitles.js`、`transcript.js` | 字幕文件解析、YouTube 文字记录读取 |
 | `extension/languages.js`、`dictionary.js` | 语言显示策略、英语词典数据整理 |
 | `extension/audio-analysis.js` | 本机波形与低音量停顿分析 |
@@ -39,6 +41,12 @@
 - 独立人声演唱回放通过 `EchoKaraoke.followRecording()` 将伴奏绑定到录音时钟，扣除 `vocalOffset` 后定位，不修改人声播放位置。同步器负责伴奏漂移校正、缓冲、开关和清理；旧版混合录音不进入此流程。
 - 回听音量使用独立的 `replayVocalVolume`、`replayBackingVolume`，与录唱监听的 `backingVolume` 分开，按视频写入 session。`createAudioOutput()` 用 Web Audio 增益控制人声，停止和结束时幂等释放；不支持时回退到 HTML 音量并显示 100% 上限。
 - 下载混合与分段合成使用回听的独立人声、伴奏增益，在本机浏览器执行。旧版混合录音不能当作独立人声再次叠加伴奏。
+
+## 字幕轨道
+
+后台 `echo-captions` 只接受主框架当前 `/watch?v=…` 视频的 `list/read`，固定访问 YouTube player 及其返回的同视频 timedtext URL；不接受调用者传入 URL，不携带账号凭据，不读取 Cookie。元数据缓存 5 分钟，上限 24 个视频，轨道读取保留简繁体标识；`fmt` 使用替换而不是追加，避免已有 `srv3` 覆盖 `json3`。
+
+MAIN 只读桥接使用单次请求标识与当前视频校验，仅传回字幕身份；无网络或扩展特权。读取结果仍按 `generation` 和视频归属校验。字幕选择与已加载来源分开保存；失败、停止时不覆盖旧歌词；切换来源不删除录音。接口是 YouTube 非公开实现，需要持续维护；Android 客户端配置参考 youtube-transcript-api 上游。
 
 ## 验证
 

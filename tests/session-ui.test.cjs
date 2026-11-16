@@ -28,7 +28,7 @@ async function mount(storage, overrides = {}) {
   const doc={getElementById:()=>null,documentElement:new Element(),createElement:()=>new Element(),createTextNode:text=>({textContent:text}),addEventListener(name,fn){events.set(name,fn);},querySelector:selector=>selector==='video.html5-main-video'?(overrides.video || {duration:60}):null};
   const context={document:doc,location:{href:'https://www.youtube.com/watch?v=video',pathname:'/watch'},indexedDB:{},URL,Blob,console,setTimeout,clearTimeout,cancelAnimationFrame(){},requestAnimationFrame(){},crypto:globalThis.crypto,
     window:{addEventListener(){},speechSynthesis:{cancel(){}}},chrome:{runtime:{onMessage:{addListener(){}}}},
-    EchoPanelView:require('../extension/panel-view.js'),EchoTransport:require('../extension/transport.js'),EchoPlayback:require('../extension/playback.js'),
+    EchoCaptionTracks:require('../extension/caption-tracks.js'),EchoPanelView:require('../extension/panel-view.js'),EchoTransport:require('../extension/transport.js'),EchoPlayback:require('../extension/playback.js'),
     EchoAudioExport:require('../extension/audio-export.js'),EchoPanelSize:require('../extension/panel-size.js'),EchoLanguages:require('../extension/languages.js'),EchoKaraoke:require('../extension/karaoke.js'),EchoStorage:{...require('../extension/storage.js'),createStorage:()=>storage},EchoPractice:require('../extension/practice.js'),EchoDictionary:require('../extension/dictionary.js'),EchoSubtitles:require('../extension/subtitles.js'),EchoAudioAnalysis:require('../extension/audio-analysis.js')};
   Object.assign(context,overrides.globals || {});
   for (const name of ['EchoTransport','EchoPlayback']) {
@@ -800,5 +800,49 @@ test('whole-song validation remains beside the generation button without sending
   await nodes.get('prepareBacking').onclick();
   assert.equal(requests,0);assert.match(nodes.get('karaokeInfo').textContent,/超过 10 分钟/);assert.match(nodes.get('status').textContent,/超过 10 分钟/);
   assert.equal(nodes.get('prepareBacking').disabled,false);
+  (await storage.ready).close();
+});
+
+
+test('caption source selection loads the exact track, persists it and keeps recordings',async()=>{
+  const storage=createStorage(new IDBFactory()),requests=[];
+  await storage.saveTake({id:'saved',videoId:'video',cueKey:'old',start:0,end:2,speed:1,createdAt:1,blob:new Blob(['voice'])});
+  const tracks=[{id:'.zh-Hans',name:'中文（简体）',language:'zh-Hans'},{id:'.en',name:'English',language:'en'}];
+  const {nodes}=await mount(storage,{globals:{chrome:{runtime:{onMessage:{addListener(){}},async sendMessage(message){requests.push(message);return message.action==='list'?{tracks}:{cues:[{start:43,end:49,text:'测试中文字幕'}]};}}}}});
+  nodes.get('tab-transcript').onclick();
+  await nodes.get('refreshCaptionTracks').onclick();assert.equal(nodes.get('captionSource').children.length,3);
+  nodes.get('captionSource').value='.zh-Hans';nodes.get('captionSource').onchange();
+  for(let i=0;i<20 && !requests.some(r=>r.action==='read');i++)await new Promise(r=>setTimeout(r,2));
+  await new Promise(r=>setTimeout(r,5));
+  assert.equal(requests.find(r=>r.action==='read').trackId,'.zh-Hans');
+  assert.match(nodes.get('captionSourceInfo').textContent,/中文/);assert.equal(nodes.get('position').textContent,'1 / 1');
+  assert.equal((await storage.listTakes('video')).length,1);
+  const saved=await storage.getSession('video');assert.equal(nodes.get('page-transcript').hidden,false);assert.equal(saved.captionSource,'.zh-Hans');assert.equal(saved.cues[0].text,'测试中文字幕');
+  const restored=await mount(storage);assert.equal(restored.nodes.get('captionSource').value,'.zh-Hans');
+  (await storage.ready).close();
+});
+test('caption failures preserve existing cues and never silently fall back to English',async()=>{
+  const storage=createStorage(new IDBFactory());let fallback=0;
+  await storage.saveSession({videoId:'video',index:0,start:0,end:2,speed:'1',captionSource:'.zh-Hant',captionSourceName:'中文繁体',cues:[{start:0,end:2,text:'保留原歌词'}]});
+  const {nodes}=await mount(storage,{globals:{EchoTranscript:{async read(){fallback++;}},chrome:{runtime:{onMessage:{addListener(){}},async sendMessage(){return {error:'字幕请求失败'};}}}}});
+  await nodes.get('read').onclick();assert.equal(fallback,0);assert.match(nodes.get('status').textContent,/字幕请求失败/);
+  assert.equal(nodes.get('position').textContent,'1 / 1');
+  assert.equal((await storage.getSession('video')).cues[0].text,'保留原歌词');
+  (await storage.ready).close();
+});
+test('automatic caption reading follows the player selected track instead of the English transcript',async()=>{
+  const storage=createStorage(new IDBFactory());let readId;
+  const {nodes}=await mount(storage,{globals:{EchoCaptionTracks:{async currentTrack(){return {language:'zh-Hant',generated:false};}},chrome:{runtime:{onMessage:{addListener(){}},async sendMessage(m){if(m.action==='list')return {tracks:[{id:'.en',language:'en',name:'English'},{id:'.zh-Hant',language:'zh-Hant',name:'中文繁体',generated:false}]};readId=m.trackId;return {cues:[{start:0,end:2,text:'測試字幕'}]};}}}}});
+  await nodes.get('read').onclick();assert.equal(readId,'.zh-Hant');assert.match(nodes.get('status').textContent,/中文.*繁体/);
+  (await storage.ready).close();
+});
+
+test('stopping a pending caption request prevents late subtitle replacement',async()=>{
+  const storage=createStorage(new IDBFactory());let release;
+  await storage.saveSession({videoId:'video',index:0,start:0,end:2,speed:'1',captionSource:'.en',cues:[{start:0,end:2,text:'Original saved caption'}]});
+  const {nodes}=await mount(storage,{globals:{chrome:{runtime:{onMessage:{addListener(){}},async sendMessage(m){if(m.action==='list')return {tracks:[{id:'.en',name:'English',language:'en'}]};return new Promise(resolve=>release=resolve);}}}}});
+  const reading=nodes.get('read').onclick();for(let i=0;i<20 && !release;i++)await Promise.resolve();
+  assert.equal(typeof release,'function');nodes.get('stop').onclick();release({cues:[{start:5,end:6,text:'Late result'}]});await reading;
+  assert.equal((await storage.getSession('video')).cues[0].text,'Original saved caption');assert.equal(nodes.get('read').disabled,false);
   (await storage.ready).close();
 });

@@ -17,6 +17,7 @@
     onError: error => { stop(); status(error.message || String(error)); }
   });
   let activity = 'speech';
+  let captionTracks=[],captionListRequest=0,captionSource='auto',captionSourceName='',loadedCaptionSource='';
   let captionVideo = null, captionSignature = '', captionGhost = null;
   const captionEvents = ['timeupdate','seeking','seeked','play','pause','ended'];
   let savedBackings = [], activeKaraokeJob = null, recordMonitor = null, songTake = null;
@@ -218,7 +219,7 @@
     $('captionSetup').hidden=recording || cues.length>0;
     $('clipSettings').hidden=recording || (isSinging() && $('karaokeScope').value!=='clip');
     $('linePractice').hidden=isSinging() || recording;
-    for (const id of ['contentLanguage','captionLayout','activityMode','read','import','transcriptRead','transcriptImport','prepareBacking','karaokeScope','useBacking','backingVolume','prev','next','markStart','markEnd','original','speed','start','end','record','startEarlier','startLater','endEarlier','endLater','loop','loopCount','autoPractice','prepSeconds','autoNext']) $(id).disabled = busy;
+    for (const id of ['captionSource','refreshCaptionTracks','contentLanguage','captionLayout','activityMode','read','import','transcriptRead','transcriptImport','prepareBacking','karaokeScope','useBacking','backingVolume','prev','next','markStart','markEnd','original','speed','start','end','record','startEarlier','startLater','endEarlier','endLater','loop','loopCount','autoPractice','prepSeconds','autoNext']) $(id).disabled = busy;
     for(const id of ['karaokeScope','useBacking'])$(id).disabled=busy || !isSinging();
     $('backingVolume').disabled=!isSinging() || !['idle','backing','recording'].includes(mode);
     $('backingVolumeValue').textContent=`${Math.round(Number($('backingVolume').value)*100)}%`;
@@ -341,7 +342,7 @@
     if (restoring || !videoId) return;
     const start = Number($('start').value), end = Number($('end').value);
     if (!Number.isFinite(start) || !Number.isFinite(end) || start < 0 || end <= start) return;
-    const session = {replayVocalVolume:replayMix().vocal,replayBackingVolume:replayMix().backing,replayWithBacking:$('replayWithBacking').checked,backingVolume:Number($('backingVolume').value),contentLanguage:$('contentLanguage').value,captionLayout:$('captionLayout').value,videoId,cues:cues.map(c=>({...c})),index,start,end,speed:$('speed').value,showChinese:$('showChinese').checked,hideText:$('hideText').checked,followCaptions:$('followCaptions').checked,karaokeScope:$('karaokeScope').value,selectedTakeId:take?.id,updatedAt:Date.now()};
+    const session = {captionSource,captionSourceName,loadedCaptionSource,replayVocalVolume:replayMix().vocal,replayBackingVolume:replayMix().backing,replayWithBacking:$('replayWithBacking').checked,backingVolume:Number($('backingVolume').value),contentLanguage:$('contentLanguage').value,captionLayout:$('captionLayout').value,videoId,cues:cues.map(c=>({...c})),index,start,end,speed:$('speed').value,showChinese:$('showChinese').checked,hideText:$('hideText').checked,followCaptions:$('followCaptions').checked,karaokeScope:$('karaokeScope').value,selectedTakeId:take?.id,updatedAt:Date.now()};
     void storage.saveSession(session).catch(()=>{
       if (!progressWarning && session.videoId === videoId) { progressWarning=true; status('练习位置未能保存，请检查本地存储空间。录音仍可下载。'); }
     });
@@ -422,6 +423,7 @@
       if(id!==videoId || token!==generation) return;
       savedBackings=backings;videoHistory=values;setSongTake(values.find(t=>t.kind==='song')); mode='idle';
       if(session) {
+        captionSource=typeof session.captionSource==='string'?session.captionSource:'auto';captionSourceName=session.captionSourceName || '';loadedCaptionSource=session.loadedCaptionSource || '';renderCaptionSources();
         $('contentLanguage').value=EchoLanguages.validLanguage(session.contentLanguage)?session.contentLanguage:'auto';
         // Older sessions intentionally used English/Chinese splitting. Keep
         // that preference only when their text is confidently English.
@@ -1153,27 +1155,76 @@
       const next=EchoSubtitles.parse(await file.text());
       if(token!==generation || id!==currentId())return;
       if(!next.length)throw Error('未找到有效字幕，请使用 SRT 或 VTT 文件。');
-      mode='idle';displayCues(next);status(`已导入 ${next.length} 句台词。`);
+      mode='idle';loadedCaptionSource='导入的字幕文件';renderCaptionSources();displayCues(next);status(`已导入 ${next.length} 句台词。`);
     }finally{if(token===generation){mode='idle';controls();}}
   });
+  function captionTrackLabel(track){return ({'zh-Hans':'中文（简体）','zh-Hant':'中文（繁体）',en:'英语',ja:'日语',ko:'韩语'})[track.language] || track.name;}
+  function renderCaptionSources(){
+    const options=[['auto','跟随 YouTube 当前字幕'],...captionTracks.map(t=>[t.id,`${captionTrackLabel(t)}${t.generated?' · 自动生成':''}`])];
+    if(captionSource!=='auto' && !captionTracks.some(t=>t.id===captionSource))options.push([captionSource,captionSourceName || '上次选择的字幕（待刷新）']);
+    $('captionSource').replaceChildren(...options.map(([value,text])=>{const option=document.createElement('option');option.value=value;option.textContent=text;return option;}));
+    $('captionSource').value=captionSource;
+    $('captionSourceInfo').textContent=loadedCaptionSource?`已加载：${loadedCaptionSource}。切换来源后会加载新字幕，录音仍保留。`:'可刷新语言后选择字幕。内容语言只影响文本处理。';
+  }
+  async function captionsRequest(action,extra={}){
+    if(!chrome.runtime.sendMessage)throw Error('请重新加载扩展并刷新视频页后读取字幕。');
+    const result=await chrome.runtime.sendMessage({type:'echo-captions',action,videoId,...extra});
+    if(result?.error)throw Error(result.error);
+    if(!result)throw Error('字幕服务未响应，请重新加载扩展并刷新视频。');
+    return result;
+  }
+  async function refreshCaptionTracks(refresh=false){
+    const id=videoId,request=++captionListRequest;
+    const result=await captionsRequest('list',{refresh});
+    if(id!==videoId || request!==captionListRequest)return null;
+    captionTracks=result.tracks || [];renderCaptionSources();return captionTracks;
+  }
+  $('refreshCaptionTracks').onclick=guarded(async()=>{
+    if(mode!=='idle')return;
+    const token=++generation;mode='reading';controls();status('正在查找此视频的字幕语言…');
+    try{const tracks=await refreshCaptionTracks(true);if(token===generation && tracks)status(tracks.length?`找到 ${tracks.length} 个字幕轨道，请在“字幕来源”中选择。`:'此视频未返回可用字幕轨道，可尝试读取当前文字记录或导入字幕。');}
+    finally{if(token===generation){mode='idle';controls();}}
+  });
+  $('captionSettings').ontoggle=()=>{if($('captionSettings').open && !captionTracks.length && mode==='idle')void $('refreshCaptionTracks').onclick();};
+  $('captionSource').onchange=()=>{
+    if(mode!=='idle')return;
+    captionSource=$('captionSource').value;
+    const selected=captionTracks.find(t=>t.id===captionSource);captionSourceName=selected?captionTrackLabel(selected):'';
+    saveProgress();void $('read').onclick();
+  };
   $('read').onclick = $('transcriptRead').onclick = guarded(async () => {
     if(mode!=='idle')return;
-    const v = video(), token = ++generation, id = videoId;
-    mode = 'reading'; controls(); status('正在读取视频台词…');
-    try {
-      const next = await EchoTranscript.read({
-        doc: document,
-        duration: v.duration,
-        cancelled: () => token !== generation || id !== currentId(),
-        progress: status
-      });
-      if (!next || token !== generation || id !== currentId()) return;
-      mode = 'idle';
-      displayCues(next);
-      status(`已读取 ${next.length} 句台词。当前加载内容可能不完整，末句终点为估算值，可手动调整。`);
-    } finally {
-      if (token === generation) { mode = 'idle'; controls(); }
-    }
+    const v=video(),token=++generation,id=videoId,source=captionSource,page=currentPage;
+    const cancelled=()=>token!==generation || id!==currentId();
+    mode='reading';controls();status('正在读取视频字幕…');
+    try{
+      let track=null,next,sourceLabel='YouTube 当前文字记录';
+      if(source==='auto'){
+        const current=await EchoCaptionTracks.currentTrack(document,id);
+        if(cancelled())return;
+        if(current){
+          const tracks=await refreshCaptionTracks();if(cancelled())return;
+          track=tracks?.find(t=>t.id===current.id) || tracks?.find(t=>t.language===current.language && t.generated===current.generated);
+          if(!track)throw Error('未找到播放器当前选择的字幕轨道，请刷新语言后手动选择。');
+        }
+      }else{
+        const tracks=await refreshCaptionTracks();if(cancelled())return;
+        track=tracks?.find(t=>t.id===source);
+        if(!track)throw Error('所选字幕已不可用，请刷新语言后重新选择；原有歌词仍保留。');
+      }
+      if(track){
+        status(`正在读取 ${captionTrackLabel(track)} 字幕…`);
+        const result=await captionsRequest('read',{trackId:track.id,duration:v.duration});
+        if(cancelled())return;
+        next=result.cues;sourceLabel=captionTrackLabel(track)+(track.generated?' · 自动生成':'');
+        if(!next?.length)throw Error('所选轨道没有可用字幕，原有歌词仍保留。');
+      }else{
+        next=await EchoTranscript.read({doc:document,duration:v.duration,cancelled,progress:status});
+      }
+      if(!next || cancelled())return;
+      mode='idle';loadedCaptionSource=sourceLabel;renderCaptionSources();displayCues(next);showPage(page);
+      status(`已读取 ${next.length} 句 · ${sourceLabel}。${track?'':'末句终点为估算值，可手动调整。'}`);
+    }finally{if(token===generation){mode='idle';controls();}}
   });
   $('search').onclick = () => { window.open(`https://www.youtube.com/results?search_query=${encodeURIComponent($('query').value || ({'zh':'中文 歌词','ja':'日本語 字幕 歌詞','ko':'한국어 자막 가사','en':'english conversation subtitles'}[contentLanguage()] || 'subtitles lyrics'))}`, '_blank', 'noopener'); };
   chrome.runtime.onMessage.addListener(message => { if (message.type === 'echo-toggle') { const open = host.style.display === 'none'; host.style.display = open ? 'block' : 'none'; if (!open) stop(); } });
@@ -1184,6 +1235,7 @@
     restoringBacking = false;
     karaokeIssue = '';
     activity = 'speech';
+    captionTracks=[];captionListRequest++;captionSource='auto';captionSourceName='';loadedCaptionSource='';renderCaptionSources();
     $('contentLanguage').value = 'auto';
     $('captionLayout').value = 'original';
     $('hideText').checked=false;$('showChinese').checked=false;$('followCaptions').checked=true;
