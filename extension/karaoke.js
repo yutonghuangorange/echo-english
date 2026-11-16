@@ -14,8 +14,7 @@
     const bytes=Uint8Array.from(atob(value.audio),c=>c.charCodeAt(0));
     return new Blob([bytes],{type:value.mime});
   }
-  // Mix only the accompaniment into speakers, but both microphone and music into
-  // the recording. A saved take is self-contained and replays without the service.
+  // Accompaniment is monitored only; the recorder receives the microphone directly.
   function setGain(gain, volume) {gain.gain.value=Number.isFinite(volume)?Math.max(0,Math.min(2,volume)):1;}
   async function createBackingOutput(music, volume=1, env=root) {
     const context=new env.AudioContext();
@@ -26,7 +25,7 @@
       return {setVolume:value=>setGain(gain,value),dispose:()=>{void context.close().catch(()=>{});}};
     }catch(error){await context.close().catch(()=>{});throw error;}
   }
-  async function createMix({blob,mic,video,start,speed,volume=1}, env=root) {
+  async function createMonitor({blob,video,start,speed,volume=1}, env=root) {
     const context=new env.AudioContext();
     const url=env.URL.createObjectURL(blob), music=new env.Audio(url);
     let disposed=false;
@@ -36,24 +35,21 @@
     };
     try {
       music.preload='auto';music.playbackRate=speed;music.preservesPitch=true;
-      const destination=context.createMediaStreamDestination();
       const backing=context.createMediaElementSource(music), gain=context.createGain();setGain(gain,volume);
-      backing.connect(gain);gain.connect(context.destination);gain.connect(destination);
-      const voice=context.createMediaStreamSource(mic), voiceGain=context.createGain();voiceGain.gain.value=0.85;
-      voice.connect(voiceGain);voiceGain.connect(destination);
+      backing.connect(gain);gain.connect(context.destination);
       const ready=new Promise((resolve,reject)=>{
         const timeout=env.setTimeout(()=>reject(Error('伴奏加载超时，请重新生成。')),10000);
         music.oncanplay=()=>{env.clearTimeout(timeout);resolve();};
         music.onerror=()=>{env.clearTimeout(timeout);reject(Error('伴奏无法解码，请重新生成。'));};
       });
       music.load();await Promise.all([ready,context.resume()]);
-      return {stream:destination.stream,setVolume:value=>setGain(gain,value),
+      return {setVolume:value=>setGain(gain,value),
         async sync(position=video.currentTime){if(disposed)return;music.currentTime=Math.max(0,position-start);await music.play();},
         async resume(){if(!disposed)await music.play();},
         position:()=>start+music.currentTime,
         pause(){music.pause();},dispose:cleanup};
     }catch(error){cleanup();throw error;}
   }
-  const api={key,covers,progressText,blobFromBase64,createMix,createBackingOutput};
+  const api={key,covers,progressText,blobFromBase64,createMonitor,createBackingOutput};
   if(typeof module!=='undefined')module.exports=api;else root.EchoKaraoke=api;
 })(globalThis);

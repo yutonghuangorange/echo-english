@@ -1,7 +1,7 @@
 const {test}=require('node:test');
 const assert=require('node:assert/strict');
 const {request}=require('../extension/karaoke-relay.js');
-const {key,blobFromBase64,createMix}=require('../extension/karaoke.js');
+const {key,blobFromBase64,createMonitor}=require('../extension/karaoke.js');
 const sender={tab:{url:'https://www.youtube.com/watch?v=jNQXAC9IVRw'}};
 const id='a'.repeat(32);
 
@@ -48,15 +48,15 @@ test('relay reports offline and worker failures and transfers audio bytes withou
   assert.notEqual(key('video',{start:0,end:1}),key('video',{start:0,end:1.2}));
 });
 
-test('mix sends accompaniment to headphones and recording, while microphone is never monitored',async()=>{
+test('monitor routes only accompaniment to speakers and does not create a recording stream',async()=>{
   const edges=[],events=[];
   const node=name=>({connect(other){edges.push([name,other.name]);},name});
   let gain=0, music;
   class Context {
     destination=node('speakers');
-    createMediaStreamDestination(){return {...node('recording'),stream:'mixed-stream'};}
+    createMediaStreamDestination(){assert.fail('monitor must not produce a mixed recording');}
     createMediaElementSource(){return node('music');}
-    createMediaStreamSource(mic){assert.equal(mic,'mic-stream');return node('mic');}
+    createMediaStreamSource(){assert.fail('microphone must remain independent');}
     createGain(){return {...node('gain'+(++gain)),gain:{value:1}};}
     async resume(){events.push('resume');}async close(){events.push('close');}
   }
@@ -66,9 +66,9 @@ test('mix sends accompaniment to headphones and recording, while microphone is n
   }
   const env={AudioContext:Context,Audio,URL:{createObjectURL:()=> 'blob:music',revokeObjectURL:()=>events.push('revoke')},setTimeout,clearTimeout};
   const video={currentTime:12};
-  const mix=await createMix({blob:new Blob(),mic:'mic-stream',video,start:10,speed:0.75},env);
-  assert.equal(mix.stream,'mixed-stream');
-  assert.deepEqual(edges,[['music','gain1'],['gain1','speakers'],['gain1','recording'],['mic','gain2'],['gain2','recording']]);
+  const mix=await createMonitor({blob:new Blob(),video,start:10,speed:0.75},env);
+  assert.equal(mix.stream,undefined);
+  assert.deepEqual(edges,[['music','gain1'],['gain1','speakers']]);
   await mix.sync();assert.equal(music.currentTime,2);assert.equal(music.playbackRate,0.75);assert.equal(music.preservesPitch,true);
   video.currentTime=99;await mix.sync(10);assert.equal(music.currentTime,0);
   await mix.resume();assert.equal(music.currentTime,0);assert.equal(mix.position(),10);

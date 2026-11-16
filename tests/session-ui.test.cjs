@@ -8,17 +8,18 @@ const {createStorage,cueKey}=require('../extension/storage.js');
 // Lightweight content-script DOM harness: run actual UI handlers against a real
 // IndexedDB implementation, without requesting microphone or YouTube access.
 async function mount(storage, overrides = {}) {
-  const nodes=new Map(),created=[];
+  const nodes=new Map(),created=[],downloads=[];
   class Element {
     constructor(){this.children=[];this.hidden=false;this.value='';this.style={};this.attrs={};this.classList={toggle:()=>{}};created.push(this);}
     set innerHTML(html){this.html=html;for(const match of html.matchAll(/\bid="([^"]+)"/g))nodes.set(match[1],new Element());
       nodes.get('followCaptions').checked=true;
-      for(const [id,value] of Object.entries({start:'0',end:'5',speed:'1',loopCount:'3',prepSeconds:'3',backingVolume:'1',karaokeScope:'whole',activityMode:'speech',contentLanguage:'auto',captionLayout:'original'}))nodes.get(id).value=value;}
+      for(const [id,value] of Object.entries({start:'0',end:'5',speed:'1',loopCount:'3',prepSeconds:'3',backingVolume:'1',karaokeScope:'whole',assemblyType:'vocal',activityMode:'speech',contentLanguage:'auto',captionLayout:'original'}))nodes.get(id).value=value;}
     get innerHTML(){return this.html;}
     setAttribute(k,v){this.attrs[k]=v;} getAttribute(k){return this.attrs[k];} removeAttribute(k){delete this.attrs[k];if(k==='value')this.value=0;}
     append(...children){this.children.push(...children);} replaceChildren(...children){this.children=children;}
     attachShadow(){return root;} focus(){} getContext(){return {clearRect(){},fillRect(){},beginPath(){},moveTo(){},lineTo(){},stroke(){}};}
-    click(){return this.onclick?.();}
+    click(){if(this.download)downloads.push(this);return this.onclick?.();}
+    remove(){}
   }
   const root=new Element();root.getElementById=id=>nodes.get(id);
   root.querySelector=()=>({scrollTop:0});root.querySelectorAll=selector=>created.filter(n=>n.className===selector.slice(1));
@@ -26,7 +27,7 @@ async function mount(storage, overrides = {}) {
   const doc={getElementById:()=>null,documentElement:new Element(),createElement:()=>new Element(),createTextNode:text=>({textContent:text}),addEventListener(name,fn){events.set(name,fn);},querySelector:selector=>selector==='video.html5-main-video'?(overrides.video || {duration:60}):null};
   const context={document:doc,location:{href:'https://www.youtube.com/watch?v=video',pathname:'/watch'},indexedDB:{},URL,Blob,console,setTimeout,clearTimeout,cancelAnimationFrame(){},requestAnimationFrame(){},crypto:globalThis.crypto,
     window:{addEventListener(){},speechSynthesis:{cancel(){}}},chrome:{runtime:{onMessage:{addListener(){}}}},
-    EchoPanelSize:require('../extension/panel-size.js'),EchoLanguages:require('../extension/languages.js'),EchoKaraoke:require('../extension/karaoke.js'),EchoStorage:{...require('../extension/storage.js'),createStorage:()=>storage},EchoPractice:require('../extension/practice.js'),EchoDictionary:require('../extension/dictionary.js'),EchoSubtitles:require('../extension/subtitles.js'),EchoAudioAnalysis:require('../extension/audio-analysis.js')};
+    EchoAudioExport:require('../extension/audio-export.js'),EchoPanelSize:require('../extension/panel-size.js'),EchoLanguages:require('../extension/languages.js'),EchoKaraoke:require('../extension/karaoke.js'),EchoStorage:{...require('../extension/storage.js'),createStorage:()=>storage},EchoPractice:require('../extension/practice.js'),EchoDictionary:require('../extension/dictionary.js'),EchoSubtitles:require('../extension/subtitles.js'),EchoAudioAnalysis:require('../extension/audio-analysis.js')};
   Object.assign(context,overrides.globals || {});
   if(context.chrome.runtime.sendMessage){
     const send=context.chrome.runtime.sendMessage;
@@ -34,7 +35,7 @@ async function mount(storage, overrides = {}) {
   }
   vm.runInNewContext(fs.readFileSync('extension/content.js','utf8'),context);
   for(let i=0;i<20 && nodes.get('read').disabled;i++)await new Promise(r=>setTimeout(r,2));
-  return {nodes,root,events};
+  return {nodes,root,events,downloads};
 }
 test('singing detects offline service and retry collapses setup help after connection',async()=>{
   const storage=createStorage(new IDBFactory());let online=false,checks=0,starts=0;
@@ -188,6 +189,33 @@ test('song replay starts at audio opening and buffering moves video instead of s
   sound.elapsed=0.6;listeners.get('waiting')();video.currentTime=4;listeners.get('playing')();
   assert.equal(video.currentTime,0.6);assert.deepEqual(audioSeeks,[]);
   sound.onended();await replaying;(await storage.ready).close();
+});
+
+test('dry vocal downloads can be mixed per take or assembled as a full song without starting recording',async()=>{
+  const storage=createStorage(new IDBFactory()),exports=[];
+  await storage.saveTake({id:'vocal',kind:'song',capture:'vocal',videoId:'video',cueKey:'song:manual',start:5,end:10,speed:1,createdAt:1,blob:new Blob(['voice'])});
+  await storage.saveBacking({key:'backing',videoId:'video',start:0,end:20,createdAt:1,blob:new Blob(['music'])});
+  const {nodes,downloads}=await mount(storage,{video:{duration:20},globals:{setTimeout:(fn,ms)=>setTimeout(fn,ms===30000?0:ms),
+    EchoAudioExport:{...require('../extension/audio-export.js'),async render(options){exports.push(options);return {blob:new Blob(['wave']),gaps:[]};}}}});
+  nodes.get('activityMode').value='sing';nodes.get('activityMode').onchange();
+  assert.equal(nodes.get('songMixDownload').hidden,false);await nodes.get('songMixDownload').onclick();
+  assert.equal(exports[0].origin,5);assert.equal(exports[0].duration,5);assert.equal(exports[0].backing.key,'backing');
+  nodes.get('assemblyType').value='vocal';await nodes.get('assembleSong').onclick();
+  assert.equal(exports[1].origin,0);assert.equal(exports[1].duration,20);assert.equal(exports[1].backing,null);
+  nodes.get('assemblyType').value='mixed';await nodes.get('assembleSong').onclick();
+  assert.equal(exports[2].backing.key,'backing');assert.equal(downloads.length,3);
+  assert.match(downloads[0].download,/vocal-and-backing.wav$/);assert.match(downloads[1].download,/vocals.wav$/);
+  (await storage.ready).close();
+});
+
+test('legacy mixed songs remain downloadable but never offer extraction of a nonexistent vocal track',async()=>{
+  const storage=createStorage(new IDBFactory());
+  await storage.saveTake({id:'legacy',kind:'song',withBacking:true,videoId:'video',cueKey:'song:manual',start:0,end:10,speed:1,createdAt:1,blob:new Blob(['mixed'])});
+  const {nodes}=await mount(storage);
+  assert.match(nodes.get('songDownload').textContent,/旧版混合/);assert.equal(nodes.get('songMixDownload').hidden,true);
+  assert.equal(nodes.get('takeMixDownload').hidden,true);
+  await nodes.get('assembleSong').onclick();assert.match(nodes.get('status').textContent,/旧版混合/);
+  (await storage.ready).close();
 });
 
 test('searching lyrics preserves original cue selection and reveals optional line practice',async()=>{
@@ -348,13 +376,13 @@ test('whole-song recording uses the full duration and offers replay, retry and d
   const mic={getTracks:()=>[{stop(){events.push('mic-stop');}}]};
   class MediaRecorder {
     static isTypeSupported(){return true;}
-    constructor(stream){assert.equal(stream,mixedStream);this.state='inactive';this.mimeType='audio/webm';}
+    constructor(stream){assert.equal(stream,mic);this.state='inactive';this.mimeType='audio/webm';}
     start(){this.state='recording';events.push('recorder-start');}
     stop(){this.state='inactive';this.ondataavailable({data:new Blob(['mixed-audio'])});queueMicrotask(()=>this.onstop());}
   }
   const mix={stream:mixedStream,async sync(position){assert.equal(position,0);events.push('sync');},pause(){events.push('pause');},dispose(){events.push('dispose');}};
   const {nodes}=await mount(storage,{video,globals:{MediaRecorder,navigator:{mediaDevices:{getUserMedia:async()=>mic}},
-    EchoKaraoke:{...require('../extension/karaoke.js'),createMix:async options=>{assert.equal(options.mic,mic);return mix;}},
+    EchoKaraoke:{...require('../extension/karaoke.js'),createMonitor:async options=>{assert.equal(options.video,video);return mix;}},
     requestAnimationFrame:fn=>setTimeout(fn,0),cancelAnimationFrame:clearTimeout,
     chrome:{runtime:{onMessage:{addListener(){}},async sendMessage(message){return message.action==='audio'?{audio:'UklGRg==',mime:'audio/wav'}:{id:'c'.repeat(32),state:'ready'};}}}}});
   nodes.get('activityMode').value='sing';nodes.get('activityMode').onchange();
@@ -371,10 +399,10 @@ test('whole-song recording uses the full duration and offers replay, retry and d
   assert.equal(nodes.get('reuseSongRange').hidden,false);nodes.get('reuseSongRange').onclick();
   assert.equal(nodes.get('start').value,0);assert.equal(nodes.get('end').value,180);
   assert.equal(nodes.get('recordSong').textContent,'● 再录一次');
-  assert.equal(takes[0].withBacking,true);assert.equal(await takes[0].blob.text(),'mixed-audio');
+  assert.equal(takes[0].withBacking,undefined);assert.equal(takes[0].capture,'vocal');assert.equal(await takes[0].blob.text(),'mixed-audio');
   assert.deepEqual(events.filter(value=>['recorder-start','sync','video-play'].includes(value)),['recorder-start','sync','video-play']);
   assert(events.includes('dispose'));assert(events.includes('mic-stop'));assert.equal(video.muted,false);
-  assert.match(nodes.get('historyInfo').textContent,/含伴奏/);
+  assert.match(nodes.get('historyInfo').textContent,/独立人声/);
   assert.equal(nodes.get('record').disabled,false);
   (await storage.ready).close();
 });
@@ -422,7 +450,7 @@ test('ordinary dubbing records the microphone directly with the accompaniment se
     stop(){this.state='inactive';this.ondataavailable({data:new Blob(['voice-only'])});queueMicrotask(()=>this.onstop());}
   }
   const {nodes}=await mount(storage,{video,globals:{MediaRecorder,navigator:{mediaDevices:{getUserMedia:async()=>mic}},
-    EchoKaraoke:{...require('../extension/karaoke.js'),createMix:async()=>{mixes++;throw Error('Must not mix ordinary dubbing');}},
+    EchoKaraoke:{...require('../extension/karaoke.js'),createMonitor:async()=>{mixes++;throw Error('Must not monitor ordinary dubbing');}},
     requestAnimationFrame:fn=>setTimeout(fn,0),cancelAnimationFrame:clearTimeout,
     chrome:{runtime:{onMessage:{addListener(){}},async sendMessage(){requests++;throw Error('offline');}}}}});
   assert.equal(nodes.get('activityMode').value,'speech');assert.equal(nodes.get('karaokeSettings').hidden,true);

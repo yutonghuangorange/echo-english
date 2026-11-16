@@ -29,15 +29,15 @@
     <nav class="tabs" role="tablist" aria-label="练习面板"><button id="tab-practice" role="tab" aria-selected="true" aria-controls="page-practice" tabindex="0">练习</button><button id="tab-transcript" role="tab" aria-selected="false" aria-controls="page-transcript" tabindex="-1">台词</button><button id="tab-recordings" role="tab" aria-selected="false" aria-controls="page-recordings" tabindex="-1">录音</button></nav>
     <div class="pages">
       <section id="page-practice" role="tabpanel" aria-labelledby="tab-practice">
-        <select id="activityMode" aria-label="练习模式"><option value="speech" selected>说对白 · 配音跟读</option><option value="sing">唱歌曲 · 保留伴奏</option></select>
+        <select id="activityMode" aria-label="练习模式"><option value="speech" selected>说对白 · 配音跟读</option><option value="sing">唱歌曲 · 伴奏监听</option></select>
         <div id="singActions" hidden>
           <div class="row"><label class="hint" for="karaokeScope">录唱范围</label><select id="karaokeScope" aria-label="唱歌范围"><option value="whole" selected>整首歌曲</option><option value="clip">当前练习片段</option></select></div>
-          <div class="main-actions"><button id="songOriginal">▶ 听原曲</button><button id="songReplay" disabled>▷ 回听演唱</button><button class="primary" id="recordSong">● 开始整首录唱</button></div>
+          <div class="main-actions"><button id="songOriginal">▶ 听原曲</button><button id="songReplay" disabled>▷ 回听人声</button><button class="primary" id="recordSong">● 开始整首录唱</button></div>
           <div class="row"><span class="hint" id="songReadiness" role="status">先准备伴奏，再开始录唱</span><button id="openBacking">准备伴奏 →</button></div>
           <div id="karaokeNotice" role="alert" style="padding:10px 12px;border:1px solid #d8aa69;border-radius:10px;color:#ffe0ac;font-size:13px;overflow-wrap:anywhere" hidden></div>
           <p class="hint" id="karaokeInfo" role="status"></p>
           <progress id="karaokeProgress" max="100" aria-label="去原唱阶段进度" style="width:100%;accent-color:#b3eedb" hidden></progress>
-          <div id="songResult" hidden><small id="songInfo"></small><div class="row"><a id="songDownload">↓ 下载演唱</a></div></div>
+          <div id="songResult" hidden><small id="songInfo"></small><details class="fold"><summary>下载演唱</summary><div class="row"><a id="songDownload">↓ 仅人声</a><button id="songMixDownload">人声＋伴奏</button></div><small>原始人声为 WebM；合成 WAV 暂支持 1× 录唱。</small></details></div>
         </div>
         <div class="cue-card"><div class="cue-nav"><span class="eyebrow" id="cueHeading">当前台词</span><span><button id="prev" aria-label="上一句">‹</button><span aria-label="当前练习句">练习 <span id="position">手动片段</span></span><button id="next" aria-label="下一句">›</button></span></div>
           <div id="captionPrevious" class="caption-context" aria-label="上一句" hidden></div><div id="captionPhase" class="caption-phase"></div>
@@ -52,7 +52,7 @@
         </div></details>
         <div id="wordcard" class="wordcard" hidden><div class="row"><strong id="wordTitle"></strong><button id="speakWord">▶ 朗读</button><button id="closeWord" aria-label="关闭词卡">×</button></div><small id="phonetic"></small><div id="definitions" role="status"></div><small>释义：Free Dictionary API · 查询时仅发送所选单词</small></div>
         <details id="linePractice" open><summary id="linePracticeSummary" hidden>逐句练唱（可选）</summary>
-          <label class="check" id="lineBackingOption" hidden><input id="useBacking" type="checkbox">逐句练唱使用已生成的伴奏</label>
+          <label class="check" id="lineBackingOption" hidden><input id="useBacking" type="checkbox">逐句练唱时监听伴奏（仅录人声）</label>
         <div class="main-actions"><button id="original">▶ 听原声</button><button id="replay" disabled>▷ 我的配音</button><button class="primary" id="record">● 开始配音</button></div>
         <div class="secondary-actions"><button id="loop">↻ 单句循环</button><button id="autoPractice">▶ 自动跟读</button></div>
         </details>
@@ -104,10 +104,16 @@
         <input id="recordingSearch" class="recording-search" placeholder="搜索台词、编号或时间" aria-label="查找录音">
         <div id="historyList" class="recording-timeline" aria-label="已录句子"></div>
         <div class="history-actions"><button id="deleteTake" disabled>删除所选版本</button><button id="undoDelete" hidden>撤销删除</button></div>
+        <details class="fold" id="songAssembly" hidden><summary>分段合成整首</summary><div class="fold-content">
+          <p class="hint" id="assemblyInfo"></p>
+          <select id="assemblyType" aria-label="整首下载内容"><option value="vocal">仅人声</option><option value="mixed">人声＋整首伴奏</option></select>
+          <p class="hint">按视频时间轴合成，重叠处用最新录音，未录处保留空白。暂支持 1× 录唱；WAV 文件约 10 MB / 分钟。</p>
+          <button id="assembleSong">合成并下载整首</button>
+        </div></details>
         <details class="fold" id="recordingDetails"><summary>所选录音详情</summary><div class="fold-content">
           <div id="analysis" hidden><canvas id="waveform" width="660" height="180" role="img" aria-label="录音音量波形，橙色表示低音量停顿"></canvas><div id="analysisText" class="analysis-text" role="status"></div><small>波形显示音量和停顿，不代表发音准确度。</small></div>
           <button id="reuseSongRange" hidden>使用此版范围练唱</button>
-          <div class="row"><a id="download">↓ 下载所选录音</a></div>
+          <div class="row"><a id="download">↓ 下载所选录音</a><button id="takeMixDownload" hidden>人声＋伴奏</button></div>
           <small>每个练习片段保留最近 3 次，演唱与配音分别保存。连播使用各片段最新版本。</small>
         </div></details>
       </section>
@@ -123,7 +129,7 @@
   let activity = 'speech';
   let captionVideo = null, captionSignature = '', captionGhost = null;
   const captionEvents = ['timeupdate','seeking','seeked','play','pause','ended'];
-  let savedBackings = [], activeKaraokeJob = null, recordMix = null, songTake = null, songUrl = null;
+  let savedBackings = [], activeKaraokeJob = null, recordMonitor = null, songTake = null, songUrl = null;
   let backingRestoreRequest=0, restoringBacking=false, karaokeIssue='';
   let backingOutput=null;
   let serviceState='unknown',serviceCheck=null,serviceMaxSeconds=null;
@@ -220,7 +226,7 @@
     if(restoringBacking)$('karaokeInfo').textContent='正在查找已生成的伴奏…';
     else if(error)$('karaokeInfo').textContent=error;
     else if(karaokeIssue)$('karaokeInfo').textContent='';
-    else if(ready)$('karaokeInfo').textContent='戴上耳机，点击开始录唱。';
+    else if(ready)$('karaokeInfo').textContent='请戴耳机，避免伴奏被麦克风录入。人声会独立保存。';
     else $('karaokeInfo').textContent=serviceState==='online'?'':serviceState==='offline'?'伴奏服务未连接。请查看下方启动说明，启动后点击“重新检测”。已有的伴奏和录音仍可使用。':'首次使用需准备本机伴奏服务，点击“准备伴奏”查看。';
   }
   function setSongTake(value) {
@@ -230,6 +236,9 @@
     $('songResult').hidden=!value;
     $('songInfo').textContent=value ? `最近演唱 · ${Math.round((value.end-value.start)/value.speed)} 秒 · 已保留，可回听或重录` : '';
     $('songDownload').href=songUrl || '';
+    $('songDownload').textContent=value?.withBacking?'↓ 旧版混合录音':'↓ 仅人声';
+    $('songReplay').textContent=value?.withBacking?'▷ 回听演唱':'▷ 回听人声';
+    $('songMixDownload').hidden=!value || value.capture!=='vocal' || !!value.withBacking;
     $('songDownload').download=value ? `echo-song-${videoId}-${value.createdAt}.webm` : '';
     updateBackingControls();
   }
@@ -246,6 +255,7 @@
   function status(text) { $('status').textContent = text; }
   function controls() {
     const busy = mode !== 'idle';
+    for(const id of ['songMixDownload','takeMixDownload','assembleSong','assemblyType'])$(id).disabled=busy;
     const recording=mode==='recording';
     $('activityMode').hidden=recording;
     $('singActions').hidden=!isSinging() || recording;
@@ -287,7 +297,7 @@
     cancelAnimationFrame(frame); clearTimeout(timer);
     if (pendingDone) { const done = pendingDone; pendingDone = null; done(); }
     if (audio) { audio.pause(); audio.src = ''; audio = null; }
-    recordMix?.pause();
+    recordMonitor?.pause();
   }
   function finish() { cancelPlayback(); restoreVideo(); mode = 'idle'; controls(); }
   function stop() {
@@ -299,7 +309,7 @@
     generation++;
     cancelPlayback(); restoreVideo();
     if (recorder && recorder.state !== 'inactive') { mode = 'saving'; recorder.stop(); }
-    else { recordMix?.dispose();recordMix=null;recorder=null;stream?.getTracks().forEach(t => t.stop()); stream = null; mode = 'idle'; }
+    else { recordMonitor?.dispose();recordMonitor=null;recorder=null;stream?.getTracks().forEach(t => t.stop()); stream = null; mode = 'idle'; }
     controls();
   }
   function guarded(fn) { return async () => { const before = generation; try { await fn(); } catch (e) { if (generation > before + 1) return; stop(); status(e.message || String(e)); } }; }
@@ -342,9 +352,11 @@
     take = value ? { ...value, url: URL.createObjectURL(value.blob) } : null;
     $('download').style.display = take ? 'block' : 'none';
     $('recordingEmpty').hidden = !!take || !!videoHistory.length; $('recordingContent').hidden = !take;
-    $('historyInfo').textContent = take ? `${take.label || '手动片段'} · ${take.start.toFixed(1)}–${take.end.toFixed(1)} 秒 · ${take.speed}×${take.withBacking ? ' · 含伴奏' : ''}` : '';
+    $('historyInfo').textContent = take ? `${take.label || '手动片段'} · ${take.start.toFixed(1)}–${take.end.toFixed(1)} 秒 · ${take.speed}×${take.withBacking ? ' · 旧版混合录音' : take.capture==='vocal'?' · 独立人声':''}` : '';
     $('recordingText').textContent=take ? recordingText(take) : '';
     $('reuseSongRange').hidden=take?.kind!=='song';
+    $('takeMixDownload').hidden=take?.kind!=='song' || take.capture!=='vocal' || !!take.withBacking;
+    $('download').textContent=take?.withBacking?'↓ 旧版混合录音':take?.capture==='vocal'?'↓ 下载人声':'↓ 下载所选录音';
     if (take) { $('download').href = take.url; $('download').download = `echo-${videoId}-${take.start.toFixed(1)}.webm`; }
     controls();
     analysisRequest++;
@@ -386,6 +398,9 @@
     const shown=queue.filter(t=>`${recordingText(t)} ${t.label || ''} ${recordingTime(t.start)}`.toLowerCase().includes(query));
     $('historyCount').textContent=`${queue.length} 段`;
     $('recordingSummary').textContent=`${videoHistory.length} 个版本`;
+    const songVoices=videoHistory.filter(t=>t.kind==='song' && t.capture==='vocal');
+    $('songAssembly').hidden=!videoHistory.some(t=>t.kind==='song');
+    $('assemblyInfo').textContent=`${EchoPractice.recordingQueue(songVoices).length} 段独立人声可用于合成；每段自动选最新版本。`;
     $('recordingEmpty').hidden=!!queue.length || !!take;
     list.replaceChildren();
     if(!shown.length && queue.length){const p=document.createElement('p');p.className='hint';p.textContent='没有匹配的录音，试试其他关键词。';list.append(p);}
@@ -416,7 +431,8 @@
     controls();
   }
   function chooseCurrentTake(preferredId) {
-    const matching=videoHistory.filter(t=>t.cueKey===currentCueKey());
+    const key=usesBacking()?`song:${currentCueKey()}`:currentCueKey();
+    const matching=videoHistory.filter(t=>t.cueKey===key);
     const value=videoHistory.find(t=>t.id===preferredId) || matching[0];
     setTake(value || null); renderHistory();
   }
@@ -528,7 +544,7 @@
   $('backingVolume').oninput=()=>{
     const volume=Number($('backingVolume').value);
     $('backingVolumeValue').textContent=`${Math.round(volume*100)}%`;
-    backingOutput?.setVolume(volume);recordMix?.setVolume?.(volume);
+    backingOutput?.setVolume(volume);recordMonitor?.setVolume?.(volume);
   };
   $('backingVolume').onchange=saveProgress;
   $('karaokeScope').onchange=()=>{karaokeIssue='';controls();saveProgress();if(!restoringBacking)void restoreServerBacking();};
@@ -558,6 +574,33 @@
     $('karaokeScope').value='clip';updateSummaries();controls();saveProgress();showPage('practice');
     status('已使用此版的范围和速度，点击主按钮录唱。');void checkKaraokeService();void restoreServerBacking();
   };
+  function downloadAudio(blob,name){
+    const url=URL.createObjectURL(blob),link=document.createElement('a');
+    link.href=url;link.download=name;link.hidden=true;root.append(link);link.click();link.remove();
+    setTimeout(()=>URL.revokeObjectURL(url),30000);
+  }
+  async function exportAudio(takes,duration,origin,withMusic){
+    if(mode!=='idle')return;
+    const backing=withMusic?backingFor({start:origin,end:origin+duration}):null;
+    if(withMusic && !backing)throw Error('缺少覆盖下载范围的伴奏，请先生成整首伴奏，再导出。独立人声仍可直接下载。');
+    EchoAudioExport.plan(takes.map(t=>({...t,start:t.start-origin,end:t.end-origin,...(Number.isFinite(t.capturedEnd)?{capturedEnd:t.capturedEnd-origin}:{})})),duration);
+    const token=++generation,id=videoId,volume=Number($('backingVolume').value);
+    mode='exporting';controls();status('正在本机合成 WAV，可点击停止取消…');
+    try{
+      const result=await EchoAudioExport.render({takes,duration,origin,backing,volume,active:()=>token===generation && id===videoId});
+      if(token!==generation || id!==videoId)return;
+      downloadAudio(result.blob,`echo-${id}-${origin.toFixed(1)}-${withMusic?'vocal-and-backing':'vocals'}.wav`);
+      status(result.gaps.length?'已下载合成音频，未录制的人声位置保留空白。':'合成完成，已开始下载。');
+    }finally{if(token===generation){mode='idle';controls();}}
+  }
+  function exportTake(value){
+    if(!value || value.capture!=='vocal' || value.withBacking)throw Error('这条旧版录音已经混入伴奏，请下载原文件。');
+    const end=Number.isFinite(value.capturedEnd)?Math.min(value.end,value.capturedEnd):value.end;
+    return exportAudio([value],end-value.start,value.start,true);
+  }
+  $('songMixDownload').onclick=guarded(()=>exportTake(songTake));
+  $('takeMixDownload').onclick=guarded(()=>exportTake(take));
+  $('assembleSong').onclick=guarded(()=>exportAudio(videoHistory,video().duration,0,$('assemblyType').value==='mixed'));
   $('songReplay').onclick=guarded(()=>isSinging() && songTake && playRecording(songTake));
   $('prepareBacking').onclick=guarded(async()=>{
     if(mode!=='idle' || !isSinging())return;
@@ -668,16 +711,21 @@
     const mic = await navigator.mediaDevices.getUserMedia({ audio: { echoCancellation: true }, video: false });
     if (token !== generation) { mic.getTracks().forEach(t => t.stop()); return; }
     stream = mic;
-    const mix=ready ? await EchoKaraoke.createMix({blob:ready.blob,mic,video:v,start:ready.start,speed:r.speed,volume:Number($('backingVolume').value)}) : null;
+    const mix=ready ? await EchoKaraoke.createMonitor({blob:ready.blob,video:v,start:ready.start,speed:r.speed,volume:Number($('backingVolume').value)}) : null;
     if(token!==generation){mix?.dispose();mic.getTracks().forEach(t=>t.stop());return;}
-    recordMix=mix;
+    recordMonitor=mix;
     const mimeType = ['audio/webm;codecs=opus', 'audio/webm'].find(t => MediaRecorder.isTypeSupported(t));
-    const recordingStream=mix ? mix.stream : mic;
+    const recordingStream=mic;
     recorder = mimeType ? new MediaRecorder(recordingStream, { mimeType }) : new MediaRecorder(recordingStream);
-    const recordedKey=options.song ? `song:${EchoStorage.cueKey(null,r.start,r.end)}` : currentCueKey();
+    const singingTake=options.song || !!mix;
+    const recordedKey=singingTake ? `song:${options.song?EchoStorage.cueKey(null,r.start,r.end):currentCueKey()}` : currentCueKey();
     const recordedLabel=options.song ? (r.start===0 && Math.abs(r.end-v.duration)<0.01?'整首演唱':'片段演唱') : index>=0 ? `第 ${index+1} 句` : '手动片段';
     const currentRecorder = recorder, chunks = [];
+    const clock=()=>globalThis.performance?.now?.() ?? Date.now();
+    let vocalOffset=0;
     let starting=true;
+    let capturedEnd=r.start;
+    const observePosition=()=>{if(Number.isFinite(v.currentTime))capturedEnd=Math.max(capturedEnd,Math.min(r.end,v.currentTime));};
     const onWaiting=()=>{mix?.pause();if(currentRecorder.state==='recording')currentRecorder.pause();};
     const onPlaying=()=>{
       if(starting || token!==generation || !['recording','paused'].includes(currentRecorder.state))return;
@@ -689,15 +737,17 @@
     recorder.ondataavailable = e => { if (e.data.size) chunks.push(e.data); };
     recorder.onerror = () => { stop(); status('录音失败，请检查麦克风后重试。'); };
     recorder.onstop = async () => {
+      if(id===videoId)observePosition();
+      v.removeEventListener('timeupdate',observePosition);
       v.removeEventListener('waiting',onWaiting);v.removeEventListener('playing',onPlaying);
-      mix?.dispose();if(recordMix===mix)recordMix=null;
+      mix?.dispose();if(recordMonitor===mix)recordMonitor=null;
       mic.getTracks().forEach(t => t.stop());
       const blob = new Blob(chunks, { type: currentRecorder.mimeType });
       if (!blob.size) { if (recorder === currentRecorder) { recorder = null; stream=null; if(id===videoId) {mode = 'idle'; controls();} } resolveRecording(false); return; }
-      const value = { id:crypto.randomUUID(),videoId:id,cueKey:recordedKey,label:recordedLabel,...r,blob,createdAt:Date.now(),...(mix?{withBacking:true}:{}),...(options.song?{kind:'song'}:{}) };
+      const value = { id:crypto.randomUUID(),videoId:id,cueKey:recordedKey,label:recordedLabel,...r,blob,createdAt:Date.now(),capture:'vocal',vocalOffset,...(capturedEnd>r.start?{capturedEnd}:{}),...(mix?{backingKey:ready.key}:{}),...(singingTake?{kind:'song'}:{}) };
       if(recorder===currentRecorder){recorder=null;stream=null;}
       if(id===videoId){
-        if(options.song)setSongTake(value);
+        if(singingTake)setSongTake(value);
         setTake(value);mode=options.keepBusy && token===generation?'practice':'idle';controls();saveProgress();
         status('录音完成，正在保存…');
       }
@@ -705,7 +755,7 @@
         await storage.saveTake(value);
         if(id===videoId){
           const values=await storage.listTakes(id);
-          if(id===videoId){videoHistory=values;renderHistory();if(token===generation || take?.id===value.id && mode==='idle')status(mix?'演唱完成，歌声与伴奏已一起保存。':'配音完成，已加入本句录音版本。');}
+          if(id===videoId){videoHistory=values;renderHistory();if(token===generation || take?.id===value.id && mode==='idle')status(mix?'演唱人声已保存，可单独下载或加伴奏导出。':'配音完成，已加入本句录音版本。');}
         }
       }catch{if(videoId===id && take?.id===value.id)status('录音已完成，但保存失败，请下载备份。');}
       finally{resolveRecording(true);}
@@ -717,9 +767,14 @@
     // before starting its backing, which may otherwise skip to a later clock.
     if(!mix){await v.play();if(token!==generation)return;}
     recorder.start(250); mode = 'recording'; controls();
+    const captureStartedAt=clock();
     status('录音已启动，正在准备同步播放…');
     v.addEventListener('waiting',onWaiting);v.addEventListener('playing',onPlaying);
-    if(mix)await mix.sync(r.start);
+    v.addEventListener('timeupdate',observePosition);
+    if(mix){
+      await mix.sync(r.start);
+      vocalOffset=Math.max(0,(clock()-captureStartedAt)/1000-((mix.position?.() ?? r.start)-r.start)/r.speed);
+    }
     if(token!==generation)return completed;
     if(mix)await v.play();
     if(token!==generation)return completed;
@@ -731,7 +786,7 @@
     }
     const position=mix?.position?.();
     if(Number.isFinite(position) && Math.abs(v.currentTime-position)>0.15)v.currentTime=position;
-    status(mix?'● 正在演唱，保留伴奏并录下你的歌声…':'● 正在配音，视频原声已静音…');
+    status(mix?'● 正在录制人声，伴奏仅在耳机播放…':'● 正在配音，视频原声已静音…');
     const endRecording = () => {
       if (token !== generation) return;
       cancelPlayback(); restoreVideo(); mode = 'saving'; controls();
