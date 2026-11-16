@@ -100,6 +100,8 @@ test('plain recording pauses for buffering and saves to its original video after
   assert.equal(nodes.get('stop').textContent,'■ 结束录音');
   assert.equal(nodes.get('transport').hidden,false);
   assert.equal(nodes.get('transportTime').textContent,'0:00 / 0:05');
+  assert.equal(nodes.get('transportProgress').disabled,true);
+  assert.equal(nodes.get('transportProgress').oninput,null);
   video.currentTime=2;frames.values().next().value();
   assert.equal(nodes.get('transportProgress').value,0.4);
   assert.equal(nodes.get('transportTime').textContent,'0:02 / 0:05');
@@ -159,10 +161,10 @@ test('song mode exposes main recording and guides missing accompaniment without 
 });
 
 test('volume remains adjustable during accompaniment preview and saves the chosen gain',async()=>{
-  const storage=createStorage(new IDBFactory());let gain=1;
+  const storage=createStorage(new IDBFactory());let gain=1,sound;
   await storage.saveBacking({key:'music',videoId:'video',start:0,end:60,createdAt:1,blob:new Blob(['audio'])});
   const video={duration:60,currentTime:0,muted:false,playbackRate:1,pause(){},async play(){},addEventListener(){},removeEventListener(){}};
-  class Audio{pause(){}async play(){}}
+  class Audio{constructor(){sound=this;}pause(){}async play(){}}
   const {nodes}=await mount(storage,{video,globals:{Audio,EchoKaraoke:{...require('../extension/karaoke.js'),async createBackingOutput(){return {setVolume(value){gain=value;},dispose(){}};}}}});
   nodes.get('activityMode').value='sing';nodes.get('activityMode').onchange();
   const playing=nodes.get('previewBacking').onclick();
@@ -170,8 +172,26 @@ test('volume remains adjustable during accompaniment preview and saves the chose
   assert.equal(nodes.get('backingVolume').disabled,false);
   nodes.get('backingVolume').value='1.5';nodes.get('backingVolume').oninput();
   assert.equal(gain,1.5);assert.equal(nodes.get('backingVolumeValue').textContent,'150%');
+  for(let i=0;i<20 && !nodes.get('transportProgress').oninput;i++)await Promise.resolve();
+  nodes.get('transportProgress').value='0.5';await nodes.get('transportProgress').oninput();
+  assert.equal(video.currentTime,30);assert.equal(sound.currentTime,30);
   nodes.get('backingVolume').onchange();nodes.get('stop').onclick();await playing;
   const session=await storage.getSession('video');assert.equal(session.backingVolume,1.5);
+  (await storage.ready).close();
+});
+
+test('original playback slider seeks within the selected range at reduced speed',async()=>{
+  const storage=createStorage(new IDBFactory());
+  const video={duration:60,currentTime:0,muted:false,playbackRate:1,pause(){},async play(){},addEventListener(){},removeEventListener(){}};
+  const {nodes}=await mount(storage,{video});
+  nodes.get('speed').value='0.5';
+  const playing=nodes.get('original').onclick();
+  for(let i=0;i<10 && !nodes.get('transportProgress').oninput;i++)await Promise.resolve();
+  const slider=nodes.get('transportProgress');
+  assert.equal(slider.disabled,false);assert.equal(nodes.get('transportTime').textContent,'0:00 / 0:10');
+  slider.value='0.75';await slider.oninput();assert.equal(video.currentTime,3.75);
+  slider.value='0.25';await slider.oninput();assert.equal(video.currentTime,1.25);
+  nodes.get('stop').onclick();await playing;assert.equal(slider.oninput,null);
   (await storage.ready).close();
 });
 
@@ -180,7 +200,7 @@ test('song replay starts at audio opening and shows progress from the audio cloc
   await storage.saveTake({id:'song',kind:'song',videoId:'video',cueKey:'song:manual',start:0,end:10,speed:1,createdAt:1,blob:new Blob(['song'])});
   const video={duration:60,currentTime:0,muted:false,playbackRate:1,pause(){},
     addEventListener(name,fn){listeners.set(name,fn);},removeEventListener(name){listeners.delete(name);},
-    async play(){calls.push('video');this.currentTime=3;listeners.get('playing')?.();}};
+    async play(){if(!calls.includes('video'))this.currentTime=3;calls.push('video');listeners.get('playing')?.();}};
   class Audio{
     constructor(){sound=this;this.elapsed=0;}
     get currentTime(){return this.elapsed;}set currentTime(value){audioSeeks.push(value);this.elapsed=value;}
@@ -199,7 +219,13 @@ test('song replay starts at audio opening and shows progress from the audio cloc
   assert.equal(nodes.get('transportTime').textContent,'0:00 / 0:02');
   sound.elapsed=0.6;listeners.get('waiting')();video.currentTime=4;listeners.get('playing')();
   assert.equal(video.currentTime,0.6);assert.deepEqual(audioSeeks,[]);
-  sound.onended();await replaying;assert.equal(nodes.get('transport').hidden,true);(await storage.ready).close();
+  const slider=nodes.get('transportProgress');assert.equal(slider.disabled,false);
+  sound.duration=8;slider.value='0.75';await slider.oninput();
+  assert.equal(sound.currentTime,6);assert.equal(video.currentTime,6);
+  slider.value='0.125';await slider.oninput();
+  assert.equal(sound.currentTime,1);assert.equal(video.currentTime,1);
+  sound.onended();await replaying;assert.equal(nodes.get('transport').hidden,true);
+  assert.equal(slider.disabled,true);assert.equal(slider.oninput,null);(await storage.ready).close();
 });
 
 test('dry vocal downloads can be mixed per take or assembled as a full song without starting recording',async()=>{

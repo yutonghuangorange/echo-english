@@ -120,7 +120,7 @@
     </div>
     <div id="transport" hidden style="padding:8px 20px 0;flex-shrink:0;background:#111b24">
       <div style="display:flex;justify-content:space-between;font-size:11px;color:#9ab2c1"><span id="transportLabel"></span><span id="transportTime"></span></div>
-      <progress id="transportProgress" max="1" value="0" aria-label="播放或录音进度" style="display:block;width:100%;height:6px;margin:6px 0;accent-color:#b3eedb"></progress>
+      <input id="transportProgress" type="range" min="0" max="1" step="0.001" value="0" aria-label="播放进度，可点击或拖动跳转" style="display:block;width:100%;margin:6px 0;accent-color:#b3eedb" disabled>
     </div>
     <footer><div class="status" id="status" role="status">准备好了，从一句开始。</div><button id="stop" disabled hidden>■ 停止</button></footer>
     <button class="resize-handle" id="resizePanel" aria-label="调整面板大小" title="拖动左下角调整大小；双击或按 Home 恢复默认。方向键微调，Shift 加速。">⤢</button>
@@ -301,6 +301,7 @@
   function cancelPlayback() {
     cancelAnimationFrame(frame); clearTimeout(timer);
     cancelAnimationFrame(progressFrame);progressFrame=0;$('transport').hidden=true;
+    $('transportProgress').disabled=true;$('transportProgress').oninput=null;
     if (pendingDone) { const done = pendingDone; pendingDone = null; done(); }
     if (audio) { audio.pause(); audio.src = ''; audio = null; }
     recordMonitor?.pause();
@@ -326,9 +327,17 @@
     };
     frame = requestAnimationFrame(tick);
   }
-  function showTransport(label, position, duration) {
+  function showTransport(label, position, duration, seekTo=null) {
     cancelAnimationFrame(progressFrame);
     $('transport').hidden=false;$('transportLabel').textContent=label;
+    const slider=$('transportProgress');
+    slider.disabled=!seekTo;
+    slider.setAttribute('aria-label',seekTo?'播放进度，可点击或拖动跳转':'录音进度');
+    slider.title=seekTo?'点击或拖动跳转':'录音中，仅显示进度';
+    slider.oninput=seekTo?guarded(async()=>{
+      const ratio=Math.min(1,Math.max(0,Number(slider.value) || 0));
+      await seekTo(ratio*Math.max(0,Number(duration()) || 0));
+    }):null;
     const tick=()=>{
       const total=Math.max(0,Number(duration()) || 0);
       const elapsed=Math.min(total,Math.max(0,Number(position()) || 0));
@@ -338,8 +347,8 @@
     };
     tick();
   }
-  function showVideoTransport(label,v,r) {
-    showTransport(label,()=>(v.currentTime-r.start)/r.speed,()=>(r.end-r.start)/r.speed);
+  function showVideoTransport(label,v,r,seekTo=null) {
+    showTransport(label,()=>(v.currentTime-r.start)/r.speed,()=>(r.end-r.start)/r.speed,seekTo);
   }
   async function seek(v, at, token) {
     v.pause();
@@ -360,9 +369,12 @@
     if (token !== generation) return;
     await v.play();
     if (token !== generation) return;
-    showVideoTransport('原声',v,r);
     await new Promise(resolve => {
       pendingDone = resolve;
+      showVideoTransport('原声',v,r,elapsed=>{
+        v.currentTime=r.start+elapsed*r.speed;
+        clearTimeout(timer);timer=setTimeout(()=>{v.pause();resolve();},Math.max(0,(r.end-v.currentTime)/r.speed)*1000+15000);
+      });
       watchEnd(v, r.end, () => { v.pause(); resolve(); });
       timer = setTimeout(() => { v.pause(); resolve(); }, (r.end - r.start) / r.speed * 1000 + 15000);
     });
@@ -700,8 +712,15 @@
         if(token!==generation)return;
         backingOutput=output;
         status('正在试听去原唱伴奏…');await v.play();if(token!==generation)return;sync();
-        showVideoTransport('伴奏试听',v,r);
-        await new Promise(resolve=>{pendingDone=resolve;a.onended=resolve;watchEnd(v,r.end,resolve);timer=setTimeout(resolve,EchoPractice.playbackTimeout(r));});
+        await new Promise(resolve=>{
+          pendingDone=resolve;a.onended=resolve;
+          showVideoTransport('伴奏试听',v,r,elapsed=>{
+            v.currentTime=r.start+elapsed*r.speed;
+            a.currentTime=Math.max(0,v.currentTime-ready.start);
+            clearTimeout(timer);timer=setTimeout(resolve,Math.max(0,(r.end-v.currentTime)/r.speed)*1000+15000);
+          });
+          watchEnd(v,r.end,resolve);timer=setTimeout(resolve,EchoPractice.playbackTimeout(r));
+        });
       } finally {v.removeEventListener('waiting',wait);v.removeEventListener('playing',sync);output?.dispose();if(backingOutput===output)backingOutput=null;}
       if(token===generation){finish();status('伴奏试听完成。');}
     } finally {URL.revokeObjectURL(url);}
@@ -847,7 +866,14 @@
       a.preload='auto';
       await a.play();
       if (token !== generation) return;
-      showTransport('录音回放',()=>a.currentTime,()=>Number.isFinite(a.duration) && a.duration>0?a.duration:((t.capturedEnd ?? t.end)-t.start)/t.speed+(t.vocalOffset || 0));
+      const duration=()=>Number.isFinite(a.duration) && a.duration>0?a.duration:((t.capturedEnd ?? t.end)-t.start)/t.speed+(t.vocalOffset || 0);
+      showTransport('录音回放',()=>a.currentTime,duration,async elapsed=>{
+        a.currentTime=elapsed;
+        v.currentTime=Math.min(t.end,t.start+elapsed*t.speed);
+        cancelAnimationFrame(frame);watchEnd(v,t.end,()=>v.pause());
+        clearTimeout(timer);timer=setTimeout(resolvePlayback,Math.max(0,duration()-elapsed)*1000+15000);
+        if(v.currentTime<t.end)await v.play();
+      });
       pendingDone=resolvePlayback;
       if(!ended){
         await v.play();
