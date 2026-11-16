@@ -95,6 +95,12 @@ fi
 marker="$project_dir/.venv/.echo-requirements"
 if ! cmp -s "$project_dir/karaoke/requirements.txt" "$marker" || ! "$venv_python" -c 'import torch, torchaudio, demucs, yt_dlp' >/dev/null 2>&1; then
   echo '安装伴奏依赖，下载较大，请稍候…'
+  if ! "$venv_python" -m pip --version >/dev/null 2>&1; then
+    echo '修复未完成安装的 pip 环境…'
+    if ! "$venv_python" -m ensurepip --upgrade; then
+      "$python_bin" -m pip --python "$venv_python" install pip
+    fi
+  fi
   "$venv_python" -m pip install --upgrade pip
   if [[ "$system" == Linux ]]; then
     "$venv_python" -m pip install --index-url https://download.pytorch.org/whl/cpu torch==2.5.1 torchaudio==2.5.1

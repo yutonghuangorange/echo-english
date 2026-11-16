@@ -27,7 +27,7 @@
         headers:{'X-Echo-Client':'echo-english',...(body?{'Content-Type':'application/json'}:{})},
         credentials:'omit',redirect:'error',signal:AbortSignal.timeout(action==='audio'?30000:10000)});
     }catch{throw Error('无法连接本机伴奏服务，伴奏尚未开始生成。请在项目根目录运行 bash start-karaoke.sh（首次自动安装），保持终端开启，再点击“重新检测”。安装扩展不会自动安装本机服务。');}
-    if(!response.ok){const data=await response.json();throw Error(data.error || '伴奏服务请求失败。');}
+    if(!response.ok){const data=await response.json();throw Error(/0–300 秒/.test(data.error || '')?'当前运行的是旧版伴奏服务。请在服务终端按 Ctrl+C，再运行 ./start-karaoke.sh，然后重新检测。':data.error || '伴奏服务请求失败。');}
     if(action!=='audio')return await response.json();
     if(Number(response.headers.get('Content-Length'))>24*1024*1024)throw Error('伴奏文件过大，请缩短片段。');
     const bytes=new Uint8Array(await response.arrayBuffer());

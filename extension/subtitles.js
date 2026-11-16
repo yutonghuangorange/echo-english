@@ -1,7 +1,8 @@
 (function (root) {
   function time(value) {
+    if(!/^\d+(?::\d{2}){1,2}(?:[.,]\d{1,3})?$/.test(value.trim()))return NaN;
     const parts = value.trim().replace(',', '.').split(':').map(Number);
-    if (parts.length < 2 || parts.length > 3 || parts.some(n => !Number.isFinite(n) || n < 0)) return NaN;
+    if (parts.some(n => !Number.isFinite(n) || n < 0) || parts.at(-1)>=60 || parts.length===3 && parts[1]>=60) return NaN;
     return parts.reduce((a, b) => a * 60 + b, 0);
   }
   function parse(text) {
@@ -13,7 +14,7 @@
       const [left, right] = lines[i].split('-->');
       const start = time(left), end = time(right.trim().split(/\s/)[0]);
       const content = lines.slice(i + 1).join(' ').replace(/<[^>]*>/g, '').trim();
-      if (Number.isFinite(start) && end > start && content) cues.push({ start, end, text: content });
+      if (Number.isFinite(start) && Number.isFinite(end) && end > start && content) cues.push({ start, end, text: content });
     }
     return cues.sort((a, b) => a.start - b.start);
   }

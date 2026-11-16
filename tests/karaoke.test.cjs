@@ -20,6 +20,11 @@ test('relay accepts a complete ten-minute song',async()=>{
   });
 });
 
+test('old service duration errors explain how to restart instead of repeating an obsolete limit',async()=>{
+  await assert.rejects(request({action:'start',videoId:'jNQXAC9IVRw',start:0,end:600},sender,
+    async()=>({ok:false,json:async()=>({error:'请选择有效的视频和 0–300 秒片段。'})})),/旧版.*Ctrl\+C.*start-karaoke/);
+});
+
 test('karaoke relay accepts only fixed loopback routes and current-video clips',async()=>{
   const calls=[];
   const fetcher=async(url,opts)=>{calls.push({url,opts});return {ok:true,json:async()=>({id,state:'queued'})};};

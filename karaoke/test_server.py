@@ -1,4 +1,6 @@
 import http.client
+import errno
+import io
 import json
 from pathlib import Path
 import sys
@@ -6,9 +8,11 @@ import tempfile
 import threading
 import time
 import unittest
+from contextlib import redirect_stderr
+from unittest.mock import patch
 from http.server import ThreadingHTTPServer
 
-from server import Jobs, Cancelled, handler, validate_clip, separation_progress, ACTIVE_STATES
+from server import Jobs, Cancelled, handler, validate_clip, separation_progress, ACTIVE_STATES, main
 
 CLIP = {"videoId": "jNQXAC9IVRw", "start": 0, "end": 5}
 
@@ -26,6 +30,15 @@ class Tests(unittest.TestCase):
     def setUp(self):
         self.temp = tempfile.TemporaryDirectory()
         self.addCleanup(self.temp.cleanup)
+
+    def test_occupied_port_explains_how_to_restart_the_service(self):
+        output = io.StringIO()
+        with patch.object(sys, "argv", ["server.py", "--cache", self.temp.name]), \
+                patch("server.ThreadingHTTPServer", side_effect=OSError(errno.EADDRINUSE, "busy")), \
+                redirect_stderr(output):
+            self.assertEqual(main(), 1)
+        self.assertIn("Ctrl+C", output.getvalue())
+        self.assertIn("./start-karaoke.sh", output.getvalue())
 
     def test_progress_parses_model_work_and_not_weight_downloads(self):
         self.assertEqual(separation_progress("100%|weights| 80.2M/80.2M [00:01<00:00, 61.5MB/s]"), (None, None))
@@ -146,6 +159,10 @@ class Tests(unittest.TestCase):
         self.assertIsNone(response.getheader("Access-Control-Allow-Origin"))
         response.read()
         headers = {"X-Echo-Client": "echo-english"}
+        connection.request("GET", "/health", headers=headers)
+        response = connection.getresponse()
+        self.assertEqual(response.status, 200)
+        self.assertEqual(json.loads(response.read())["maxSeconds"], 600)
         connection.request("POST", "/jobs", json.dumps(CLIP), headers)
         response = connection.getresponse()
         self.assertEqual(response.status, 202)

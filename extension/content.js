@@ -112,7 +112,7 @@
   const captionEvents = ['timeupdate','seeking','seeked','play','pause','ended'];
   let savedBackings = [], activeKaraokeJob = null, recordMix = null, songTake = null, songUrl = null;
   let backingRestoreRequest=0, restoringBacking=false, karaokeIssue='';
-  let serviceState='unknown',serviceCheck=null;
+  let serviceState='unknown',serviceCheck=null,serviceMaxSeconds=null;
   let wordRequest = 0, selectedWord = null, analysisRequest = 0;
   let videoId = currentId();
   const storage = EchoStorage.createStorage();
@@ -190,7 +190,7 @@
     if(busy)return;
     if(restoringBacking)$('karaokeInfo').textContent='正在查找已生成的伴奏…';
     else if(error)$('karaokeInfo').textContent=error;
-    else if(karaokeIssue)$('karaokeInfo').textContent=karaokeIssue;
+    else if(karaokeIssue)$('karaokeInfo').textContent='';
     else if(ready)$('karaokeInfo').textContent='伴奏已就绪。可以试听，再点击开始录唱；也可切换台词逐句练习，无需重新生成。';
     else $('karaokeInfo').textContent=serviceState==='online'?'先生成伴奏，再试听、录唱。建议戴耳机。':serviceState==='offline'?'伴奏服务未连接。请查看下方启动说明，启动后点击“重新检测”。已有的伴奏和录音仍可使用。':'生成伴奏需要额外配置本机服务，安装扩展不会自动安装。展开下方“首次使用”查看准备步骤。';
   }
@@ -306,7 +306,9 @@
     $('recordingText').textContent=take ? recordingText(take) : '';
     if (take) { $('download').href = take.url; $('download').download = `echo-${videoId}-${take.start.toFixed(1)}.webm`; }
     controls();
-    void analyzeTake(take);
+    analysisRequest++;
+    $('analysis').hidden=!take;
+    if($('recordingDetails').open)void analyzeTake(take);
   }
   function currentCueKey() {
     return EchoStorage.cueKey(cues[index], Number($('start').value), Number($('end').value));
@@ -448,7 +450,9 @@
       try{
         const result=await karaokeRequest('health');
         if(result.service!=='echo-karaoke')throw Error('服务不匹配');
-        serviceState='online';$('karaokeService').textContent='伴奏服务 · 已连接';$('karaokeHelp').open=false;
+        serviceState='online';serviceMaxSeconds=Number.isFinite(result.maxSeconds)?result.maxSeconds:300;
+        $('karaokeService').textContent=serviceMaxSeconds<600?'伴奏服务 · 已连接旧版，请重启服务以支持 10 分钟':'伴奏服务 · 已连接';
+        $('karaokeHelp').open=serviceMaxSeconds<600;
       }catch{
         serviceState='offline';$('karaokeService').textContent='伴奏服务 · 未连接（未启动或不可用）';$('karaokeHelp').open=true;
       }finally{$('checkKaraoke').disabled=false;serviceCheck=null;updateBackingControls();}
@@ -500,6 +504,10 @@
     karaokeIssue='';
     let r;
     try{r=songRange();}catch(error){karaokeIssue=error.message;controls();status(error.message);return;}
+    if(serviceState==='online' && serviceMaxSeconds<r.end-r.start){
+      karaokeIssue='当前运行的是旧版伴奏服务。请在服务终端按 Ctrl+C，再运行 ./start-karaoke.sh，最后点击“重新检测”。';
+      $('karaokeHelp').open=true;controls();status('请重启旧版伴奏服务。');return;
+    }
     if(serviceState==='offline'){
       karaokeIssue='伴奏尚未开始生成：本机服务未连接。请在项目根目录运行 bash start-karaoke.sh（首次自动安装），保持终端开启，再点击“重新检测”。';
       $('karaokeHelp').open=true;controls();status(karaokeIssue);
@@ -539,7 +547,7 @@
       if(token!==generation)return;
       karaokeIssue=error.message || '伴奏生成失败，请重试。';
       $('karaokeHelp').open=true;
-      $('karaokeInfo').textContent=karaokeIssue;status(karaokeIssue);
+      $('karaokeInfo').textContent='';status('未能生成伴奏，请查看按钮下方提示。');
     } finally {
       if(token===generation){activeKaraokeJob=null;$('karaokeProgress').hidden=true;mode='idle';controls();if(karaokeIssue)$('karaokeNotice').scrollIntoView?.({block:'nearest'});}
     }
@@ -599,13 +607,13 @@
     const mimeType = ['audio/webm;codecs=opus', 'audio/webm'].find(t => MediaRecorder.isTypeSupported(t));
     const recordingStream=mix ? mix.stream : mic;
     recorder = mimeType ? new MediaRecorder(recordingStream, { mimeType }) : new MediaRecorder(recordingStream);
-    const recordedKey=options.song ? EchoStorage.cueKey(null,r.start,r.end) : currentCueKey();
+    const recordedKey=options.song ? `song:${EchoStorage.cueKey(null,r.start,r.end)}` : currentCueKey();
     const recordedLabel=options.song ? (r.start===0 && Math.abs(r.end-v.duration)<0.01?'整首演唱':'片段演唱') : index>=0 ? `第 ${index+1} 句` : '手动片段';
     const currentRecorder = recorder, chunks = [];
-    const onWaiting=()=>{mix?.pause();if(mix && currentRecorder.state==='recording')currentRecorder.pause();};
+    const onWaiting=()=>{mix?.pause();if(currentRecorder.state==='recording')currentRecorder.pause();};
     const onPlaying=()=>{
-      if(!mix || token!==generation || !['recording','paused'].includes(currentRecorder.state))return;
-      void mix.sync().then(()=>{if(token===generation && currentRecorder.state==='paused')currentRecorder.resume();})
+      if(token!==generation || !['recording','paused'].includes(currentRecorder.state))return;
+      void Promise.resolve(mix?.sync()).then(()=>{if(token===generation && currentRecorder.state==='paused')currentRecorder.resume();})
         .catch(()=>{if(token===generation){stop();status('伴奏播放失败，录音已停止，请重新生成伴奏。');}});
     };
     let resolveRecording;
@@ -617,14 +625,22 @@
       mix?.dispose();if(recordMix===mix)recordMix=null;
       mic.getTracks().forEach(t => t.stop());
       const blob = new Blob(chunks, { type: currentRecorder.mimeType });
-      if (id !== videoId || !blob.size) { if (recorder === currentRecorder) { recorder = null; stream=null; if(id===videoId) {mode = 'idle'; controls();} } resolveRecording(false); return; }
+      if (!blob.size) { if (recorder === currentRecorder) { recorder = null; stream=null; if(id===videoId) {mode = 'idle'; controls();} } resolveRecording(false); return; }
       const value = { id:crypto.randomUUID(),videoId:id,cueKey:recordedKey,label:recordedLabel,...r,blob,createdAt:Date.now(),...(mix?{withBacking:true}:{}),...(options.song?{kind:'song'}:{}) };
-      if(options.song)setSongTake(value);
-      setTake(value); recorder = null; stream = null; mode = options.keepBusy && token === generation ? 'practice' : 'idle'; controls();
-      saveProgress();
-      status(mix?'演唱完成，歌声与伴奏已一起保存。':'配音完成，已加入本句录音版本。');
-      resolveRecording(true);
-      try { await storage.saveTake(value); if(id===videoId) { const values=await storage.listTakes(id); if(id===videoId) { videoHistory=values; renderHistory(); } } } catch { if (videoId === id && take?.createdAt === value.createdAt) status('录音已完成，但保存失败，请下载备份。'); }
+      if(recorder===currentRecorder){recorder=null;stream=null;}
+      if(id===videoId){
+        if(options.song)setSongTake(value);
+        setTake(value);mode=options.keepBusy && token===generation?'practice':'idle';controls();saveProgress();
+        status('录音完成，正在保存…');
+      }
+      try {
+        await storage.saveTake(value);
+        if(id===videoId){
+          const values=await storage.listTakes(id);
+          if(id===videoId){videoHistory=values;renderHistory();if(token===generation || take?.id===value.id && mode==='idle')status(mix?'演唱完成，歌声与伴奏已一起保存。':'配音完成，已加入本句录音版本。');}
+        }
+      }catch{if(videoId===id && take?.id===value.id)status('录音已完成，但保存失败，请下载备份。');}
+      finally{resolveRecording(true);}
     };
     saveVideo(v); v.muted = true; v.playbackRate = r.speed;
     await seek(v, r.start, token);
@@ -633,7 +649,8 @@
     await v.play();
     if (token !== generation) return;
     recorder.start(250); mode = 'recording'; controls();
-    if(mix){v.addEventListener('waiting',onWaiting);v.addEventListener('playing',onPlaying);await mix.sync();}
+    v.addEventListener('waiting',onWaiting);v.addEventListener('playing',onPlaying);
+    if(mix)await mix.sync();
     if(token!==generation)return completed;
     status(mix?'● 正在演唱，保留伴奏并录下你的歌声…':'● 正在配音，视频原声已静音…');
     const endRecording = () => {
@@ -703,6 +720,10 @@
     } catch { if (request === analysisRequest) $('analysisText').textContent = '浏览器暂时无法解码这次录音，仍可回放或下载。'; }
     finally { if (context) await context.close().catch(()=>{}); }
   }
+  $('recordingDetails').ontoggle=()=>{
+    if($('recordingDetails').open)void analyzeTake(take);
+    else analysisRequest++;
+  };
   function closeWord() { wordRequest++; selectedWord = null; $('wordcard').hidden = true; window.speechSynthesis?.cancel(); }
   async function lookupWord(word) {
     if (mode !== 'idle' || contentLanguage()!=='en') return;
@@ -844,8 +865,7 @@
   }
   function rememberBounds() {
     updateSummaries();
-    const start = Number($('start').value), end = Number($('end').value);
-    if (cues[index] && Number.isFinite(start) && end > start) { cues[index].start = start; cues[index].end = end; }
+    // Recording boundaries must not rewrite or reorder the original subtitle timeline.
     chooseCurrentTake(); saveProgress();
   }
   for (const [id, edge, delta] of [['startEarlier','start',-.2],['startLater','start',.2],['endEarlier','end',-.2],['endLater','end',.2]]) {
@@ -895,7 +915,18 @@
   $('replay').onclick = guarded(async () => { const token = ++generation; mode = 'replay'; controls(); status('正在随画面播放你的配音…'); await replay(token); });
   $('compare').onclick = guarded(async () => { if (!take) return; const token = ++generation; mode = 'compare'; controls(); status('对比 1/2：原声'); await original(take, token); if (token !== generation) return; status('对比 2/2：你的配音'); await replay(token); });
   $('import').onclick = $('transcriptImport').onclick = () => { if(mode==='idle')$('file').click(); };
-  $('file').onchange = guarded(async () => { const file = $('file').files[0]; if (!file) return; if (file.size > 5e6) throw Error('字幕文件请小于 5 MB。'); const next = EchoSubtitles.parse(await file.text()); $('file').value = ''; if (!next.length) throw Error('未找到有效字幕，请使用 SRT 或 VTT 文件。'); displayCues(next); status(`已导入 ${next.length} 句台词。`); });
+  $('file').onchange = guarded(async () => {
+    const file=$('file').files[0];$('file').value='';
+    if(!file || mode!=='idle')return;
+    if(file.size>5e6)throw Error('字幕文件请小于 5 MB。');
+    const token=++generation,id=videoId;mode='importing';controls();status('正在导入字幕…');
+    try{
+      const next=EchoSubtitles.parse(await file.text());
+      if(token!==generation || id!==currentId())return;
+      if(!next.length)throw Error('未找到有效字幕，请使用 SRT 或 VTT 文件。');
+      mode='idle';displayCues(next);status(`已导入 ${next.length} 句台词。`);
+    }finally{if(token===generation){mode='idle';controls();}}
+  });
   $('read').onclick = $('transcriptRead').onclick = guarded(async () => {
     if(mode!=='idle')return;
     const v = video(), token = ++generation, id = videoId;

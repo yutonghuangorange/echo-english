@@ -1,5 +1,6 @@
 """Loopback-only vocal separation worker. Run with the project's Python venv."""
 import argparse
+import errno
 import hashlib
 import importlib.util
 import json
@@ -256,7 +257,7 @@ def handler(jobs):
             if not self.allowed():
                 return
             if self.path == "/health":
-                return self.reply(200, {"service": "echo-karaoke", "version": 1})
+                return self.reply(200, {"service": "echo-karaoke", "version": 1, "maxSeconds": MAX_SECONDS})
             cached = re.fullmatch(r"/backings/([A-Za-z0-9_-]{11})", self.path)
             if cached:
                 with jobs.lock:
@@ -313,7 +314,13 @@ def main():
     args = parser.parse_args()
     args.cache.mkdir(parents=True, exist_ok=True)
     jobs = Jobs(args.cache)
-    server = ThreadingHTTPServer(("127.0.0.1", PORT), handler(jobs))
+    try:
+        server = ThreadingHTTPServer(("127.0.0.1", PORT), handler(jobs))
+    except OSError as error:
+        if error.errno != errno.EADDRINUSE:
+            raise
+        print(f"端口 {PORT} 已被占用。若旧版伴奏服务仍在运行，请先在旧终端按 Ctrl+C，再运行 ./start-karaoke.sh。", file=sys.stderr)
+        return 1
     print(f"Echo 伴奏服务已启动：http://127.0.0.1:{PORT}（Ctrl+C 停止）", flush=True)
     try:
         server.serve_forever()
@@ -326,4 +333,4 @@ def main():
 
 
 if __name__ == "__main__":
-    main()
+    sys.exit(main())

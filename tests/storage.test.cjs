@@ -50,6 +50,26 @@ test('stable sentence keys survive boundary changes and distinguish manual range
   assert.notEqual(cueKey(null,1,3),cueKey(null,2,3));
 });
 
+test('upgrades existing song takes without losing audio or sharing manual dubbing version limits',async()=>{
+  const factory=new IDBFactory();
+  const old=await new Promise((resolve,reject)=>{
+    const request=factory.open('echo-dubbing-v1',3);
+    request.onupgradeneeded=()=>request.result.createObjectStore('recordings',{keyPath:'id'});
+    request.onsuccess=()=>resolve(request.result);request.onerror=()=>reject(request.error);
+  });
+  const key=cueKey(null,1,3);
+  await new Promise((resolve,reject)=>{
+    const tx=old.transaction('recordings','readwrite');tx.objectStore('recordings').put({...take('1','video',key),kind:'song'});
+    tx.oncomplete=resolve;tx.onerror=reject;
+  });old.close();
+  const storage=createStorage(factory);
+  for(const id of ['2','3','4','5'])await storage.saveTake(take(id,'video',key));
+  const values=await storage.listTakes('video');
+  assert.equal(values.length,4);const song=values.find(t=>t.kind==='song');
+  assert.equal(song.cueKey,`song:${key}`);assert.equal(await song.blob.text(),'audio');
+  (await storage.ready).close();
+});
+
 test('accompaniment audio survives database reopen and keeps a bounded cache independently of recordings',async()=>{
   const factory=new IDBFactory(),first=createStorage(factory);
   await first.saveTake(take('1'));

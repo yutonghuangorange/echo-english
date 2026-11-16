@@ -11,3 +11,8 @@ test('rejects invalid ranges and sorts subtitles', () => {
   assert.deepEqual(parse('00:05 --> 00:07\nlater\n\n00:03 --> 00:02\nbad\n\nxx --> 00:04\nbad\n\n00:01 --> 00:02\nfirst').map(c=>c.text), ['first','later']);
   assert.ok(Number.isNaN(time('unknown')));
 });
+
+test('rejects overflowing and malformed subtitle timestamps',()=>{
+  for(const value of ['00:60','01:60:00','00:Infinity','00:','00:1e2','00:01.2.3'])assert.ok(Number.isNaN(time(value)),value);
+  assert.deepEqual(parse('00:01 --> 00:Infinity\nbad'),[]);
+});

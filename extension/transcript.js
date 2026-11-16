@@ -25,7 +25,14 @@
       if (seen.has(key)) return false;
       seen.add(key); return true;
     });
-    return unique.map((cue, i) => ({ ...cue, end: Math.min(duration, unique.slice(i + 1).find(c => c.start > cue.start)?.start ?? cue.start + 5) })).filter(c => c.end > c.start);
+    let nextStart=null;
+    const cues=new Array(unique.length);
+    for(let i=unique.length-1;i>=0;i--){
+      const cue=unique[i];
+      if(i+1<unique.length && unique[i+1].start>cue.start)nextStart=unique[i+1].start;
+      cues[i]={...cue,end:Math.min(duration,nextStart ?? cue.start+5)};
+    }
+    return cues.filter(c=>c.end>c.start);
   }
   function visible(element) {
     return !!element && !element.disabled && !element.closest('[hidden], [aria-hidden="true"]') && element.getClientRects().length > 0;

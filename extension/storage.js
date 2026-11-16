@@ -5,7 +5,7 @@
   }
   function createStorage(factory = root.indexedDB, name = 'echo-dubbing-v1') {
     const ready = new Promise((resolve,reject) => {
-      const request = factory.open(name,3);
+      const request = factory.open(name,4);
       request.onupgradeneeded = () => {
         const db = request.result, tx = request.transaction;
         if (!db.objectStoreNames.contains('sessions')) db.createObjectStore('sessions',{keyPath:'videoId'});
@@ -16,6 +16,13 @@
         const recordings = db.objectStoreNames.contains('recordings') ? tx.objectStore('recordings') : db.createObjectStore('recordings',{keyPath:'id'});
         if (!recordings.indexNames.contains('videoId')) recordings.createIndex('videoId','videoId');
         if (!recordings.indexNames.contains('segment')) recordings.createIndex('segment',['videoId','cueKey']);
+        // Older song takes shared the manual dubbing version bucket.
+        recordings.openCursor().onsuccess=event=>{
+          const cursor=event.target.result;if(!cursor)return;
+          const value=cursor.value;
+          if(value.kind==='song' && !value.cueKey?.startsWith('song:'))cursor.update({...value,cueKey:`song:${value.cueKey || cueKey(null,value.start,value.end)}`});
+          cursor.continue();
+        };
         if (db.objectStoreNames.contains('takes')) {
           // Move v1's most recent take rather than discarding it or retaining a
           // second copy of its audio in the legacy store.
