@@ -22,6 +22,7 @@ async function mount(storage, overrides = {}) {
     remove(){}
   }
   const root=new Element();root.getElementById=id=>nodes.get(id);
+  root.addEventListener=(name,fn)=>{root['on'+name]=fn;};
   root.querySelector=()=>({scrollTop:0});root.querySelectorAll=selector=>created.filter(n=>n.className===selector.slice(1));
   const events=new Map();
   const doc={getElementById:()=>null,documentElement:new Element(),createElement:()=>new Element(),createTextNode:text=>({textContent:text}),addEventListener(name,fn){events.set(name,fn);},querySelector:selector=>selector==='video.html5-main-video'?(overrides.video || {duration:60}):null};
@@ -44,6 +45,64 @@ async function mount(storage, overrides = {}) {
   for(let i=0;i<20 && nodes.get('read').disabled;i++)await new Promise(r=>setTimeout(r,2));
   return {nodes,root,events,downloads};
 }
+test('empty pages hide irrelevant recording controls and keep the practice dock on the practice tab',async()=>{
+  const storage=createStorage(new IDBFactory());
+  const {nodes}=await mount(storage);
+  assert.equal(nodes.get('practiceDock').hidden,false);
+  assert.equal(nodes.get('captionSetup').hidden,false);
+  assert.equal(nodes.get('captionOptions').hidden,true);
+  assert.equal(nodes.get('practiceTools').open,false);
+  nodes.get('tab-recordings').onclick();
+  assert.equal(nodes.get('practiceDock').hidden,true);
+  assert.equal(nodes.get('recordingEmpty').hidden,false);
+  assert.equal(nodes.get('historyBrowser').hidden,true);
+  assert.equal(nodes.get('recordingDetails').hidden,true);
+  assert.equal(nodes.get('playAll').hidden,true);
+  nodes.get('backToPractice').onclick();assert.equal(nodes.get('practiceDock').hidden,false);
+  nodes.get('openTranscript').onclick();assert.equal(nodes.get('practiceDock').hidden,true);
+  (await storage.ready).close();
+});
+
+test('recording details can return a spoken take to practice with its recorded range and speed',async()=>{
+  const storage=createStorage(new IDBFactory());
+  await storage.saveTake({id:'spoken',videoId:'video',cueKey:'manual:10:15',start:10,end:15,speed:0.75,createdAt:1,blob:new Blob(['voice'])});
+  const {nodes}=await mount(storage);
+  nodes.get('tab-recordings').onclick();assert.equal(nodes.get('reuseSongRange').hidden,false);
+  nodes.get('reuseSongRange').onclick();
+  assert.equal(nodes.get('page-practice').hidden,false);assert.equal(nodes.get('practiceDock').hidden,false);
+  assert.equal(nodes.get('start').value,10);assert.equal(nodes.get('end').value,15);
+  assert.equal(nodes.get('speed').value,'0.75');assert.equal(nodes.get('activityMode').value,'speech');
+  (await storage.ready).close();
+});
+
+test('unsupported song assembly explains the reason before the user clicks',async()=>{
+  const storage=createStorage(new IDBFactory());
+  await storage.saveTake({id:'slow',videoId:'video',kind:'song',capture:'vocal',cueKey:'song:manual',start:0,end:5,speed:0.75,createdAt:1,blob:new Blob(['voice'])});
+  const {nodes}=await mount(storage);
+  assert.equal(nodes.get('songAssembly').hidden,false);
+  assert.equal(nodes.get('assembleSong').disabled,true);
+  assert.equal(nodes.get('assemblyWarning').hidden,false);assert.match(nodes.get('assemblyWarning').textContent,/1×/);
+  (await storage.ready).close();
+});
+
+test('Escape stops playback, restores idle actions and clears the playing status',async()=>{
+  const storage=createStorage(new IDBFactory());
+  const video={duration:60,currentTime:0,muted:false,playbackRate:1,pause(){},async play(){},addEventListener(){},removeEventListener(){}};
+  const {nodes,root}=await mount(storage,{video});
+  let stopFocused=false;
+  root.activeElement=nodes.get('original');nodes.get('stop').id='stop';
+  nodes.get('stop').focus=()=>{stopFocused=true;root.activeElement=nodes.get('stop');};
+  const playing=nodes.get('original').onclick();
+  for(let i=0;i<10 && !nodes.get('transportProgress').oninput;i++)await Promise.resolve();
+  assert.equal(nodes.get('practiceDock').hidden,true);
+  assert.equal(stopFocused,true);
+  root.onkeydown({key:'Escape',preventDefault(){},stopPropagation(){}});
+  await playing;
+  assert.equal(nodes.get('practiceDock').hidden,false);
+  assert.equal(nodes.get('transport').hidden,true);assert.equal(nodes.get('status').textContent,'已停止。');
+  (await storage.ready).close();
+});
+
 test('singing detects offline service and retry collapses setup help after connection',async()=>{
   const storage=createStorage(new IDBFactory());let online=false,checks=0,starts=0;
   const {nodes}=await mount(storage,{health:()=>{checks++;return online?{service:'echo-karaoke',maxSeconds:600}:{error:'offline'};},globals:{chrome:{runtime:{onMessage:{addListener(){}},async sendMessage(){starts++;return {};}}}}});
@@ -104,6 +163,7 @@ test('plain recording pauses for buffering and saves to its original video after
   for(let i=0;i<10 && instance?.state!=='recording';i++)await new Promise(r=>setTimeout(r,1));
   assert.equal(instance.state,'recording');
   assert.equal(nodes.get('activityMode').hidden,true);assert.equal(nodes.get('linePractice').hidden,true);
+  assert.equal(nodes.get('practiceDock').hidden,true);
   assert.equal(nodes.get('stop').textContent,'■ 结束录音');
   assert.equal(nodes.get('transport').hidden,false);
   assert.equal(nodes.get('transportTime').textContent,'0:00 / 0:05');
@@ -114,11 +174,16 @@ test('plain recording pauses for buffering and saves to its original video after
   assert.equal(nodes.get('transportTime').textContent,'0:02 / 0:05');
   listeners.get('waiting')();assert.equal(instance.state,'paused');
   listeners.get('playing')();await Promise.resolve();assert.equal(instance.state,'recording');
+  nodes.get('hideText').checked=true;nodes.get('hideText').onchange();
+  nodes.get('showChinese').checked=true;nodes.get('followCaptions').checked=false;
   location.href='https://www.youtube.com/watch?v=other';events.get('yt-navigate-finish')();
   await recording;
   assert.equal((await storage.listTakes('video')).length,1);assert.equal((await storage.listTakes('other')).length,0);
   assert.equal(stopped,1);assert.equal(nodes.get('recordingContent').hidden,true);
   assert.equal(nodes.get('transport').hidden,true);
+  assert.equal(nodes.get('hideText').checked,false);assert.equal(nodes.get('showChinese').checked,false);
+  assert.equal(nodes.get('followCaptions').checked,true);
+  assert.equal(nodes.get('list').style.display,'');
   (await storage.ready).close();
 });
 
@@ -164,7 +229,7 @@ test('song mode exposes main recording and guides missing accompaniment without 
   await nodes.get('recordSong').onclick();assert.equal(micRequests,0);assert.equal(nodes.get('karaokeSettings').open,true);
   nodes.get('activityMode').value='speech';nodes.get('activityMode').onchange();
   assert.equal(nodes.get('singActions').hidden,true);assert.equal(nodes.get('karaokeSettings').hidden,true);
-  assert.equal(nodes.get('linePractice').hidden,false);assert.equal(nodes.get('practiceToolsSummary').hidden,true);
+  assert.equal(nodes.get('linePractice').hidden,false);assert.equal(nodes.get('practiceToolsSummary').hidden,false);
   (await storage.ready).close();
 });
 
@@ -641,12 +706,14 @@ test('captions follow playback with faded context while preserving recording bou
   const {nodes}=await mount(storage,{video});
   const text=()=>nodes.get('caption').children.map(n=>n.textContent).join('');
   assert.equal(text(),'First line');assert.equal(nodes.get('captionNext').textContent,'Second line');
+  assert.equal(nodes.get('captionPrevious').hidden,true);
   video.paused=false;time=4.5;listeners.get('timeupdate')({type:'timeupdate'});
   assert.equal(text(),'Second line');assert.equal(nodes.get('captionPrevious').textContent,'First line');
   assert.equal(nodes.get('captionNext').textContent,'Third line');assert.equal(nodes.get('translation').textContent,'第二句');
   assert.equal(nodes.get('start').value,2);assert.equal(nodes.get('end').value,4);
   time=7;listeners.get('timeupdate')({type:'timeupdate'});
   assert.equal(text(),'Third line');assert.match(nodes.get('captionPhase').textContent,/即将开始 · 2 秒/);
+  assert.equal(nodes.get('captionNext').hidden,true);
   video.paused=true;time=3;listeners.get('seeked')({type:'seeked'});assert.equal(text(),'First line');
   nodes.get('hideText').checked=true;nodes.get('hideText').onchange();
   assert.equal(nodes.get('captionPrevious').hidden,true);assert.equal(nodes.get('captionNext').hidden,true);

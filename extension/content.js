@@ -30,9 +30,11 @@
   let videoId = currentId();
   const storage = EchoStorage.createStorage();
   let videoHistory = [], historyRequest = 0, restoring = true, progressWarning = false, deletedTake = null;
+  let currentPage='practice', returnFocus=null;
   const pageNames = ['practice','transcript','recordings'];
   function showPage(name, focus = false) {
     if (!pageNames.includes(name)) return;
+    currentPage=name;
     for (const page of pageNames) {
       const selected = page === name;
       $('page-'+page).hidden = !selected;
@@ -42,6 +44,7 @@
     if (focus) $('tab-'+name).focus();
     root.querySelector('.pages').scrollTop = 0;
     if(name==='recordings'){ if(!take && videoHistory.length)setTake(EchoPractice.recordingQueue(videoHistory)[0]);renderHistory(); }
+    controls();
   }
   pageNames.forEach((name,i) => {
     $('tab-'+name).onclick = () => showPage(name);
@@ -58,7 +61,7 @@
   $('backToPractice').onclick = () => showPage('practice',true);
   $('reviewReplay').onclick = () => $('replay').click();
   function updateSummaries() {
-    $('speedSummary').textContent = isSinging()?`${$('speed').value}×`:`${$('speed').value}× · ${$('loopCount').value === '0' ? '持续循环' : '循环 '+$('loopCount').value+' 次'}`;
+    $('speedSummary').textContent = `${$('speed').value}×`;
     $('clipSummary').textContent = `${Number($('start').value).toFixed(1)}–${Number($('end').value).toFixed(1)} 秒`;
     updateBackingControls();
   }
@@ -70,12 +73,15 @@
     $('singActions').hidden=!singing;$('karaokeSettings').hidden=!singing;
     $('karaokeSettings').open=false;
     $('linePractice').hidden=singing;
-    $('practiceToolsSummary').hidden=!singing;
-    $('practiceTools').open=!singing;
-    $('practiceTools').className=singing?'fold':'';
+    $('practiceToolsSummary').hidden=false;
+    $('practiceTools').open=false;
+    $('practiceTools').className='fold';
+    $('transcriptTitle').textContent=singing?'选择想练的一句歌词':'找到想练的那一句';
+    $('transcriptSubtitle').textContent=singing?'点选歌词，主录唱区会切到对应片段。':'点选一句，回到练习。可搜索台词或导入字幕。';
     $('loop').textContent=singing?'↻ 循环听当前片段':'↻ 单句循环';
     $('autoPractice').textContent=singing?'▶ 自动练当前片段':'▶ 自动跟读';
     $('cueHeading').textContent=singing?'当前歌词':'当前台词';
+    $('practiceFlowHint').textContent=singing?'自动练唱：原曲 → 准备 → 录唱 → 回听。':'自动跟读：原声 → 准备 → 配音 → 回放。';
     $('record').textContent=singing?'● 录这一句':'● 开始配音';
     $('original').textContent=singing?'▶ 听这一句':'▶ 听原声';
     $('replay').textContent=singing?'▷ 回听这一句':'▷ 我的配音';
@@ -92,7 +98,7 @@
   function songRange() {
     if($('karaokeScope').value==='clip')return range();
     const v=video();
-    if(v.duration>600)throw Error('视频超过 10 分钟，请选择「当前练习片段」并设置歌曲起止时间。');
+    if(v.duration>600)throw Error('视频超过 10 分钟，请选择「当前片段」并设置歌曲起止时间。');
     if(v.duration<=0)throw Error('请等待视频加载。');
     return {start:0,end:v.duration,speed:Number($('speed').value)};
   }
@@ -123,7 +129,7 @@
     if(restoringBacking)$('karaokeInfo').textContent='正在查找已生成的伴奏…';
     else if(error)$('karaokeInfo').textContent=error;
     else if(karaokeIssue)$('karaokeInfo').textContent='';
-    else if(ready)$('karaokeInfo').textContent='请戴耳机，避免伴奏被麦克风录入。人声会独立保存。';
+    else if(ready)$('karaokeInfo').textContent='';
     else $('karaokeInfo').textContent=serviceState==='online'?'':serviceState==='offline'?'伴奏服务未连接。请查看下方启动说明，启动后点击“重新检测”。已有的伴奏和录音仍可使用。':'首次使用需准备本机伴奏服务，点击“准备伴奏”查看。';
   }
   function setSongTake(value) {
@@ -131,10 +137,10 @@
     if(songUrl)URL.revokeObjectURL(songUrl);
     songTake=value || null;songUrl=value ? URL.createObjectURL(value.blob) : null;
     $('songResult').hidden=!value;
-    $('songInfo').textContent=value ? `最近演唱 · ${Math.round((value.end-value.start)/value.speed)} 秒 · 已保留，可回听或重录` : '';
+    $('songInfo').textContent=value ? `最近演唱 · ${recordingTime(value.start)}–${recordingTime(value.end)} · ${value.speed}×` : '';
     $('songDownload').href=songUrl || '';
     $('songDownload').textContent=value?.withBacking?'↓ 旧版混合录音':'↓ 仅人声';
-    $('songReplay').textContent='▷ 回听演唱';
+    $('songReplay').textContent='▷ 回听最近演唱';
     $('songMixDownload').hidden=!value || value.capture!=='vocal' || !!value.withBacking;
     $('songDownload').download=value ? `echo-song-${videoId}-${value.createdAt}.webm` : '';
     updateBackingControls();
@@ -152,12 +158,28 @@
   function status(text) { $('status').textContent = text; }
   function controls() {
     const busy = mode !== 'idle';
+    const focused=root.activeElement;
     for(const id of ['songMixDownload','takeMixDownload','assembleSong','assemblyType'])$(id).disabled=busy;
     const recording=mode==='recording';
+    $('panel').setAttribute('aria-busy',String(['loading','reading','importing','exporting','saving','permission'].includes(mode)));
+    $('practiceDock').hidden=currentPage!=='practice' || mode!=='idle';
+    $('songControls').hidden=!isSinging();
+    $('historyBrowser').hidden=!videoHistory.length;
+    $('playAll').hidden=!videoHistory.length;
+    $('recordingDetails').hidden=!take;
+    const voices=videoHistory.filter(t=>t.kind==='song' && t.capture==='vocal' && !t.withBacking);
+    let assemblyError='';
+    if(voices.length){try{EchoAudioExport.plan(videoHistory,document.querySelector('video.html5-main-video')?.duration);}catch(error){assemblyError=error.message;}}
+    $('assembleSong').disabled=busy || !voices.length || !!assemblyError;
+    $('assembleSong').title=assemblyError;
+    $('assemblyWarning').textContent=assemblyError;$('assemblyWarning').hidden=!assemblyError;
     $('activityMode').hidden=recording;
     $('singActions').hidden=!isSinging() || recording;
+    $('singDetails').hidden=!isSinging() || recording;
     $('karaokeSettings').hidden=!isSinging() || recording;
-    for(const id of ['captionSetup','practiceTools','practiceSettings','clipSettings'])$(id).hidden=recording;
+    for(const id of ['practiceTools','practiceSettings'])$(id).hidden=recording;
+    $('captionSetup').hidden=recording || cues.length>0;
+    $('clipSettings').hidden=recording || (isSinging() && $('karaokeScope').value!=='clip');
     $('linePractice').hidden=isSinging() || recording;
     for (const id of ['contentLanguage','captionLayout','activityMode','read','import','transcriptRead','transcriptImport','prepareBacking','karaokeScope','useBacking','backingVolume','prev','next','markStart','markEnd','original','speed','start','end','record','startEarlier','startLater','endEarlier','endLater','loop','loopCount','autoPractice','prepSeconds','autoNext']) $(id).disabled = busy;
     for(const id of ['karaokeScope','useBacking'])$(id).disabled=busy || !isSinging();
@@ -180,6 +202,12 @@
     root.querySelectorAll('.history-delete').forEach(b=>b.disabled=busy && mode!=='replay');
     root.querySelectorAll('.word').forEach(b => b.disabled = busy);
     root.querySelectorAll('.cue').forEach(b => b.disabled = busy);
+    if(busy && focused?.disabled && !$('stop').disabled){
+      returnFocus ||= focused;$('stop').focus();
+    } else if(!busy && returnFocus){
+      const target=returnFocus;returnFocus=null;
+      if(currentPage==='practice' && (!focused || focused.id==='stop') && !target.disabled)target.focus();
+    }
   }
   function range() {
     const start = Number($('start').value), end = Number($('end').value), v = video();
@@ -201,11 +229,13 @@
   }
   function finish() { cancelPlayback(); restoreVideo(); mode = 'idle'; controls(); }
   function stop() {
+    const previous=mode;
     window.speechSynthesis?.cancel();
     if (mode === 'loading') restoring = false;
     if (mode === 'reading') status('已停止读取台词。');
     if (mode === 'separating') {karaokeIssue='已停止生成伴奏，可重新生成。';status('已停止生成伴奏。');$('karaokeInfo').textContent='已停止，可重新生成本段伴奏。';$('karaokeProgress').hidden=true;}
     if(activeKaraokeJob){void karaokeRequest('cancel',{jobId:activeKaraokeJob}).catch(()=>{});activeKaraokeJob=null;}
+    if(!['idle','reading','separating'].includes(previous))status(recorder && recorder.state!=='inactive'?'录音已结束，正在保存…':'已停止。');
     generation++;
     cancelPlayback(); restoreVideo();
     if (recorder && recorder.state !== 'inactive') { mode = 'saving'; recorder.stop(); }
@@ -230,7 +260,7 @@
     if (token !== generation) throw Error('操作已停止。');
   }
   async function original(r, token) {
-    window.speechSynthesis?.cancel();
+    closeWord();
     const v = video(); saveVideo(v); v.muted = false; v.playbackRate = r.speed;
     await seek(v, r.start, token);
     if (token !== generation) return;
@@ -255,7 +285,7 @@
     $('recordingEmpty').hidden = !!take || !!videoHistory.length; $('recordingContent').hidden = !take;
     $('historyInfo').textContent = take ? `${take.label || '手动片段'} · ${take.start.toFixed(1)}–${take.end.toFixed(1)} 秒 · ${take.speed}×${take.withBacking ? ' · 旧版混合录音' : take.capture==='vocal'?' · 独立人声':''}` : '';
     $('recordingText').textContent=take ? recordingText(take) : '';
-    $('reuseSongRange').hidden=take?.kind!=='song';
+    $('reuseSongRange').hidden=!take;
     $('takeMixDownload').hidden=take?.kind!=='song' || take.capture!=='vocal' || !!take.withBacking;
     $('download').textContent=take?.withBacking?'↓ 旧版混合录音':take?.capture==='vocal'?'↓ 下载人声':'↓ 下载所选录音';
     if (take) { $('download').href = take.url; $('download').download = `echo-${videoId}-${take.start.toFixed(1)}.webm`; }
@@ -277,8 +307,10 @@
     });
   }
   function recordingText(value) {
-    const cue=cues.find(c=>c.key===value.cueKey);
-    return cue ? captionText(cue) : value.label || '手动片段';
+    const cue=cues.find(c=>c.key===value.cueKey || `song:${c.key}`===value.cueKey);
+    if(cue)return captionText(cue);
+    const covered=cues.filter(c=>c.start<value.end && c.end>value.start);
+    return covered.length?covered.slice(0,3).map(c=>captionText(c)).join(' / ')+(covered.length>3?'…':''):value.label || '手动片段';
   }
   function recordingTime(value) {return EchoTransport.formatTime(value);}
   async function playRecording(value) {
@@ -299,8 +331,8 @@
     const shown=queue.filter(t=>`${recordingText(t)} ${t.label || ''} ${recordingTime(t.start)}`.toLowerCase().includes(query));
     $('historyCount').textContent=`${queue.length} 段`;
     $('recordingSummary').textContent=`${videoHistory.length} 个版本`;
-    const songVoices=videoHistory.filter(t=>t.kind==='song' && t.capture==='vocal');
-    $('songAssembly').hidden=!videoHistory.some(t=>t.kind==='song');
+    const songVoices=videoHistory.filter(t=>t.kind==='song' && t.capture==='vocal' && !t.withBacking);
+    $('songAssembly').hidden=!songVoices.length;
     $('assemblyInfo').textContent=`${EchoPractice.recordingQueue(songVoices).length} 段独立人声可用于合成；每段自动选最新版本。`;
     $('recordingEmpty').hidden=!!queue.length || !!take;
     list.replaceChildren();
@@ -469,11 +501,11 @@
     return record({range:r,song:true});
   });
   $('reuseSongRange').onclick=()=>{
-    if(mode!=='idle' || take?.kind!=='song')return;
-    const value=take;activity='sing';$('useBacking').checked=true;renderActivity();
+    if(mode!=='idle' || !take)return;
+    const value=take;activity=value.kind==='song'?'sing':'speech';$('useBacking').checked=isSinging();renderActivity();
     $('start').value=value.start;$('end').value=value.end;$('speed').value=String(value.speed);
     $('karaokeScope').value='clip';updateSummaries();controls();saveProgress();showPage('practice');
-    status('已使用此版的范围和速度，点击主按钮录唱。');void checkKaraokeService();void restoreServerBacking();
+    status('已使用此版的范围和速度，可以重新练习。');if(isSinging()){void checkKaraokeService();void restoreServerBacking();}
   };
   function downloadAudio(blob,name){
     const url=URL.createObjectURL(blob),link=document.createElement('a');
@@ -521,7 +553,7 @@
     }
     const id=videoId, token=++generation;
     video().pause();mode='separating';controls();
-    $('karaokeSettings').open=false;$('singActions').scrollIntoView?.({block:'nearest'});
+    $('karaokeSettings').open=false;$('singDetails').scrollIntoView?.({block:'nearest'});
     $('karaokeProgress').hidden=false;$('karaokeProgress').removeAttribute('value');
     status('正在准备伴奏，请稍候…');$('karaokeInfo').textContent='正在连接本机伴奏服务…';
     $('karaokeNotice').textContent='正在连接本机伴奏服务，请稍候…';$('karaokeNotice').hidden=false;
@@ -630,14 +662,14 @@
       videoHistory = values;
       renderHistory();
       if (token === generation || (take?.id === value.id && mode === 'idle')) {
-        status(monitored ? '演唱人声已保存，可单独下载或加伴奏导出。' : '配音完成，已加入本句录音版本。');
+        status(value.kind==='song'?(monitored?'演唱人声已保存，可单独下载或加伴奏导出。':'清唱人声已保存，可回听或下载。'):'配音完成，已加入本句录音版本。');
       }
     } catch {
       if (videoId === id && take?.id === value.id) status('录音已完成，但保存失败，请下载备份。');
     }
   }
   async function record(options = {}) {
-    window.speechSynthesis?.cancel();
+    closeWord();
     const r = options.range || range(), v = video(), id = videoId, token = options.token ?? ++generation;
     const ready=usesBacking() ? backingFor(r) : null;
     if(usesBacking() && !ready)throw Error('请先为当前片段生成伴奏，或关闭「录唱时播放伴奏」。');
@@ -717,7 +749,7 @@
     }
     const position=monitor?.position?.();
     if(Number.isFinite(position) && Math.abs(v.currentTime-position)>0.15)v.currentTime=position;
-    status(monitor?'● 正在录制人声，伴奏仅在耳机播放…':'● 正在配音，视频原声已静音…');
+    status(monitor?'● 正在录制人声，伴奏仅在耳机播放…':singingTake?'● 正在录制清唱人声…':'● 正在配音，视频原声已静音…');
     showVideoTransport('录音',v,r);
     const endRecording = () => {
       if (token !== generation) return;
@@ -729,7 +761,7 @@
     return completed;
   }
   async function replay(token, keepBusy = false) {
-    window.speechSynthesis?.cancel();
+    closeWord();
     if (!take) return;
     const t = take, v = video(); saveVideo(v); v.muted = true; v.playbackRate = t.speed;
     await seek(v, t.start, token);
@@ -855,6 +887,7 @@
     try { video().pause(); } catch {}
     $('wordcard').hidden = false; $('wordTitle').textContent = word; $('phonetic').textContent = '';
     $('definitions').textContent = '正在查词…';
+    $('wordcard').scrollIntoView?.({block:'nearest'});
     try {
       const result = await chrome.runtime.sendMessage({type:'echo-dictionary',word:selectedWord});
       if (request !== wordRequest) return;
@@ -930,12 +963,12 @@
   }
   function renderCaption(shownIndex, phase='selected', animate=false) {
     closeWord();
-    const cue=cues[shownIndex], hidden=$('hideText').checked;
+    const cue=cues[shownIndex], hidden=cues.length>0 && $('hideText').checked;
     const motion=animate && !hidden && !window.matchMedia?.('(prefers-reduced-motion: reduce)').matches;
     if(captionGhost){captionGhost.remove();captionGhost=null;}
     const outgoing=motion ? $('caption').cloneNode?.(true) : null;
     $('caption').replaceChildren();
-    if(hidden)$('caption').textContent='••• 听节奏，试着说出来';
+    if(hidden)$('caption').textContent=isSinging()?'••• 跟着节奏唱出来':'••• 听节奏，试着说出来';
     else {
       const raw=cue?.text || (isSinging()?'读取台词或导入字幕后，录唱时会自动翻句。':'标记片段后，点击开始配音。');
       const text=cue ? captionView(cue).primary : raw;
@@ -949,8 +982,8 @@
     $('caption').setAttribute('data-phase',phase);
     $('captionPrevious').textContent=hidden?'':captionText(cues[shownIndex-1]);
     $('captionNext').textContent=hidden?'':captionText(cues[shownIndex+1]);
-    $('captionPrevious').hidden=hidden || !cue;$('captionNext').hidden=hidden || !cue;
-    $('captionPhase').textContent=hidden?'':phase==='upcoming'?'即将开始':phase==='active'?`当前台词 · ${shownIndex+1} / ${cues.length}`:phase==='ended'?'台词已结束':'';
+    $('captionPrevious').hidden=hidden || !cues[shownIndex-1];$('captionNext').hidden=hidden || !cues[shownIndex+1];
+    $('captionPhase').textContent=hidden?'':phase==='upcoming'?'即将开始':phase==='active'?`当前${isSinging()?'歌词':'台词'} · ${shownIndex+1} / ${cues.length}`:phase==='ended'?(isSinging()?'歌词已结束':'台词已结束'):'';
     const parts=captionView(cue);
     $('translation').textContent=parts.reference;
     $('referenceToggle').hidden=!parts.reference;
@@ -972,7 +1005,7 @@
   }
   function updateCaption() {
     updateLanguageInfo();captionSignature='';renderCaption(index);
-    $('practiceSetup').hidden=cues.length>0;updateSummaries();
+    $('practiceSetup').hidden=cues.length>0;$('captionOptions').hidden=!cues.length;updateSummaries();
     $('position').textContent=index>=0 ? `${index+1} / ${cues.length}` : '手动片段';
     syncCaptions();
   }
@@ -985,13 +1018,13 @@
     index = i; $('start').value = cues[i].start.toFixed(2); $('end').value = cues[i].end.toFixed(2);
     if(fromList && isSinging()){$('karaokeScope').value='clip';karaokeIssue='';}
     updateCaption(); chooseCurrentTake();updateSummaries();saveProgress();showPage('practice');renderCueList();
-    if(fromList && isSinging())$('singActions').scrollIntoView?.({block:'nearest'});
+    if(fromList){$(isSinging()?'recordSong':'record').focus();}
   }
   function displayCues(next, preferredIndex = 0) {
     cues = next.map(c=>({...c,key:EchoStorage.cueKey(c)})); index = -1; $('list').replaceChildren();
     $('transcriptSearch').value='';
     $('captionSetup').open=!cues.length;
-    $('captionSetupTitle').textContent=cues.length?`台词与字幕 · ${cues.length} 句`:'准备台词 · 读取或导入';
+    $('captionSetupTitle').textContent=cues.length?`字幕 · ${cues.length} 句`:'准备字幕 · 读取或导入';
     $('transcriptEmpty').hidden = next.length > 0;
     renderCueList();
     if (cues.length && preferredIndex >= 0) select(Math.min(preferredIndex,cues.length-1)); else {updateCaption();chooseCurrentTake();saveProgress();}
@@ -1039,6 +1072,13 @@
     if (token === generation) { finish(); status('自动跟读完成。可以重练或下载这次录音。'); }
   });
   $('close').onclick = () => { closeWord(); stop(); host.style.display = 'none'; };
+  root.addEventListener('keydown',event=>{
+    if(event.key!=='Escape')return;
+    event.preventDefault();event.stopPropagation();
+    if(!$('wordcard').hidden)closeWord();
+    else if(mode!=='idle')stop();
+    else $('close').click();
+  });
   $('hideText').onchange = () => { updateCaption(); $('list').style.display = $('hideText').checked ? 'none' : ''; saveProgress(); };
   $('prev').onclick = () => select(index - 1,isSinging()); $('next').onclick = () => select(index + 1,isSinging());
   $('markStart').onclick = guarded(() => { $('start').value = video().currentTime.toFixed(2); index = -1; updateCaption();chooseCurrentTake();saveProgress(); });
@@ -1090,6 +1130,8 @@
     activity = 'speech';
     $('contentLanguage').value = 'auto';
     $('captionLayout').value = 'original';
+    $('hideText').checked=false;$('showChinese').checked=false;$('followCaptions').checked=true;
+    $('list').style.display='';
     renderActivity();
     savedBackings = [];
     $('karaokeScope').value = 'whole';
