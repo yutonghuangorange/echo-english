@@ -70,3 +70,18 @@ test('caption frames handle upcoming lines, exact boundaries, gaps, seeks and th
   assert.deepEqual(captionFrame([],3),{index:-1,phase:'empty'});
   assert.deepEqual(captionFrame(cues,NaN),{index:-1,phase:'empty'});
 });
+
+test('lead-in seconds are bounded and never seek before the video begins',()=>{
+  const {leadInSeconds,leadInStart}=require('../extension/practice.js');
+  for(const [value,expected] of [[undefined,0],['3',3],[-5,0],[Infinity,0],[100,30],[2.6,3]])assert.equal(leadInSeconds(value),expected);
+  assert.equal(leadInStart(50,3),47);assert.equal(leadInStart(2,3),0);assert.equal(leadInStart(0,3),0);
+});
+
+test('previous sentence lead-in handles first sentences, gaps and manually adjusted ranges',()=>{
+  const {leadInStart}=require('../extension/practice.js');
+  const cues=[{start:5,end:8},{start:10,end:13},{start:15,end:18}];
+  const previous={mode:'previous',cues};
+  for(const [start,expected] of [[5,5],[10,5],[10.2,5],[14,10],[15,10],[19,15]])assert.equal(leadInStart(start,3,previous),expected);
+  assert.equal(leadInStart(10,3,{mode:'previous'}),10);
+  assert.equal(leadInStart(10,3,{mode:'none',cues}),10);
+});

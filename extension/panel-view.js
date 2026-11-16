@@ -99,6 +99,8 @@
         </div></details>
         <details class="fold" id="clipSettings"><summary>片段与边界<span id="clipSummary">0.0–5.0 秒</span></summary><div class="fold-content">
           <div class="row"><label><small>起点</small><input id="start" aria-label="片段起点（秒）" type="number" min="0" step="0.1" value="0"></label><label><small>终点</small><input id="end" aria-label="片段终点（秒）" type="number" min="0" step="0.1" value="5"></label></div>
+          <div class="row"><label class="hint" for="leadInMode">前置播放</label><select id="leadInMode" aria-describedby="leadInHint"><option value="none">关闭</option><option value="seconds">前 N 秒</option><option id="previousLeadIn" value="previous">上一句</option></select></div>
+          <div id="leadInSecondsRow" class="row" hidden><label class="hint" for="leadInSeconds">前置时长（秒）</label><input id="leadInSeconds" type="number" min="0" max="30" step="1" value="3" aria-describedby="leadInHint"></div><p class="hint" id="leadInHint">先播放片段前的原声作准备，不录入准备段。</p>
           <div class="row micro"><button id="startEarlier">起点 −0.2s</button><button id="startLater">起点 +0.2s</button><button id="endEarlier">终点 −0.2s</button><button id="endLater">终点 +0.2s</button></div>
           <div class="row"><button id="markStart">此刻设为起点</button><button id="markEnd">此刻设为终点</button></div><p class="hint">配音时原声静音；每段最长 10 分钟。</p>
         </div></details>

@@ -24,8 +24,8 @@
       container.hidden = false;
       label.textContent = text;
       slider.disabled = !seekTo;
-      slider.setAttribute('aria-label', seekTo ? '播放进度，可点击或拖动跳转' : '录音进度');
-      slider.title = seekTo ? '点击或拖动跳转' : '录音中，仅显示进度';
+      slider.setAttribute('aria-label', seekTo ? '播放进度，可点击或拖动跳转' : text==='录音'?'录音进度':'播放进度');
+      slider.title = seekTo ? '点击或拖动跳转' : text==='录音'?'录音中，仅显示进度':'仅显示播放进度';
       slider.oninput = seekTo ? async () => {
         if (current !== revision) return;
         const ratio = Math.min(1, seconds(slider.value));

@@ -233,6 +233,14 @@
     $('songReplay').textContent='▷ 回听最近演唱';
     updateBackingControls();
   }
+  $('leadInMode').value='none';$('leadInSeconds').value=3;
+  $('leadInMode').onchange=()=>{updateLeadInSettings();saveProgress();};
+  function updateLeadInSettings(){
+    $('leadInSecondsRow').hidden=$('leadInMode').value!=='seconds';
+    $('previousLeadIn').disabled=cues.length<2;
+    $('leadInHint').textContent=$('leadInMode').value==='previous'?'从上一句开头听到片段起点，再开始录音。需要时间轴字幕；没有上一句时不前置。':'先播放片段前的原声作准备，不录入准备段。前 N 秒按视频时间计算，开头不足时从头播放。';
+  }
+  $('leadInSeconds').onchange=()=>{$('leadInSeconds').value=EchoPractice.leadInSeconds($('leadInSeconds').value);saveProgress();};
   $('speed').onchange = () => {updateSummaries();saveProgress();}; $('loopCount').onchange = updateSummaries;
   function currentId() { return new URL(location.href).searchParams.get('v'); }
   function video() {
@@ -247,6 +255,7 @@
   function controls() {
     const busy = mode !== 'idle';
     $('openLibrary').disabled=busy;
+    updateLeadInSettings();
     const focused=root.activeElement;
     for(const id of ['openSongRecording','takeMixDownload','assembleSong','assemblyType'])$(id).disabled=busy;
     const recording=mode==='recording';
@@ -270,7 +279,7 @@
     $('captionSetup').hidden=recording || cues.length>0;
     $('clipSettings').hidden=recording || (isSinging() && $('karaokeScope').value!=='clip');
     $('linePractice').hidden=isSinging() || recording;
-    for (const id of ['echoCancellation','autoGainControl','manualGainDb','captionSource','refreshCaptionTracks','contentLanguage','captionLayout','activityMode','read','import','transcriptRead','transcriptImport','prepareBacking','karaokeScope','useBacking','backingVolume','prev','next','markStart','markEnd','original','speed','start','end','record','startEarlier','startLater','endEarlier','endLater','loop','loopCount','autoPractice','prepSeconds','autoNext']) $(id).disabled = busy;
+    for (const id of ['echoCancellation','autoGainControl','manualGainDb','captionSource','refreshCaptionTracks','contentLanguage','captionLayout','activityMode','read','import','transcriptRead','transcriptImport','prepareBacking','karaokeScope','useBacking','backingVolume','prev','next','markStart','markEnd','original','speed','start','end','leadInMode','leadInSeconds','record','startEarlier','startLater','endEarlier','endLater','loop','loopCount','autoPractice','prepSeconds','autoNext']) $(id).disabled = busy;
     for(const id of ['karaokeScope','useBacking'])$(id).disabled=busy || !isSinging();
     $('backingVolume').disabled=!isSinging() || !['idle','backing','recording'].includes(mode);
     $('backingVolumeValue').textContent=`${Math.round(Number($('backingVolume').value)*100)}%`;
@@ -339,10 +348,10 @@
     transport.show({label, position: () => (v.currentTime-r.start)/r.speed,
       duration: () => (r.end-r.start)/r.speed, seekTo});
   }
-  async function seek(v, at, token) {
+  async function seek(v, at, token, force=false) {
     v.pause();
     if (token !== generation) throw Error('操作已停止。');
-    if (Math.abs(v.currentTime - at) < 0.03 && !v.seeking) return;
+    if (!force && Math.abs(v.currentTime - at) < 0.03 && !v.seeking) return;
     await new Promise((resolve, reject) => {
       const timeout = setTimeout(() => { cleanup(); reject(Error('视频定位超时，请重试。')); }, 10000);
       function cleanup() { clearTimeout(timeout); v.removeEventListener('seeked', done); }
@@ -351,7 +360,32 @@
     });
     if (token !== generation) throw Error('操作已停止。');
   }
-  async function original(r, token) {
+  function leadInStart(r){return EchoPractice.leadInStart(r.start,$('leadInSeconds').value,{mode:$('leadInMode').value,cues});}
+  async function playRecordingLeadIn(v,r,token){
+    const start=leadInStart(r);
+    if(start>=r.start)return false;
+    mode='lead-in';controls();v.muted=false;v.playbackRate=r.speed;
+    await seek(v,start,token);
+    if(token!==generation)return false;
+    const update=()=>status(`准备录音 · ${Math.max(0,Math.ceil((r.start-v.currentTime)/r.speed))} 秒后开始`);
+    update();v.addEventListener('timeupdate',update);
+    try{
+      await v.play();
+      if(token!==generation)return false;
+      await new Promise((resolve,reject)=>{
+        playback.onCancel(resolve);
+        showVideoTransport('准备录音 · 前置原声',v,{start,end:r.start,speed:r.speed});
+        playback.watchEnd(v,r.start,()=>{v.pause();resolve();});
+        playback.timeout(()=>{v.pause();reject(Error('前置播放超时，请检查视频后重试。'));},EchoPractice.playbackTimeout({start,end:r.start,speed:r.speed}));
+      });
+    }finally{
+      v.removeEventListener('timeupdate',update);
+      if(token===generation){playback.cancel();transport.hide();}
+    }
+    return token===generation;
+  }
+  async function original(r, token, withLeadIn=true) {
+    if(withLeadIn)r={...r,start:leadInStart(r)};
     closeWord();
     const v = video(); saveVideo(v); v.muted = false; v.playbackRate = r.speed;
     await seek(v, r.start, token);
@@ -395,7 +429,7 @@
     const start = Number($('start').value), end = Number($('end').value);
     if (!Number.isFinite(start) || !Number.isFinite(end) || start < 0 || end <= start) return;
     const title=(document.querySelector('ytd-watch-metadata h1')?.textContent || document.title || '').replace(/\s*[-–]\s*YouTube\s*$/,'').trim();
-    const session = {title:title || videoId,activity,useBacking:$('useBacking').checked,captionSource,captionSourceName,loadedCaptionSource,replayVocalVolume:replayMix().vocal,replayBackingVolume:replayMix().backing,replayWithBacking:$('replayWithBacking').checked,backingVolume:Number($('backingVolume').value),contentLanguage:$('contentLanguage').value,captionLayout:$('captionLayout').value,videoId,cues:cues.map(c=>({...c})),index,start,end,speed:$('speed').value,showChinese:$('showChinese').checked,hideText:$('hideText').checked,followCaptions:$('followCaptions').checked,karaokeScope:$('karaokeScope').value,selectedTakeId:take?.id,updatedAt:Date.now()};
+    const session = {title:title || videoId,leadInMode:$('leadInMode').value,leadInSeconds:EchoPractice.leadInSeconds($('leadInSeconds').value),activity,useBacking:$('useBacking').checked,captionSource,captionSourceName,loadedCaptionSource,replayVocalVolume:replayMix().vocal,replayBackingVolume:replayMix().backing,replayWithBacking:$('replayWithBacking').checked,backingVolume:Number($('backingVolume').value),contentLanguage:$('contentLanguage').value,captionLayout:$('captionLayout').value,videoId,cues:cues.map(c=>({...c})),index,start,end,speed:$('speed').value,showChinese:$('showChinese').checked,hideText:$('hideText').checked,followCaptions:$('followCaptions').checked,karaokeScope:$('karaokeScope').value,selectedTakeId:take?.id,updatedAt:Date.now()};
     void storage.saveSession(session).catch(()=>{
       if (!progressWarning && session.videoId === videoId) { progressWarning=true; status('练习位置未能保存，请检查本地存储空间。录音仍可下载。'); }
     });
@@ -484,6 +518,8 @@
         const sample=(session.cues || []).slice(0,32).map(c=>c.text).join(' ');
         $('captionLayout').value=['original','en-zh'].includes(session.captionLayout)?session.captionLayout:EchoLanguages.detect(sample)==='en'?'en-zh':'original';
         $('speed').value=['0.75','1','1.25'].includes(session.speed)?session.speed:'1';
+        $('leadInSeconds').value=session.leadInSeconds===undefined?3:EchoPractice.leadInSeconds(session.leadInSeconds);
+        $('leadInMode').value=['none','seconds','previous'].includes(session.leadInMode)?session.leadInMode:EchoPractice.leadInSeconds(session.leadInSeconds)>0?'seconds':'none';
         $('karaokeScope').value=session.karaokeScope==='clip'?'clip':'whole';
         $('backingVolume').value=Number.isFinite(session.backingVolume)?Math.max(0,Math.min(2,session.backingVolume)):1;
         $('replayVocalVolume').value=clampGain(session.replayVocalVolume);
@@ -826,12 +862,15 @@
         resolveRecording(true);
       }
     };
-    saveVideo(v); v.muted = true; v.playbackRate = r.speed;
-    await seek(v, r.start, token);
+    saveVideo(v);v.playbackRate=r.speed;
+    const hadLeadIn=await playRecordingLeadIn(v,r,token);
+    if(token!==generation)return false;
+    v.muted=true;
+    await seek(v, r.start, token, hadLeadIn);
     if (token !== generation) { mic.getTracks().forEach(t => t.stop()); return; }
     // Capture dry vocals before starting the singing monitor. Ordinary dubbing
-    // retains its existing video-first startup; do not reorder these paths.
-    if(!monitor){await v.play();if(token!==generation)return;}
+    // retains its existing video-first startup when no lead-in is requested.
+    if(!monitor && !hadLeadIn){await v.play();if(token!==generation)return;}
     recorder.start(250);
     const captureStartedAt=clock();
     mode = 'recording'; controls();
@@ -844,7 +883,7 @@
       vocalOffset=Math.max(0,(clock()-captureStartedAt)/1000-((monitor.position?.() ?? r.start)-r.start)/r.speed);
     }
     if(token!==generation)return completed;
-    if(monitor)await v.play();
+    if(monitor || hadLeadIn)await v.play();
     if(token!==generation)return completed;
     starting=false;
     if(currentRecorder.state==='paused'){
@@ -1204,7 +1243,7 @@
   $('original').onclick = guarded(async () => { const r = range(), token = ++generation; mode = 'original'; controls(); status('正在播放原声…'); await original(r, token); if (token === generation) { finish(); status('原声播放完成。'); } });
   $('record').onclick = guarded(() => record()); $('stop').onclick = stop;
   $('replay').onclick = guarded(async () => { const token = ++generation; mode = 'replay'; controls(); status('正在随画面播放你的配音…'); await replay(token); });
-  $('compare').onclick = guarded(async () => { if (!take) return; const token = ++generation; mode = 'compare'; controls(); status('对比 1/2：原声'); await original(take, token); if (token !== generation) return; status('对比 2/2：你的配音'); await replay(token); });
+  $('compare').onclick = guarded(async () => { if (!take) return; const token = ++generation; mode = 'compare'; controls(); status('对比 1/2：原声'); await original(take, token, false); if (token !== generation) return; status('对比 2/2：你的配音'); await replay(token); });
   $('import').onclick = $('transcriptImport').onclick = () => { if(mode==='idle')$('file').click(); };
   $('file').onchange = guarded(async () => {
     const file=$('file').files[0];$('file').value='';
@@ -1302,6 +1341,7 @@
     $('list').style.display='';
     renderActivity();
     savedBackings = [];
+    $('leadInMode').value='none';$('leadInSeconds').value=3;
     $('karaokeScope').value = 'whole';
     $('backingVolume').value = 1;
     $('replayVocalVolume').value=1;$('replayBackingVolume').value=1;$('replayWithBacking').checked=true;replayVoiceMax=2;

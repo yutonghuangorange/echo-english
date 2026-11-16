@@ -39,6 +39,17 @@
       if (!advance()) return;
     }
   }
+  function leadInSeconds(value){const n=Number(value);return Number.isFinite(n)?Math.max(0,Math.min(30,Math.round(n))):0;}
+  function leadInStart(start,seconds,{mode='seconds',cues=[]}={}){
+    if(mode==='none')return start;
+    if(mode==='previous'){
+      const ordered=cues.filter(c=>Number.isFinite(c.start) && Number.isFinite(c.end) && c.end>c.start).sort((a,b)=>a.start-b.start);
+      const current=ordered.findIndex(c=>c.end>start+0.001);
+      const previous=current<0?ordered.at(-1):ordered[current-1];
+      return previous && previous.start<start?Math.max(0,previous.start):start;
+    }
+    return Math.max(0,start-leadInSeconds(seconds));
+  }
   function playbackTimeout(range) {return Math.ceil((range.end-range.start)/range.speed*1000)+15000;}
   function recordingQueue(takes) {
     const latest=new Map();
@@ -53,6 +64,6 @@
   async function playQueue({queue,active,play}) {
     for(let i=0;i<queue.length && active();i++)await play(queue[i],i,queue.length);
   }
-  const api = {splitCaption,captionFrame,nudge,runLoop,runPractice,recordingQueue,playQueue,playbackTimeout};
+  const api = {leadInSeconds,leadInStart,splitCaption,captionFrame,nudge,runLoop,runPractice,recordingQueue,playQueue,playbackTimeout};
   if (typeof module !== 'undefined') module.exports = api; else root.EchoPractice = api;
 })(globalThis);

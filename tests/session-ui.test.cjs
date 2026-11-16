@@ -970,3 +970,62 @@ test('manual input gain reaches the saved vocal recording and meter, then releas
   assert.equal(await take.blob.text(),'amplified-vocal');assert.deepEqual(meterStreams,[processed]);assert.equal(disposed,1);
   (await storage.ready).close();
 });
+
+function leadInVideo({hold=false}={}){
+  const events=new Map(),plays=[];let time=0;
+  return {duration:60,muted:true,playbackRate:1.25,plays,pause(){},
+    get currentTime(){return time;},set currentTime(value){time=value;queueMicrotask(()=>{for(const fn of events.get('seeked') || [])fn();});},
+    addEventListener(name,fn){if(!events.has(name))events.set(name,new Set());events.get(name).add(fn);},
+    removeEventListener(name,fn){events.get(name)?.delete(fn);},
+    async play(){plays.push({at:time,muted:this.muted});if(!hold)time=plays.length===1?10:11;}
+  };
+}
+for(const leadMode of ['seconds','previous'])test(`recording ${leadMode} lead-in plays context without recording it and preserves the saved range`,async()=>{
+  const storage=createStorage(new IDBFactory()),video=leadInVideo(),starts=[];
+  await storage.saveSession({videoId:'video',start:10,end:11,speed:'1',cues:[{start:5,end:8,text:'Previous'},{start:10,end:11,text:'Selected'}],leadInMode:leadMode,leadInSeconds:3});
+  const mic={getTracks:()=>[{stop(){}}]};
+  class MediaRecorder{
+    static isTypeSupported(){return true;}
+    constructor(){this.state='inactive';this.mimeType='audio/webm';}
+    start(){starts.push(video.currentTime);this.state='recording';}
+    stop(){this.state='inactive';this.ondataavailable({data:new Blob(['only-target-vocal'])});queueMicrotask(()=>this.onstop());}
+  }
+  const {nodes}=await mount(storage,{video,globals:{MediaRecorder,navigator:{mediaDevices:{async getUserMedia(){return mic;}}},
+    requestAnimationFrame:fn=>setTimeout(fn,1),cancelAnimationFrame:clearTimeout}});
+  assert.equal(nodes.get('leadInSeconds').value,3);
+  await nodes.get('record').onclick();
+  assert.deepEqual(video.plays,[{at:leadMode==='previous'?5:7,muted:false},{at:10,muted:true}]);assert.deepEqual(starts,[10]);
+  const [take]=await storage.listTakes('video');assert.equal(take.start,10);assert.equal(take.end,11);
+  assert.equal(await take.blob.text(),'only-target-vocal');assert.equal(video.muted,true);assert.equal(video.playbackRate,1.25);
+  nodes.get('leadInSeconds').value='5';nodes.get('leadInSeconds').onchange();
+  await new Promise(r=>setTimeout(r,5));assert.equal((await storage.getSession('video')).leadInSeconds,5);
+  (await storage.ready).close();
+});
+test('stopping during the lead-in cancels preparation, releases the mic and saves no empty take',async()=>{
+  const storage=createStorage(new IDBFactory()),video=leadInVideo({hold:true});let stops=0,starts=0;
+  await storage.saveSession({videoId:'video',start:10,end:11,speed:'1',cues:[],leadInSeconds:3});
+  class MediaRecorder{static isTypeSupported(){return true;}constructor(){this.state='inactive';}start(){starts++;}}
+  const {nodes}=await mount(storage,{video,globals:{MediaRecorder,
+    navigator:{mediaDevices:{async getUserMedia(){return {getTracks:()=>[{stop(){stops++;}}]};}}},
+    requestAnimationFrame:fn=>setTimeout(fn,1),cancelAnimationFrame:clearTimeout}});
+  const pending=nodes.get('record').onclick();
+  for(let i=0;i<30 && !video.plays.length;i++)await new Promise(r=>setTimeout(r,2));
+  assert.equal(video.plays.length,1);assert.match(nodes.get('status').textContent,/准备录音/);
+  assert.equal(nodes.get('leadInSeconds').disabled,true);nodes.get('stop').onclick();await pending;
+  assert.equal(starts,0);assert(stops>=1);assert.equal((await storage.listTakes('video')).length,0);
+  assert.equal(video.muted,true);assert.equal(video.playbackRate,1.25);assert.equal(nodes.get('record').disabled,false);
+  (await storage.ready).close();
+});
+test('listening includes the configured context while recorded comparison keeps the exact range',async()=>{
+  const storage=createStorage(new IDBFactory()),video=leadInVideo();
+  await storage.saveSession({videoId:'video',start:10,end:11,speed:'1',cues:[],leadInSeconds:3,selectedTakeId:'compare-lead'});
+  await storage.saveTake({id:'compare-lead',videoId:'video',cueKey:'manual:10:11',start:10,end:11,speed:1,createdAt:1,blob:new Blob(['voice'])});
+  class Audio{constructor(){this.currentTime=0;this.duration=1;}pause(){}async play(){this.currentTime=1;queueMicrotask(()=>this.onended?.());}}
+  // End the source preview immediately; playback still uses its real end watcher.
+  video.play=async function(){this.plays.push({at:this.currentTime,muted:this.muted});this.currentTime=11;};
+  const {nodes}=await mount(storage,{video,globals:{Audio,requestAnimationFrame:fn=>setTimeout(fn,1),cancelAnimationFrame:clearTimeout}});
+  await nodes.get('original').onclick();assert.equal(video.plays[0].at,7);
+  assert.equal(nodes.get('start').value,10);assert.equal(nodes.get('end').value,11);
+  await nodes.get('compare').onclick();assert.equal(video.plays[1].at,10);
+  (await storage.ready).close();
+});
