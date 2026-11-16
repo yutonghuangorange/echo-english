@@ -70,3 +70,9 @@ bash karaoke/start.sh
 npm test
 python3 -m unittest discover -s karaoke -p 'test_*.py'
 ```
+
+## 点击生成没有进度
+
+伴奏服务必须运行在使用插件的同一台电脑上，地址固定为 `127.0.0.1:8765`。GitHub 只同步代码，不同步 Python 虚拟环境、模型缓存或运行中的服务。从另一台电脑拉取项目后，需要按本文重新安装依赖并执行 `bash karaoke/start.sh`；若终端提示先安装依赖，则该电脑尚未配置 `.venv`。
+
+生成失败原因会保留在生成按钮下方。超过 5 分钟的视频请改选「当前练习片段」。

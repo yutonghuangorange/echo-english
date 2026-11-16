@@ -25,7 +25,7 @@
       response=await fetcher(base+path,{method:body?'POST':'GET',body,
         headers:{'X-Echo-Client':'echo-english',...(body?{'Content-Type':'application/json'}:{})},
         credentials:'omit',redirect:'error',signal:AbortSignal.timeout(action==='audio'?30000:10000)});
-    }catch{throw Error('无法连接本机伴奏服务。请按 karaoke/README.md 启动服务后重试。');}
+    }catch{throw Error('无法连接本机伴奏服务。请在当前电脑的项目目录运行 bash karaoke/start.sh；首次使用需先按 karaoke/README.md 安装依赖。');}
     if(!response.ok){const data=await response.json();throw Error(data.error || '伴奏服务请求失败。');}
     if(action!=='audio')return await response.json();
     if(Number(response.headers.get('Content-Length'))>24*1024*1024)throw Error('伴奏文件过大，请缩短片段。');

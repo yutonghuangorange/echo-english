@@ -177,6 +177,10 @@ test('karaoke service failure leaves ordinary recording controls available',asyn
   nodes.get('activityMode').value='sing';nodes.get('activityMode').onchange();
   await nodes.get('prepareBacking').onclick();
   assert.match(nodes.get('status').textContent,/本机服务未启动/);
+  assert.match(nodes.get('karaokeInfo').textContent,/本机服务未启动/);
+  nodes.get('speed').onchange();
+  assert.match(nodes.get('karaokeInfo').textContent,/本机服务未启动/);
+  assert.equal(nodes.get('karaokeProgress').hidden,true);
   assert.equal(nodes.get('record').disabled,false);assert.equal(nodes.get('previewBacking').disabled,true);
   (await storage.ready).close();
 });
@@ -383,5 +387,15 @@ test('old Chinese sessions keep complete lyrics rather than enabling legacy Engl
   await storage.saveSession({videoId:'video',index:0,start:0,end:2,speed:'1',showChinese:true,cues:[{start:0,end:2,text}]});
   const {nodes}=await mount(storage);assert.equal(nodes.get('captionLayout').value,'original');
   assert.equal(nodes.get('caption').children.map(n=>n.textContent).join(''),text);
+  (await storage.ready).close();
+});
+
+test('whole-song validation remains beside the generation button without sending a request',async()=>{
+  const storage=createStorage(new IDBFactory());let requests=0;
+  const {nodes}=await mount(storage,{video:{duration:360,pause(){}},globals:{chrome:{runtime:{onMessage:{addListener(){}},async sendMessage(){requests++;return {};}}}}});
+  nodes.get('activityMode').value='sing';nodes.get('activityMode').onchange();
+  await nodes.get('prepareBacking').onclick();
+  assert.equal(requests,0);assert.match(nodes.get('karaokeInfo').textContent,/超过 5 分钟/);assert.match(nodes.get('status').textContent,/超过 5 分钟/);
+  assert.equal(nodes.get('prepareBacking').disabled,false);
   (await storage.ready).close();
 });
