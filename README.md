@@ -304,6 +304,11 @@ Echo 从英语练习扩展为多语言对白与歌曲练习。语言设置与活
 
 默认跟随 YouTube 播放器当前字幕；播放器未提供当前轨道信息时，读取已打开的文字记录，并明确标注来源。手动选择轨道后，读取失败会保留旧字幕并提示，不替换为英文。「内容语言」只用于文本处理和点词查词，与字幕来源分开。
 
-读取由扩展直接请求 YouTube，无需启动伴奏服务、安装其他插件或提供 API Key。新增的 YouTube 主机权限用于后台读取字幕；仅允许当前视频的字幕请求，不发送麦克风录音。更新后需在 `chrome://extensions` 重新加载 Echo，接受 Chrome 如有显示的权限更新，然后刷新 YouTube 页面。
+读取由 YouTube 页内的内容脚本发起同源请求，无需启动伴奏服务、安装其他插件或提供 API Key，也无需额外的 YouTube 后台主机权限。请求不携带账号凭据或麦克风录音。更新后需在 `chrome://extensions` 重新加载 Echo，再刷新 YouTube 页面。
 
 此功能使用 YouTube 非公开字幕接口，网站变动可能影响读取；失败时可刷新语言、读取文字记录或导入 SRT/VTT。实现参考 [youtube-transcript-api 的客户端配置](https://github.com/jdepoix/youtube-transcript-api/blob/master/youtube_transcript_api/_settings.py)，没有引入其 Python 依赖。
+
+
+## 0.13.1 字幕请求来源修复
+
+字幕读取从扩展后台移到 YouTube 页内，避免扩展来源触发 HTTP 403。移除上一版新增的 YouTube 后台主机权限和字幕消息中转。列表、字幕下载错误分别显示阶段及 HTTP 状态；遇到字幕签名地址被拒绝时自动刷新一次，仍读取原来选中的轨道，失败时保留旧歌词。

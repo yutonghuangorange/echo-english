@@ -20,16 +20,21 @@
       return Number.isFinite(start)&&start>=0&&Number.isFinite(end)&&end>start&&start<duration&&text?[{start,end,text}]:[];
     }).sort((a,b)=>a.start-b.start);
   }
-  function createRelay({fetcher=root.fetch,now=Date.now}={}){
+  function createClient({fetcher=root.fetch,now=Date.now}={}){
     const cache=new Map(),pending=new Map();
     async function json(url,options={}){
+      const stage=url===playerURL?'字幕语言列表':'所选字幕内容';
       let response;
-      try{response=await fetcher(url,{...options,credentials:'omit',redirect:'error',signal:AbortSignal.timeout(15000)});}catch{throw Error('无法连接 YouTube 字幕服务，请稍后重试。');}
-      if(!response.ok)throw Error('YouTube 字幕请求失败，请稍后重试。');
+      try{response=await fetcher(url,{...options,credentials:'omit',redirect:'error',signal:AbortSignal.timeout(15000)});}catch{throw Error(`${stage}连接失败，请检查网络后重试。`);}
+      if(!response.ok){
+        const reason=response.status===403?'YouTube 拒绝了请求，请刷新视频后重试。':response.status===429?'请求过于频繁，请稍后重试。':'请稍后重试。';
+        const error=Error(`${stage}读取失败（HTTP ${response.status || '未知'}）。${reason}`);
+        error.status=response.status;throw error;
+      }
       if(Number(response.headers?.get('Content-Length'))>4*1024*1024)throw Error('字幕内容过大，请导入字幕文件。');
       const text=await response.text();
       if(text.length>4*1024*1024)throw Error('字幕内容过大，请导入字幕文件。');
-      try{return JSON.parse(text);}catch{throw Error('YouTube 返回了空字幕或无法识别的内容，请刷新视频后重试。');}
+      try{return JSON.parse(text);}catch{throw Error(`${stage}为空或无法识别，请刷新视频后重试。`);}
     }
     async function tracks(videoId,refresh=false){
       const old=cache.get(videoId);
@@ -46,7 +51,7 @@
       pending.set(videoId,task);
       try{return await task;}finally{pending.delete(videoId);}
     }
-    return {async request(message,sender){
+    return {async request(message,sender={tab:{url:root.location?.href},frameId:0}){
       const url=new URL(sender.tab?.url || 'https://invalid.local');
       if(url.origin!=='https://www.youtube.com' || url.pathname!=='/watch' || url.searchParams.get('v')!==message.videoId || !/^[\w-]{11}$/.test(message.videoId) || (sender.frameId!==undefined && sender.frameId!==0))throw Error('视频已切换，请在当前 YouTube 视频页读取字幕。');
       if(!['list','read'].includes(message.action))throw Error('无效的字幕操作。');
@@ -54,10 +59,19 @@
       const publicTracks=list.map(({url,...track})=>track);
       if(message.action==='list')return {tracks:publicTracks};
       if(!Number.isFinite(message.duration) || message.duration<=0)throw Error('请等待视频时长加载。');
-      const track=list.find(t=>t.id===message.trackId);
+      let track=list.find(t=>t.id===message.trackId);
       if(!track)throw Error('所选字幕已不可用，请刷新字幕语言列表。');
-      const endpoint=new URL(track.url);endpoint.searchParams.set('fmt','json3');
-      const cues=jsonCues(await json(endpoint.href),message.duration);
+      const download=async selected=>{const endpoint=new URL(selected.url);endpoint.searchParams.set('fmt','json3');return jsonCues(await json(endpoint.href),message.duration);};
+      let cues;
+      try{cues=await download(track);}catch(error){
+        // Signed URLs can expire or become invalid after a network change.
+        // Refresh once, preserving the exact selected track; never switch language.
+        if(error.status!==403)throw error;
+        const fresh=await tracks(message.videoId,true);
+        track=fresh.find(t=>t.id===message.trackId);
+        if(!track)throw Error('所选字幕已不可用，请刷新字幕语言列表。');
+        cues=await download(track);
+      }
       if(!cues.length)throw Error('所选轨道没有可用字幕，已保留原有歌词。');
       return {tracks:publicTracks,trackId:track.id,cues};
     }};
@@ -77,6 +91,6 @@
       doc.dispatchEvent(new env.CustomEvent('echo-caption-current',{detail:{videoId,requestId}}));
     });
   }
-  const api={normalizeTracks,jsonCues,createRelay,currentTrack};
+  const api={normalizeTracks,jsonCues,createClient,currentTrack};
   if(typeof module!=='undefined')module.exports=api;else root.EchoCaptionTracks=api;
 })(globalThis);

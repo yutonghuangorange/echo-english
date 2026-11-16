@@ -14,7 +14,7 @@
 | `extension/karaoke.js` | 伴奏覆盖范围、服务状态格式化、耳机监听、演唱回放伴奏同步与 Web Audio 音量 |
 | `extension/audio-export.js` | 分段取舍、时间轴对齐、人声与伴奏混合、WAV 导出 |
 | `extension/storage.js` | IndexedDB 迁移、练习会话、录音版本与伴奏缓存 |
-| `extension/caption-tracks.js` | 字幕轨道元数据、后台定域请求、JSON3 时间轴解析和当前轨道查询客户端 |
+| `extension/caption-tracks.js` | 字幕轨道元数据、页面同源请求、JSON3 时间轴解析和当前轨道查询客户端 |
 | `extension/caption-current.js` | MAIN 环境只读桥接，仅返回当前视频选中字幕的语言和轨道标识；不改变播放器 |
 | `extension/subtitles.js`、`transcript.js` | 字幕文件解析、YouTube 文字记录读取 |
 | `extension/languages.js`、`dictionary.js` | 语言显示策略、英语词典数据整理 |
@@ -44,7 +44,9 @@
 
 ## 字幕轨道
 
-后台 `echo-captions` 只接受主框架当前 `/watch?v=…` 视频的 `list/read`，固定访问 YouTube player 及其返回的同视频 timedtext URL；不接受调用者传入 URL，不携带账号凭据，不读取 Cookie。元数据缓存 5 分钟，上限 24 个视频，轨道读取保留简繁体标识；`fmt` 使用替换而不是追加，避免已有 `srv3` 覆盖 `json3`。
+`captionClient` 在 YouTube 页的内容脚本中发起同源请求，只接受当前 `/watch?v=…` 视频的 `list/read`，固定访问 YouTube player 及其返回的同视频 timedtext URL；不接受调用者传入 URL，不携带账号凭据，不读取 Cookie。扩展后台不参与字幕请求，避免扩展 Origin 被 YouTube 拒绝。请求归属规则见 [Chrome 同源请求文档](https://developer.chrome.com/docs/extensions/develop/concepts/network-requests)。元数据缓存 5 分钟，上限 24 个视频，轨道读取保留简繁体标识；`fmt` 使用替换而不是追加，避免已有 `srv3` 覆盖 `json3`。
+
+签名字幕地址返回 403 时刷新元数据并按原轨道重试一次，不对 429 自动重试。错误提示包含请求阶段与 HTTP 状态。
 
 MAIN 只读桥接使用单次请求标识与当前视频校验，仅传回字幕身份；无网络或扩展特权。读取结果仍按 `generation` 和视频归属校验。字幕选择与已加载来源分开保存；失败、停止时不覆盖旧歌词；切换来源不删除录音。接口是 YouTube 非公开实现，需要持续维护；Android 客户端配置参考 youtube-transcript-api 上游。
 

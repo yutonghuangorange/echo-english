@@ -18,6 +18,7 @@
   });
   let activity = 'speech';
   let captionTracks=[],captionListRequest=0,captionSource='auto',captionSourceName='',loadedCaptionSource='';
+  const captionClient=EchoCaptionTracks.createClient();
   let captionVideo = null, captionSignature = '', captionGhost = null;
   const captionEvents = ['timeupdate','seeking','seeked','play','pause','ended'];
   let savedBackings = [], activeKaraokeJob = null, recordMonitor = null, songTake = null;
@@ -1167,8 +1168,7 @@
     $('captionSourceInfo').textContent=loadedCaptionSource?`已加载：${loadedCaptionSource}。切换来源后会加载新字幕，录音仍保留。`:'可刷新语言后选择字幕。内容语言只影响文本处理。';
   }
   async function captionsRequest(action,extra={}){
-    if(!chrome.runtime.sendMessage)throw Error('请重新加载扩展并刷新视频页后读取字幕。');
-    const result=await chrome.runtime.sendMessage({type:'echo-captions',action,videoId,...extra});
+    const result=await captionClient.request({action,videoId,...extra});
     if(result?.error)throw Error(result.error);
     if(!result)throw Error('字幕服务未响应，请重新加载扩展并刷新视频。');
     return result;

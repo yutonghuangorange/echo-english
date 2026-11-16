@@ -31,6 +31,9 @@ async function mount(storage, overrides = {}) {
     EchoCaptionTracks:require('../extension/caption-tracks.js'),EchoPanelView:require('../extension/panel-view.js'),EchoTransport:require('../extension/transport.js'),EchoPlayback:require('../extension/playback.js'),
     EchoAudioExport:require('../extension/audio-export.js'),EchoPanelSize:require('../extension/panel-size.js'),EchoLanguages:require('../extension/languages.js'),EchoKaraoke:require('../extension/karaoke.js'),EchoStorage:{...require('../extension/storage.js'),createStorage:()=>storage},EchoPractice:require('../extension/practice.js'),EchoDictionary:require('../extension/dictionary.js'),EchoSubtitles:require('../extension/subtitles.js'),EchoAudioAnalysis:require('../extension/audio-analysis.js')};
   Object.assign(context,overrides.globals || {});
+  // Existing UI fixtures provide a caption transport; integration fixtures can
+  // pass the real page-context client to verify fetch rather than messaging.
+  if(!overrides.globals?.EchoCaptionTracks?.createClient)context.EchoCaptionTracks={...context.EchoCaptionTracks,createClient:()=>({request:message=>context.chrome.runtime.sendMessage?.({...message,type:'echo-captions'})})};
   for (const name of ['EchoTransport','EchoPlayback']) {
     const api=context[name];
     context[name]={...api,create:options=>api.create({...options,env:context})};
@@ -844,5 +847,24 @@ test('stopping a pending caption request prevents late subtitle replacement',asy
   const reading=nodes.get('read').onclick();for(let i=0;i<20 && !release;i++)await Promise.resolve();
   assert.equal(typeof release,'function');nodes.get('stop').onclick();release({cues:[{start:5,end:6,text:'Late result'}]});await reading;
   assert.equal((await storage.getSession('video')).cues[0].text,'Original saved caption');assert.equal(nodes.get('read').disabled,false);
+  (await storage.ready).close();
+});
+
+test('caption UI uses the page-context client without sending a background request',async()=>{
+  const storage=createStorage(new IDBFactory()),calls=[];let background=0;
+  const videoId='abcdefghijk',location={href:'https://www.youtube.com/watch?v='+videoId,pathname:'/watch'};
+  const pageContext={location,URL,AbortSignal,setTimeout,clearTimeout,fetch:async(url,options)=>{
+    calls.push({url,options});
+    const data=url.includes('/player')?{videoDetails:{videoId},captions:{playerCaptionsTracklistRenderer:{captionTracks:[{vssId:'.zh-Hans',languageCode:'zh-Hans',baseUrl:'https://www.youtube.com/api/timedtext?v='+videoId+'&lang=zh-Hans'}]}}}:{events:[{tStartMs:0,dDurationMs:2000,segs:[{utf8:'页面内字幕'}]}]};
+    return {ok:true,async text(){return JSON.stringify(data);}};
+  }};
+  vm.runInNewContext(fs.readFileSync('extension/caption-tracks.js','utf8'),pageContext);
+  const {nodes}=await mount(storage,{globals:{location,EchoCaptionTracks:pageContext.EchoCaptionTracks,chrome:{runtime:{onMessage:{addListener(){}},sendMessage(){background++;throw Error('Unexpected background request');}}}}});
+  await nodes.get('refreshCaptionTracks').onclick();assert.equal(background,0);assert.equal(calls.length,1);
+  nodes.get('captionSource').value='.zh-Hans';nodes.get('captionSource').onchange();
+  for(let i=0;i<20 && calls.length<2;i++)await new Promise(r=>setTimeout(r,2));
+  await new Promise(r=>setTimeout(r,5));
+  assert.equal(calls.length,2);assert.equal(background,0);assert.equal(calls[0].options.credentials,'omit');
+  assert.equal((await storage.getSession(videoId)).cues[0].text,'页面内字幕');
   (await storage.ready).close();
 });

@@ -6,14 +6,8 @@ chrome.action.onClicked.addListener(async (tab) => {
 
 importScripts('dictionary.js');
 importScripts('karaoke-relay.js');
-importScripts('caption-tracks.js');
-const captionRelay=EchoCaptionTracks.createRelay();
 const dictionaryCache = new Map();
 chrome.runtime.onMessage.addListener((message, sender, reply) => {
-  if(message.type==='echo-captions'){
-    captionRelay.request(message,sender).then(reply,error=>reply({error:error.message}));
-    return true;
-  }
   if (message.type === 'echo-karaoke') {
     EchoKaraokeRelay.request(message,sender).then(reply,error=>reply({error:error.message}));
     return true;
