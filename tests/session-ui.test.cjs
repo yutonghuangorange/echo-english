@@ -230,7 +230,7 @@ test('song mode exposes main recording and guides missing accompaniment without 
   nodes.get('activityMode').value='sing';nodes.get('activityMode').onchange();
   assert.equal(nodes.get('singActions').hidden,false);assert.equal(nodes.get('practiceDock').hidden,false);
   assert.equal(nodes.get('practiceTools').open,false);assert.equal(nodes.get('practiceToolsSummary').hidden,false);
-  assert.equal(nodes.get('karaokeSettings').open,false);assert.equal(nodes.get('record').disabled,false);
+  assert.equal(nodes.get('karaokeSettings').open,true);assert.equal(nodes.get('record').disabled,false);
   await nodes.get('record').onclick();assert.equal(micRequests,0);assert.equal(nodes.get('karaokeSettings').open,true);
   nodes.get('activityMode').value='speech';nodes.get('activityMode').onchange();
   assert.equal(nodes.get('singActions').hidden,true);assert.equal(nodes.get('karaokeSettings').hidden,true);
@@ -1124,5 +1124,25 @@ for(const action of ['close','cancel'])test(`assembly ${action} fences a pending
   assert.equal(nodes.get('assemblyAudio').hidden,true);assert.equal(downloads.length,0);
   if(action==='cancel'){assert.equal(nodes.get('assemblyDialog').open,true);assert.equal(nodes.get('assemblyDownload').disabled,false);nodes.get('closeAssembly').onclick();}
   else assert.equal(nodes.get('assemblyDialog').open,false);
+  (await storage.ready).close();
+});
+
+test('fold preferences survive mode changes and remount without breaking settings summaries',async()=>{
+  const storage=createStorage(new IDBFactory()),preferences=new Map();
+  const localStorage={getItem:key=>preferences.get(key) || null,setItem:(key,value)=>preferences.set(key,value)};
+  const globals={window:{localStorage,addEventListener(){},speechSynthesis:{cancel(){}}}};
+  const {nodes}=await mount(storage,{globals});
+  nodes.get('practiceTools').open=true;nodes.get('practiceTools').ontoggle();
+  nodes.get('karaokeSettings').open=false;nodes.get('karaokeSettings').ontoggle();
+  nodes.get('activityMode').value='sing';nodes.get('activityMode').onchange();
+  assert.equal(nodes.get('practiceTools').open,true);assert.equal(nodes.get('karaokeSettings').open,false);
+  nodes.get('leadInMode').value='seconds';nodes.get('leadInMode').onchange();
+  nodes.get('leadInSeconds').value=5;nodes.get('leadInSeconds').onchange();
+  assert.match(nodes.get('practiceToolsState').textContent,/前置 5 秒.*循环 3 次/);
+  nodes.get('manualGainDb').value=6;nodes.get('manualGainDb').oninput();
+  assert.match(nodes.get('speedSummary').textContent,/增益 \+6 dB/);
+  const restored=await mount(storage,{globals});
+  assert.equal(restored.nodes.get('practiceTools').open,true);
+  assert.equal(restored.nodes.get('karaokeSettings').open,false);
   (await storage.ready).close();
 });
