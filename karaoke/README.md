@@ -156,3 +156,5 @@ python3 -m unittest discover -s karaoke -p 'test_*.py'
 伴奏服务必须运行在使用插件的同一台电脑上，地址固定为 `127.0.0.1:8765`。GitHub 只同步代码，不同步 Python 虚拟环境、模型缓存或运行中的服务。从另一台电脑拉取项目后，在项目根目录运行 `bash start-karaoke.sh`，Windows 使用上方 PowerShell 命令，安装依赖并启动服务。更新服务代码后，需在旧终端按 Ctrl+C，再重新启动服务；只刷新浏览器不会更新运行中的 Python 进程。
 
 生成失败原因会保留在生成按钮下方。超过 10 分钟的视频请改选「当前练习片段」。
+
+MPS 的分离子进程单独设置 PyTorch 官方的 `PYTORCH_ENABLE_MPS_FALLBACK=1`：当前 PyTorch 2.5.1 的部分卷积存在 MPS 维度限制，这些算子允许转 CPU 执行，模型仍选择 MPS。显式 `--device mps` 禁止的是整项任务改用 CPU，不禁止这种算子级兼容处理；不能据此宣称所有计算都在 GPU 上。若兼容处理后仍失败，自动模式才会重新运行一次完整 CPU 任务，显式 MPS 则报错。

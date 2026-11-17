@@ -240,6 +240,10 @@ class Jobs:
             raise Cancelled()
         env = dict(os.environ, OMP_NUM_THREADS="2", MKL_NUM_THREADS="2",
                    TORCH_HOME=str(Path(__file__).resolve().parent.parent / ".cache" / "torch"))
+        if job.get("device") == "mps":
+            # Official PyTorch compatibility path for unsupported MPS operators
+            # (2.5.1 Conv1d has a 65536 dimension limit). The model stays on MPS.
+            env["PYTORCH_ENABLE_MPS_FALLBACK"] = "1"
         with (job["directory"] / "worker.log").open("ab") as log:
             proc = subprocess.Popen(args, stdout=log, stderr=log, env=env, **process_options())
             deadline = time.monotonic() + timeout

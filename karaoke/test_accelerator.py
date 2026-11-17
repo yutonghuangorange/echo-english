@@ -1,4 +1,5 @@
 import json
+import os
 import subprocess
 from pathlib import Path
 import tempfile
@@ -93,6 +94,19 @@ class AcceleratorTests(unittest.TestCase):
                 with log.open("a") as output:
                     output.write("10%|bar| 2.0/20.0 [00:01<00:18, 1s/seconds]")
                 self.assertEqual(Jobs.public(job)["progress"], 10)
+
+    def test_mps_operator_fallback_is_confined_to_the_worker_environment(self):
+        for device in ("mps", "cuda", "cpu"):
+            with self.subTest(device=device), tempfile.TemporaryDirectory() as directory:
+                job = {"directory": Path(directory), "cancel": threading.Event(), "device": device}
+                process = Mock(returncode=0)
+                process.poll.return_value = 0
+                with patch.dict("server.os.environ", {}, clear=True), \
+                        patch("server.subprocess.Popen", return_value=process) as launch:
+                    Jobs.command(job, ["worker"], 10, "failed")
+                    env = launch.call_args.kwargs["env"]
+                    self.assertEqual(env.get("PYTORCH_ENABLE_MPS_FALLBACK"), "1" if device == "mps" else None)
+                    self.assertNotIn("PYTORCH_ENABLE_MPS_FALLBACK", os.environ)
 
     def test_gpu_retry_respects_errors_cancellation_and_forced_mode(self):
         for device, error, fallback, cancelled, expected in (
