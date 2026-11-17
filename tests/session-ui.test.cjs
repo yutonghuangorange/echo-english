@@ -1844,3 +1844,14 @@ test('setup wizard checks lossless support and keeps undo scoped to the applicat
   assert.equal(nodes.get('wizardUndo').hidden,true);assert.equal(nodes.get('wizardContinue').hidden,true);
   await new Promise(r=>setTimeout(r,5));(await storage.ready).close();
 });
+
+test('ready setup recommendations use the inline audition area without a duplicate navigation button',async()=>{
+  const storage=createStorage(new IDBFactory());
+  await storage.saveSession({videoId:'video',cues:[{start:0,end:5,text:'First'}],index:0,start:0,end:5,speed:'1'});
+  const {nodes}=await mount(storage);
+  nodes.get('openPreparation').onclick();nodes.get('wizardApply').onclick();
+  assert.equal(nodes.get('wizardContinue').hidden,true);assert.equal(nodes.get('wizardUndo').hidden,false);
+  assert.match(nodes.get('wizardMessage').textContent,/下方直接试音/);
+  assert.equal(nodes.get('micTestStart').disabled,false);assert.equal(nodes.get('toolsDialog').open,true);
+  await new Promise(r=>setTimeout(r,5));(await storage.ready).close();
+});

@@ -274,7 +274,7 @@
     if(!cues.length)return {label:'准备字幕 →',target:'captions'};
     if(!selectionState().value?.range)return {label:'调整练习范围 →',target:'practice'};
     if(usesBacking() && !backingFor(selectedRange()))return {label:'准备'+backingName()+' →',target:'backing'};
-    return {label:'麦克风试音 →',target:'mic'};
+    return {label:null,target:'ready'};
   }
   const tools=EchoPracticeTools.attach({view:root,doc:document,env:globalThis,recording:EchoRecording,meter:EchoLiveMeter,
     getSettings:()=>({activity,losslessSupported:EchoMicrophone.supportsLossless(globalThis.MediaRecorder),constraints:microphoneConstraints(),gainDb:gainPreferences[activity]?0:manualGainPreferences[activity],quality:recordingQuality,sidetone:sidetoneEnabled,sidetoneVolume,sidetoneMode,
@@ -291,7 +291,7 @@
       echoPreferences[activity]=p.echo;gainPreferences[activity]=p.gain;sidetoneEnabled=p.sidetone;recordingQuality=p.quality;
       $('leadInMode').value=p.lead;$('leadInSeconds').value=3;
       refreshSetupSettings();showPage('practice');
-      const next=setupNext(),message='推荐设置已应用。'+(next.target==='captions'?'先读取或导入字幕，也可关闭弹窗手动选择范围。':next.target==='backing'?'请先准备'+backingName()+'，再回到主界面录音。':next.target==='practice'?'当前范围超出限制，请先在主界面调整范围。':'可先试音，或关闭弹窗回到主界面练习。');
+      const next=setupNext(),message='推荐设置已应用。'+(next.target==='captions'?'先读取或导入字幕，也可关闭弹窗手动选择范围。':next.target==='backing'?'请先准备'+backingName()+'，再回到主界面录音。':next.target==='practice'?'当前范围超出限制，请先在主界面调整范围。':'可在下方直接试音，或关闭弹窗回到主界面练习。');
       status(message);return {message,nextLabel:next.label};
     },
     onUndo:()=>{
@@ -305,8 +305,8 @@
     onContinue:()=>{
       if(mode!=='idle')return;
       const next=setupNext();
-      if(next.target==='mic')tools.open('mic');
-      else if(next.target==='practice')showPage('practice');
+      if(next.target==='ready')return;
+      if(next.target==='practice')showPage('practice');
       else settings.open(next.target,'openPreparation');
     }
 

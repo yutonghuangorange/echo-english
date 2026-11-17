@@ -61,7 +61,7 @@
       if(session || applied)return;
       const result=onApply(recommendation());if(!result)return;
       applied=true;$('wizardApply').disabled=true;clearAudio();$('wizardMessage').textContent=result.message;
-      $('wizardContinue').textContent=result.nextLabel;$('wizardContinue').hidden=false;$('wizardUndo').hidden=false;
+      $('wizardContinue').textContent=result.nextLabel || '';$('wizardContinue').hidden=!result.nextLabel;$('wizardUndo').hidden=false;
       $('micTestSettings').textContent='当前设置：'+getSettings().description;
     };
     $('wizardUndo').onclick=()=>{
