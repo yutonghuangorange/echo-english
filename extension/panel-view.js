@@ -72,12 +72,29 @@
     .dock-heading-row{display:flex;align-items:center;justify-content:space-between;gap:10px;margin-bottom:8px}.dock-heading-row .dock-heading{margin:0}.dock-heading-row #quickSpeed .row{margin:0;gap:6px}.dock-heading-row #quickSpeed label{flex:0 0 auto;font-size:10px}.dock-heading-row #speed{width:110px;padding:5px 8px;font-size:11px}
     .pages:has(#page-practice:not([hidden])){--page-padding:12px;padding:12px 20px}.clip-selector-row{display:flex;gap:6px;align-items:center;margin:0 0 12px}.clip-selector-row select{min-width:0;flex:1}.clip-selector-row button{font-size:10px;padding:9px 7px;flex:0 0 auto}#clipBounds{margin-bottom:0}
     .cue-card{padding:12px}.panel[data-mode="idle"] .caption-context{display:none}.panel[data-mode="idle"] .caption{min-height:44px;padding:8px 0 10px}.panel[data-mode="idle"] .cue-card{margin-bottom:0}
+    .pages:has(#page-practice:not([hidden])){display:flex;flex-direction:column}
+    #page-practice{display:flex;flex-direction:column;flex:1 0 auto;gap:0}
+    #page-practice>.cue-card{display:flex;flex-direction:column;flex:1 0 auto;margin-bottom:0}
+    .cue-card .caption-stage{flex:1;display:flex;align-items:center;min-height:60px}
+    .cue-card .caption{width:100%;overflow-wrap:anywhere}
+    .cue-card .cue-nav,.cue-card .caption-options{flex-shrink:0}
+    .cue-card .caption-phase:empty{display:none}
+    .cue-card .caption-context{margin:8px 0}
+    .cue-card #captionNext{margin-bottom:14px}
+    .pages[data-spacious="true"] .caption{font-size:28px;line-height:1.7}
+    .panel[data-mode="idle"] .pages[data-spacious="true"] .caption-context{display:-webkit-box}
+    .pages[data-spacious="true"] .cue-card{padding:18px}
+    .panel:not([data-mode="idle"]) .pages:not([data-spacious="true"]) .caption{min-height:40px;padding:6px 0}
+    .panel:not([data-mode="idle"]) .pages:not([data-spacious="true"]) .caption-context{font-size:12px;margin:4px 0;min-height:0;max-height:21px;-webkit-line-clamp:1}
+    .panel:not([data-mode="idle"]) .pages:not([data-spacious="true"]) #captionNext{margin-bottom:8px}
+    .panel[data-mode="recording"] .live-meter canvas{height:48px}
+    #singDetails:not([hidden]){flex-shrink:0;margin-top:10px}
     .paragraphSelection{display:grid;grid-template-columns:1fr 1fr;gap:8px}#paragraphSelection .row{margin:0 0 8px;gap:4px}#paragraphSelection .row label{flex:0 0 28px;font-size:11px}#paragraphSelection>p{display:none}
     .tab-bar{display:flex;align-items:stretch;gap:10px;padding:0 20px;border-bottom:1px solid #2b3946;flex-shrink:0}.tab-bar .tabs{padding:0;gap:10px;border:0;flex:1;min-width:0}.tab-bar .tabs button{font-size:12px;padding-left:8px;padding-right:8px}.tab-setup{align-self:center;font-size:11px;padding:6px 8px;white-space:nowrap;background:transparent;color:#b3eedb}
   </style><div class="panel" id="panel">
     <header><div id="movePanel" role="button" tabindex="0" aria-label="移动面板" title="拖动标题移动；方向键微调，Home 或双击归位。"><h1>Echo<small>配音与唱歌练习</small></h1></div><div class="header-actions"><button id="favoriteVideo" aria-pressed="false" title="在练习库收藏当前视频">☆ 收藏</button><button id="openLibrary" class="text-button" aria-haspopup="dialog">练习库</button><button class="close" id="close" aria-label="关闭">×</button></div></header>
     <div class="tab-bar"><nav class="tabs" role="tablist" aria-label="练习面板"><button id="tab-practice" role="tab" aria-selected="true" aria-controls="page-practice" tabindex="0">练习</button><button id="tab-transcript" role="tab" aria-selected="false" aria-controls="page-transcript" tabindex="-1">台词</button><button id="tab-recordings" role="tab" aria-selected="false" aria-controls="page-recordings" tabindex="-1">录音</button></nav><button id="openPreparation" class="tab-setup" aria-haspopup="dialog" title="场景预设、麦克风试音与快捷键说明">练习准备</button></div>
-    <div class="pages">
+    <div class="pages" id="pages">
       <section id="page-practice" role="tabpanel" aria-labelledby="tab-practice">
 
 

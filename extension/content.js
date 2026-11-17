@@ -8,6 +8,13 @@
   root.innerHTML = EchoPanelView.html;
   const $ = id => root.getElementById(id);
   EchoPanelSize.attach({panel:$('panel'),host,handle:$('resizePanel'),moveHandle:$('movePanel'),env:window});
+  // Use the actual available practice area so a user-sized panel can show more
+  // context without making the compact layout or the fixed controls taller.
+  const practiceLayoutObserver=globalThis.ResizeObserver?new ResizeObserver(entries=>{
+    $('pages').dataset.spacious=String(entries[0].contentRect.height>=380);
+  }):null;
+  practiceLayoutObserver?.observe($('pages'));
+
   let cues = [], index = -1, take = null, mode = 'idle', generation = 0,clipRangeAdjusted=false;
   let recordingSession = null, audio = null, savedVideo = null;
   const playback = EchoPlayback.create();
@@ -1694,7 +1701,7 @@
     if (id) void loadVideo(id);
     else restoring = false;
   });
-  window.addEventListener('pagehide',()=>{inputDeviceRequest++;globalThis.navigator?.mediaDevices?.removeEventListener?.('devicechange',onInputDevicesChanged);saveProgress();closeClipDialog();settings.close();tools.close();library.close(true);stop();detachCaptionVideo();});
+  window.addEventListener('pagehide',()=>{practiceLayoutObserver?.disconnect();inputDeviceRequest++;globalThis.navigator?.mediaDevices?.removeEventListener?.('devicechange',onInputDevicesChanged);saveProgress();closeClipDialog();settings.close();tools.close();library.close(true);stop();detachCaptionVideo();});
   // Restore once; changing activities must not reset the user's expanded sections.
   const foldPreferenceKey='echo-folds-v1';
   let foldPreferences={};
