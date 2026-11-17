@@ -365,7 +365,7 @@ test('volume remains adjustable during accompaniment preview and saves the chose
   const playing=nodes.get('previewBacking').onclick();
   for(let i=0;i<30 && !nodes.get('transportProgress').oninput;i++)await new Promise(r=>setTimeout(r,1));
   assert.equal(video.currentTime,10);assert.equal(sound.currentTime,10);
-  nodes.get('generationSettings').onclick();assert.equal(nodes.get('settings-backing').hidden,false);
+  assert.equal(nodes.get('settings-generation').hidden,false);
   assert.equal(nodes.get('backingVolume').disabled,false);
   nodes.get('backingVolume').value='1.5';nodes.get('backingVolume').oninput();
   assert.equal(gain,1.5);assert.equal(nodes.get('backingVolumeValue').textContent,'150%');
@@ -1890,6 +1890,9 @@ test('generation page separates settings and reuses whole-video backing for the 
     if(message.action==='start'){starts.push(message);return {id:'b'.repeat(32),state:'ready',quality:'standard'};}
     return {audio:'UklGRg==',mime:'audio/wav'};
   }}}}});
+  nodes.get('backingSettings').onclick();assert.equal(nodes.get('settings-backing').hidden,false);
+  assert.equal(nodes.get('backingPreferencesTitle').textContent,'背景音设置');
+  nodes.get('closeSettings').onclick();assert.doesNotMatch(nodes.get('backingSettingsTitle').textContent,/→|->/);
   nodes.get('openBacking').onclick();
   assert.equal(nodes.get('settings-generation').hidden,false);assert.equal(nodes.get('settings-backing').hidden,true);assert.equal(nodes.get('settingsTabs').hidden,true);
   nodes.get('generationScope').value='whole';nodes.get('generationScope').onchange();

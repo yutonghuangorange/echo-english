@@ -226,6 +226,7 @@
     if(section==='backing' || section==='generation'){$('settingsStatus').textContent=karaokeIssue || '';void checkKaraokeService();void restoreServerBacking({explicit:true,range:generationSelection().value});}
     if(section==='captions' && !captionTracks.length && mode==='idle')void $('refreshCaptionTracks').onclick();
   }});
+  $('backingSettings').onclick=()=>{if(mode==='idle')settings.open('backing','backingSettings');};
   $('practiceTools').onclick=()=>{if(mode==='idle')settings.open('practice','practiceTools');};
   $('settingsStop').onclick=()=>stop();
   $('practiceSettings').onclick=()=>{if(mode==='idle')settings.open('microphone','practiceSettings');};
@@ -467,7 +468,8 @@
     for(const id of ['generationScope','generationStart','generationEnd','generationFirst','generationLast'])$(id).disabled=busy;
     $('previewBacking').disabled=busy || !generationReady;
     $('songReadiness').textContent=!usesBacking()?(isSinging()?'清唱 · 不播放伴奏':'录音时不播放背景音'):ready?`${name}已就绪`:mode==='separating'?`正在准备${name}…`:restoringBacking?`正在查找已有${name}…`:`尚未准备${name}`;
-    $('backingSettingsTitle').textContent=`${ready?'调整':'准备'}${name} →`;
+    $('backingPreferencesTitle').textContent=isSinging()?'伴奏设置':'背景音设置';
+    $('backingSettingsTitle').textContent=`${ready?'调整':'准备'}${name}`;
     $('openBacking').title=`为当前练习范围${ready?'调整':'准备'}${name}`;
     $('backingSummary').textContent=mode==='separating'?'正在生成…':ready?(usesBacking()?'当前范围已就绪':'已就绪 · 录音播放未启用'):!usesBacking()?(isSinging()?'清唱 · 伴奏可选':'背景音可选'):'当前范围未准备';
     $('openBacking').title+=` · ${$('backingSummary').textContent}`;
@@ -603,8 +605,8 @@
     $('singDetails').hidden=recording || (!hasBackingTools() && mode!=='separating' && !karaokeIssue);
     $('karaokeSettings').hidden=recording;
     $('backingOption').hidden=recording;
-    for(const id of ['practiceTools','practiceSettings','quickSpeed'])$(id).hidden=recording;
-    for(const id of ['practiceTools','practiceSettings','captionSettings','openBacking','adjustClipBounds'])$(id).disabled=busy;
+    for(const id of ['practiceTools','backingSettings','practiceSettings','quickSpeed'])$(id).hidden=recording;
+    for(const id of ['practiceTools','backingSettings','practiceSettings','captionSettings','openBacking','adjustClipBounds'])$(id).disabled=busy;
     $('captionSetup').hidden=recording || cues.length>0;
     $('clipBounds').hidden=recording || $('practiceScope').value!=='clip';
     syncClipSelection();

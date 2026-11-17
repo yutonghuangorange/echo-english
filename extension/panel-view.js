@@ -121,7 +121,7 @@
 
           </div>
 
-        <div class="cue-card"><div class="cue-nav"><span class="eyebrow" id="cueHeading">当前台词</span><button id="openLanguageSettings" class="text-button">调整语言</button><span id="karaokeSettings" class="cue-backing"><button id="openBacking" class="text-button" aria-haspopup="dialog"><span id="backingSettingsTitle">准备伴奏 →</span></button><small id="backingSummary" class="scope-label">当前范围未准备</small></span><span><button id="prev" aria-label="上一句">‹</button><span aria-label="当前练习句">练习 <span id="position">手动片段</span></span><button id="next" aria-label="下一句">›</button></span></div>
+        <div class="cue-card"><div class="cue-nav"><span class="eyebrow" id="cueHeading">当前台词</span><button id="openLanguageSettings" class="text-button">调整语言</button><span id="karaokeSettings" class="cue-backing"><button id="openBacking" class="text-button" aria-haspopup="dialog"><span id="backingSettingsTitle">准备伴奏</span></button><small id="backingSummary" class="scope-label">当前范围未准备</small></span><span><button id="prev" aria-label="上一句">‹</button><span aria-label="当前练习句">练习 <span id="position">手动片段</span></span><button id="next" aria-label="下一句">›</button></span></div>
           <div id="captionPrevious" class="caption-context" aria-label="上一句" hidden></div><div id="captionPhase" class="caption-phase"></div>
           <div class="caption-stage"><div class="caption" id="caption">从一句台词开始，听见自己的进步。</div></div><div id="translation" hidden></div>
           <div id="captionNext" class="caption-context" aria-label="下一句预告" hidden></div>
@@ -171,6 +171,7 @@
     </div>
     <div id="practiceUtilities" class="practice-utilities">        <button id="practiceTools" class="utility-setting" aria-haspopup="dialog"><span id="practiceToolsSummary">练习设置</span><small id="practiceToolsState"></small><span aria-hidden="true">›</span></button>
 
+<button id="backingSettings" class="utility-setting" aria-haspopup="dialog"><span id="backingPreferencesTitle">伴奏设置</span><span aria-hidden="true">›</span></button>
 <button id="practiceSettings" class="utility-setting" aria-haspopup="dialog"><span>录音设置</span><small id="speedSummary"></small><span aria-hidden="true">›</span></button>
 </div><div id="practiceDock" class="practice-dock">
       <div class="dock-heading-row"><div class="dock-heading">播放与录音</div>        <div id="quickSpeed">          <div class="row"><label class="hint" for="speed">播放速度</label><select id="speed" aria-label="练习速度"><option value="0.75">0.75× 慢速</option><option value="1" selected>1× 原速</option><option value="1.25">1.25×</option></select></div></div></div><div class="main-actions"><button id="original">▶ 听原声</button><button id="replay" disabled>▷ 回听录音</button><button class="primary" id="record">● 开始配音</button></div>
@@ -260,7 +261,7 @@
           <div class="settings-group"><h3>生成偏好</h3><div class="row readiness-row" id="songReadinessRow" hidden><span class="hint" id="songReadiness"></span></div>          <div class="field-heading"><label for="backingModel">分离模型</label><button id="manageModels" class="text-button" aria-haspopup="dialog">管理模型 →</button></div><select id="backingModel"><option value="demucs-htdemucs">通用 · Demucs</option><option id="banditModelOption" value="bandit-v2-multi">电影背景音 · BandIt</option></select><p class="hint field-note" id="backingModelHint"></p><div class="field-heading"><label for="backingQuality">伴奏／背景音音质</label></div><select id="backingQuality" aria-describedby="backingQualityHint"><option value="standard">标准 · MP3</option><option value="lossless">无损 · FLAC</option></select><p class="hint field-note" id="backingQualityHint"></p>
 
           </div>
-          <div class="settings-group"><h3>录音时的播放与监听</h3><label class="check" id="backingOption"><input id="useBacking" type="checkbox"><span id="useBackingLabel">保留背景音（电影配音，可选）</span></label><div class="monitor-control"><div class="field-heading"><label id="backingVolumeLabel" for="backingVolume">录唱监听音量</label><output id="backingVolumeValue" for="backingVolume">100%</output></div><input id="backingVolume" type="range" min="0" max="2" step="0.05" value="1" aria-label="录唱监听音量"><p class="hint">试听与录音时生效；回听音量在主界面调整。</p></div></div>
+
         </section><section id="settings-generation" class="fold-content" hidden>
           <div class="utility-row"><p class="hint">选择要准备的音频范围，不改变录音选段。</p><button id="generationSettings" class="text-button">伴奏与背景音设置 →</button></div>
           <div class="field-heading"><label for="generationScope">生成范围</label></div>
@@ -270,6 +271,7 @@
           <p id="generationRangeHint" class="hint" role="status"></p><p id="backingSettingsHint" class="hint"></p>
           <div class="backing-actions"><button id="prepareBacking">生成伴奏</button><button id="previewBacking" disabled>▷ 试听伴奏</button></div>
           <p id="generationStage" class="hint" role="status" hidden></p><p id="generationReadiness" class="hint"></p><progress id="generationProgress" max="100" aria-label="音源分离阶段进度" style="width:100%;accent-color:#b3eedb" hidden></progress>
+          <div class="settings-group"><h3>录音时的播放与监听</h3><label class="check" id="backingOption"><input id="useBacking" type="checkbox"><span id="useBackingLabel">保留背景音（电影配音，可选）</span></label><div class="monitor-control"><div class="field-heading"><label id="backingVolumeLabel" for="backingVolume">录唱监听音量</label><output id="backingVolumeValue" for="backingVolume">100%</output></div><input id="backingVolume" type="range" min="0" max="2" step="0.05" value="1" aria-label="录唱监听音量"><p class="hint">试听与录音时生效；回听音量在主界面调整。</p></div></div>
         </section></div><div class="library-foot"><div class="settings-footer-row"><p id="settingsFooterNote" class="hint">设置自动保存。</p><button id="settingsStop" hidden>■ 停止</button></div><p id="settingsStatus" role="status"></p></div>
   </dialog>
   <dialog id="toolsDialog" class="library-dialog" aria-labelledby="toolsTitle"><header><h2 id="toolsTitle">练习准备</h2><button id="closeTools" class="close" aria-label="关闭练习准备">×</button></header><div class="tools-body">
