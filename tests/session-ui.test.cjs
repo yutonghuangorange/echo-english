@@ -1769,7 +1769,7 @@ test('standalone clip editor restores focus, blocks practice shortcuts and close
   (await storage.ready).close();
 });
 
-test('roomy lyrics show multiple surrounding cues, resize around the displayed cue and hide all context in blind practice',async()=>{
+test('roomy lyrics keep one previous cue, preview multiple upcoming cues and hide context in blind practice',async()=>{
   const storage=createStorage(new IDBFactory());
   const cues=Array.from({length:12},(_,i)=>({start:i*4,end:(i+1)*4,text:`Line ${i+1}`}));
   await storage.saveSession({videoId:'video',cues,index:5,start:20,end:24,speed:'1'});
@@ -1777,18 +1777,18 @@ test('roomy lyrics show multiple surrounding cues, resize around the displayed c
   class ResizeObserver{constructor(callback){resize=callback;}observe(){}disconnect(){}}
   const {nodes}=await mount(storage,{globals:{ResizeObserver}});
   nodes.get('scopeControls').getBoundingClientRect=()=>({height:100});
-  resize([{target:nodes.get('pages'),contentRect:{height:480}}]);
-  assert.deepEqual(nodes.get('captionEarlier').children.map(n=>n.textContent),['Line 3','Line 4']);
+  resize([{target:nodes.get('pages'),contentRect:{height:400}}]);
+  assert.equal(nodes.has('captionEarlier'),false);
   assert.equal(nodes.get('captionPrevious').textContent,'Line 5');
   assert.equal(nodes.get('captionNext').textContent,'Line 7');
   assert.deepEqual(nodes.get('captionLater').children.map(n=>n.textContent),['Line 8','Line 9']);
   resize([{target:nodes.get('pages'),contentRect:{height:1200}}]);
-  assert.equal(nodes.get('captionEarlier').children.length,4);assert.equal(nodes.get('captionLater').children.length,4);
+  assert.equal(nodes.get('captionPrevious').textContent,'Line 5');assert.equal(nodes.get('captionLater').children.length,4);
   nodes.get('hideText').checked=true;nodes.get('hideText').onchange();
-  for(const id of ['captionEarlier','captionPrevious','captionNext','captionLater'])assert.equal(nodes.get(id).hidden,true);
+  for(const id of ['captionPrevious','captionNext','captionLater'])assert.equal(nodes.get(id).hidden,true);
   nodes.get('hideText').checked=false;nodes.get('hideText').onchange();
   resize([{target:nodes.get('pages'),contentRect:{height:250}}]);
-  assert.equal(nodes.get('captionEarlier').hidden,true);assert.equal(nodes.get('captionLater').hidden,true);
+  assert.equal(nodes.get('captionLater').hidden,true);
   assert.equal(nodes.get('captionNext').textContent,'Line 7');assert.equal(nodes.get('clipCue').value,'5');
   await new Promise(r=>setTimeout(r,5));(await storage.ready).close();
 });

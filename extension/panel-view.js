@@ -92,6 +92,9 @@
     .panel:not([data-mode="idle"]) .pages:not([data-spacious="true"]) .caption{min-height:40px;padding:6px 0}
     .panel:not([data-mode="idle"]) .pages:not([data-spacious="true"]) .caption-context{font-size:14px;margin:4px 0;min-height:0;max-height:22px;-webkit-line-clamp:1}
     .panel:not([data-mode="idle"]) .pages:not([data-spacious="true"]) #captionNext{margin-bottom:8px}
+    .cue-card #captionNext{color:#d1e1e6;opacity:.9}
+    .pages[data-spacious="true"] #captionNext{font-size:20px;line-height:1.5;max-height:30px}
+    .panel:not([data-mode="idle"]) .pages:not([data-spacious="true"]) #captionNext{font-size:16px;max-height:24px}
     .panel[data-mode="recording"] .live-meter canvas{height:48px}
     #singDetails:not([hidden]){flex-shrink:0;margin-top:10px}
     .paragraphSelection{display:grid;grid-template-columns:1fr 1fr;gap:8px}#paragraphSelection .row{margin:0 0 8px;gap:4px}#paragraphSelection .row label{flex:0 0 28px;font-size:11px}#paragraphSelection>p{display:none}
@@ -115,7 +118,7 @@
 
           </div>
         <div class="cue-card"><div class="cue-nav"><span class="eyebrow" id="cueHeading">当前台词</span><button id="openLanguageSettings" class="text-button">调整语言</button><span><button id="prev" aria-label="上一句">‹</button><span aria-label="当前练习句">练习 <span id="position">手动片段</span></span><button id="next" aria-label="下一句">›</button></span></div>
-          <div id="captionEarlier" class="caption-surrounding" aria-label="更早的台词" hidden></div><div id="captionPrevious" class="caption-context" aria-label="上一句" hidden></div><div id="captionPhase" class="caption-phase"></div>
+          <div id="captionPrevious" class="caption-context" aria-label="上一句" hidden></div><div id="captionPhase" class="caption-phase"></div>
           <div class="caption-stage"><div class="caption" id="caption">从一句台词开始，听见自己的进步。</div></div><div id="translation" hidden></div>
           <div id="captionNext" class="caption-context" aria-label="下一句预告" hidden></div>
           <div id="captionLater" class="caption-surrounding" aria-label="后续台词" hidden></div><div class="caption-options" id="captionOptions"><label class="check"><input type="checkbox" id="followCaptions" checked>字幕跟随视频</label><label class="check" id="referenceToggle" hidden><input type="checkbox" id="showChinese">显示参考</label><label class="check"><input type="checkbox" id="hideText">脱稿练习</label></div>

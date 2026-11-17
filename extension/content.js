@@ -17,7 +17,7 @@
     const height=practiceAvailableHeight;
     $('pages').dataset.spacious=String(height>=340);
     const occupied=['scopeControls','clipBounds','singDetails'].reduce((sum,id)=>sum+($(id).hidden?0:($(id).getBoundingClientRect?.().height || 0)),0);
-    const count=height>=340?Math.max(1,Math.min(5,1+Math.floor((height-occupied-240)/60))):1;
+    const count=height>=340?Math.max(1,Math.min(5,1+Math.floor((height-occupied-240)/30))):1;
     if(count!==captionContextCount){captionContextCount=count;renderCaptionContext(displayedCaptionIndex);}
   }):null;
   for(const id of ['pages','scopeControls','clipBounds','singDetails'])practiceLayoutObserver?.observe($(id));
@@ -1439,14 +1439,13 @@
     $('captionPrevious').textContent=hidden?'':captionText(cues[shownIndex-1]);
     $('captionNext').textContent=hidden?'':captionText(cues[shownIndex+1]);
     $('captionPrevious').hidden=hidden || !cues[shownIndex-1];$('captionNext').hidden=hidden || !cues[shownIndex+1];
-    for(const [id,first,last] of [['captionEarlier',Math.max(0,shownIndex-captionContextCount),shownIndex-1],['captionLater',shownIndex+2,Math.min(cues.length,shownIndex+captionContextCount+1)]]){
-      const container=$(id);container.replaceChildren();
-      if(!hidden)for(let i=first;i<last;i++){
-        const line=document.createElement('div');line.className='caption-surrounding-line';line.textContent=captionText(cues[i]);container.append(line);
-      }
-      container.hidden=hidden || !container.children.length;
+    const container=$('captionLater');container.replaceChildren();
+    if(!hidden)for(let i=shownIndex+2;i<Math.min(cues.length,shownIndex+captionContextCount+1);i++){
+      const line=document.createElement('div');line.className='caption-surrounding-line';line.textContent=captionText(cues[i]);container.append(line);
     }
+    container.hidden=hidden || !container.children.length;
   }
+
   function renderCaption(shownIndex, phase='selected', animate=false) {
     closeWord();
     const cue=cues[shownIndex], hidden=cues.length>0 && $('hideText').checked;
