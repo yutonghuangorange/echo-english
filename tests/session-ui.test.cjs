@@ -1610,14 +1610,14 @@ for(const activity of ['sing','speech'])test(`${activity} capture exposes live b
   (await storage.ready).close();
 });
 
-test('scene presets share existing settings, preserve microphone gain and quality, and favorites live in the library',async()=>{
+test('setup wizard applies recommendations and favorites still live in the library',async()=>{
   const storage=createStorage(new IDBFactory());
   const {nodes}=await mount(storage,{title:'收藏测试 - YouTube'});
   nodes.get('openPreparation').onclick();assert.equal(nodes.get('toolsDialog').open,true);
-  nodes.get('presetSong').onclick();assert.equal(nodes.get('toolsDialog').open,false);
+  nodes.get('wizardActivity').value='sing';nodes.get('wizardActivity').onchange();nodes.get('wizardApply').onclick();assert.equal(nodes.get('toolsDialog').open,true);
   assert.equal(nodes.get('activityMode').value,'sing');assert.equal(nodes.get('practiceScope').value,'whole');
   assert.equal(nodes.get('useBacking').checked,true);assert.equal(nodes.get('echoCancellation').checked,false);assert.equal(nodes.get('autoGainControl').checked,false);
-  nodes.get('openPreparation').onclick();nodes.get('presetSpeaker').onclick();
+  nodes.get('wizardActivity').value='speech';nodes.get('wizardListening').value='speakers';nodes.get('wizardListening').onchange();nodes.get('wizardApply').onclick();nodes.get('closeTools').onclick();
   assert.equal(nodes.get('activityMode').value,'speech');assert.equal(nodes.get('practiceScope').value,'clip');assert.equal(nodes.get('useBacking').checked,false);
   assert.equal(nodes.get('echoCancellation').checked,true);assert.equal(nodes.get('autoGainControl').checked,true);assert.equal(nodes.get('sidetoneEnabled').checked,false);
   assert.equal(nodes.get('leadInMode').value,'seconds');assert.equal(Number(nodes.get('leadInSeconds').value),3);
@@ -1790,5 +1790,57 @@ test('roomy lyrics keep one previous cue, preview multiple upcoming cues and hid
   resize([{target:nodes.get('pages'),contentRect:{height:250}}]);
   assert.equal(nodes.get('captionLater').hidden,true);
   assert.equal(nodes.get('captionNext').textContent,'Line 7');assert.equal(nodes.get('clipCue').value,'5');
+  await new Promise(r=>setTimeout(r,5));(await storage.ready).close();
+});
+
+test('setup wizard preserves recordings and manual gain, changes only on apply and restores the previous settings on undo',async()=>{
+  const storage=createStorage(new IDBFactory());
+  await storage.saveSession({videoId:'video',cues:[{start:0,end:5,text:'First'},{start:5,end:10,text:'Second'}],index:1,start:5,end:10,speed:'1'});
+  await storage.saveTake({id:'keep',videoId:'video',cueKey:'manual:5:10',start:5,end:10,speed:1,createdAt:1,blob:new Blob(['voice'])});
+  const {nodes}=await mount(storage,{globals:{EchoMicrophone:{...require('../extension/microphone.js'),supportsLossless:()=>true}}});
+  nodes.get('autoGainControl').checked=false;nodes.get('autoGainControl').onchange();
+  nodes.get('manualGainDb').value=9;nodes.get('manualGainDb').oninput();
+  nodes.get('sidetoneEnabled').checked=true;nodes.get('sidetoneEnabled').onchange();
+  nodes.get('leadInMode').value='previous';nodes.get('leadInMode').onchange();
+  nodes.get('openPreparation').onclick();
+  nodes.get('wizardActivity').value='sing';nodes.get('wizardActivity').onchange();
+  nodes.get('wizardQuality').value='lossless';nodes.get('wizardQuality').onchange();
+  assert.equal(nodes.get('activityMode').value,'speech');assert.equal(nodes.get('recordingQuality').value,'high');
+  nodes.get('wizardApply').onclick();
+  assert.equal(nodes.get('activityMode').value,'sing');assert.equal(nodes.get('recordingQuality').value,'lossless');
+  assert.equal(nodes.get('sidetoneEnabled').checked,false);assert.equal(nodes.get('wizardUndo').hidden,false);
+  nodes.get('wizardUndo').onclick();
+  assert.equal(nodes.get('activityMode').value,'speech');assert.equal(nodes.get('practiceScope').value,'clip');
+  assert.equal(nodes.get('recordingQuality').value,'high');assert.equal(nodes.get('manualGainDb').value,9);
+  assert.equal(nodes.get('sidetoneEnabled').checked,true);assert.equal(nodes.get('leadInMode').value,'previous');
+  assert.equal(nodes.get('echoCancellation').checked,true);assert.equal(nodes.get('autoGainControl').checked,false);
+  assert.equal(nodes.get('clipCue').value,'1');assert.equal((await storage.listTakes('video')).length,1);
+  await new Promise(r=>setTimeout(r,5));assert.equal((await storage.getSession('video')).cues.length,2);(await storage.ready).close();
+});
+
+test('setup wizard directs background dubbing to preparation without recording or generating audio',async()=>{
+  const storage=createStorage(new IDBFactory()),requests=[];
+  await storage.saveSession({videoId:'video',cues:[{start:0,end:5,text:'First'}],index:0,start:0,end:5,speed:'1'});
+  const {nodes}=await mount(storage,{globals:{chrome:{runtime:{onMessage:{addListener(){}},async sendMessage(message){requests.push(message);return {};}}}}});
+  nodes.get('openPreparation').onclick();nodes.get('wizardSpeechBacking').value='yes';nodes.get('wizardSpeechBacking').onchange();
+  nodes.get('wizardApply').onclick();assert.equal(nodes.get('useBacking').checked,true);
+  assert.match(nodes.get('wizardContinue').textContent,/准备背景音/);
+  assert.equal(nodes.get('record').disabled,false);assert.equal(nodes.get('wizardContinue').hidden,false);
+  nodes.get('wizardListening').value='speakers';nodes.get('wizardListening').onchange();
+  assert.equal(nodes.get('wizardContinue').hidden,true);assert.match(nodes.get('wizardMessage').textContent,/点击应用/);
+  nodes.get('wizardApply').onclick();nodes.get('wizardContinue').onclick();
+  assert.equal(nodes.get('toolsDialog').open,false);assert.equal(nodes.get('settingsDialog').open,true);assert.equal(nodes.get('settings-backing').hidden,false);
+  assert.equal(requests.some(r=>r.action && !['cached','models','health'].includes(r.action)),false);
+  await new Promise(r=>setTimeout(r,5));(await storage.ready).close();
+});
+
+test('setup wizard checks lossless support and keeps undo scoped to the application screen',async()=>{
+  const storage=createStorage(new IDBFactory());
+  const {nodes}=await mount(storage,{globals:{EchoMicrophone:{...require('../extension/microphone.js'),supportsLossless:()=>false}}});
+  nodes.get('openPreparation').onclick();assert.equal(nodes.get('wizardLossless').disabled,true);
+  nodes.get('wizardApply').onclick();assert.equal(nodes.get('wizardUndo').hidden,false);
+  assert.match(nodes.get('wizardContinue').textContent,/准备字幕/);
+  nodes.get('closeTools').onclick();nodes.get('openPreparation').onclick();
+  assert.equal(nodes.get('wizardUndo').hidden,true);assert.equal(nodes.get('wizardContinue').hidden,true);
   await new Promise(r=>setTimeout(r,5));(await storage.ready).close();
 });

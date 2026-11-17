@@ -264,24 +264,54 @@
     }catch(error){status(error.message || '收藏保存失败。');}
     finally{favoriteSaving=false;renderFavorite();}
   };
+  let setupUndo=null;
+  function refreshSetupSettings(){
+    backingRestoreRequest++;restoringBacking=false;karaokeIssue='';
+    renderActivity();chooseCurrentTake();updateSummaries();controls();saveMicrophonePreferences();saveProgress();
+    if(usesBacking())void restoreServerBacking();
+  }
+  function setupNext(){
+    if(!cues.length)return {label:'准备字幕 →',target:'captions'};
+    if(!selectionState().value?.range)return {label:'调整练习范围 →',target:'practice'};
+    if(usesBacking() && !backingFor(selectedRange()))return {label:'准备'+backingName()+' →',target:'backing'};
+    return {label:'麦克风试音 →',target:'mic'};
+  }
   const tools=EchoPracticeTools.attach({view:root,doc:document,env:globalThis,recording:EchoRecording,meter:EchoLiveMeter,
-    getSettings:()=>({constraints:microphoneConstraints(),gainDb:gainPreferences[activity]?0:manualGainPreferences[activity],quality:recordingQuality,sidetone:sidetoneEnabled,sidetoneVolume,sidetoneMode,
+    getSettings:()=>({activity,losslessSupported:EchoMicrophone.supportsLossless(globalThis.MediaRecorder),constraints:microphoneConstraints(),gainDb:gainPreferences[activity]?0:manualGainPreferences[activity],quality:recordingQuality,sidetone:sidetoneEnabled,sidetoneVolume,sidetoneMode,
       description:`${$('inputDevice').selectedOptions?.[0]?.textContent || (inputDeviceId?'所选麦克风':'系统默认麦克风')} · ${isSinging()?'唱歌':'配音'} · ${gainPreferences[activity]?'自动增益':`增益 +${manualGainPreferences[activity]} dB`} · 回声消除${echoPreferences[activity]?'开':'关'} · 耳返${sidetoneEnabled?'开':'关'}`}),
+    onClose:()=>{setupUndo=null;},
     onBeforeTest:()=>document.querySelector('video.html5-main-video')?.pause(),
     onConfigure:()=>{settings.open('microphone','practiceSettings');$('inputDevice').focus();},
-    onPreset:p=>{
-      if(mode!=='idle')return;
+    onApply:p=>{
+      if(mode!=='idle')return null;
+      if(p.quality==='lossless' && !EchoMicrophone.supportsLossless(globalThis.MediaRecorder)){status('当前浏览器不支持无损 PCM，请选择日常练习。');return null;}
       scopePreferences[activity]=$('practiceScope').value;backingPreferences[activity]=$('useBacking').checked;
+      setupUndo={videoId,activity,scopes:{...scopePreferences},backings:{...backingPreferences},echo:{...echoPreferences},gain:{...gainPreferences},sidetone:sidetoneEnabled,quality:recordingQuality,lead:$('leadInMode').value,leadSeconds:$('leadInSeconds').value};
       activity=p.activity;scopePreferences[activity]=p.scope;backingPreferences[activity]=p.backing;
-      echoPreferences[activity]=p.echo;gainPreferences[activity]=p.gain;if(p.sidetone!==undefined)sidetoneEnabled=p.sidetone;
-      backingRestoreRequest++;restoringBacking=false;karaokeIssue='';
+      echoPreferences[activity]=p.echo;gainPreferences[activity]=p.gain;sidetoneEnabled=p.sidetone;recordingQuality=p.quality;
       $('leadInMode').value=p.lead;$('leadInSeconds').value=3;
-      renderActivity();syncParagraphBounds();chooseCurrentTake();updateSummaries();controls();saveMicrophonePreferences();saveProgress();showPage('practice');
-      status('场景预设已应用，可继续调整设置或先试音。'+(p.backing?'录音前请先准备伴奏／背景音。':''));
-      if(p.backing)void restoreServerBacking();
+      refreshSetupSettings();showPage('practice');
+      const next=setupNext(),message='推荐设置已应用。'+(next.target==='captions'?'先读取或导入字幕，也可关闭弹窗手动选择范围。':next.target==='backing'?'请先准备'+backingName()+'，再回到主界面录音。':next.target==='practice'?'当前范围超出限制，请先在主界面调整范围。':'可先试音，或关闭弹窗回到主界面练习。');
+      status(message);return {message,nextLabel:next.label};
+    },
+    onUndo:()=>{
+      if(mode!=='idle' || !setupUndo || setupUndo.videoId!==videoId)return false;
+      const previous=setupUndo;setupUndo=null;
+      activity=previous.activity;Object.assign(scopePreferences,previous.scopes);Object.assign(backingPreferences,previous.backings);
+      Object.assign(echoPreferences,previous.echo);Object.assign(gainPreferences,previous.gain);
+      sidetoneEnabled=previous.sidetone;recordingQuality=previous.quality;$('leadInMode').value=previous.lead;$('leadInSeconds').value=previous.leadSeconds;
+      refreshSetupSettings();status('已撤销本次推荐设置。');return true;
+    },
+    onContinue:()=>{
+      if(mode!=='idle')return;
+      const next=setupNext();
+      if(next.target==='mic')tools.open('mic');
+      else if(next.target==='practice')showPage('practice');
+      else settings.open(next.target,'openPreparation');
     }
+
   });
-  $('openPreparation').onclick=()=>{if(mode==='idle')tools.open('preset');};
+  $('openPreparation').onclick=()=>{if(mode==='idle')tools.open('setup');};
   void refreshFavorite();
   $('openLanguageSettings').onclick=()=>{if(mode==='idle')settings.open('captions','openLanguageSettings');};
   $('backToPractice').onclick = () => showPage('practice',true);
@@ -1673,7 +1703,7 @@
   $('search').onclick = () => { window.open(`https://www.youtube.com/results?search_query=${encodeURIComponent($('query').value || ({'zh':'中文 歌词','ja':'日本語 字幕 歌詞','ko':'한국어 자막 가사','en':'english conversation subtitles'}[contentLanguage()] || 'subtitles lyrics'))}`, '_blank', 'noopener'); };
   chrome.runtime.onMessage.addListener(message => { if (message.type === 'echo-toggle') { const open = host.style.display === 'none'; host.style.display = open ? 'block' : 'none'; if (!open) {closeClipDialog();settings.close();tools.close();library.close(true);stop();} } });
   function resetVideo(id) {
-    closeClipDialog();settings.close();tools.close();favorite=false;favoriteRequest++;clipRangeAdjusted=false;
+    closeClipDialog();settings.close();tools.close();tools.resetSetup();setupUndo=null;favorite=false;favoriteRequest++;clipRangeAdjusted=false;
     library.close(true);
     stop();
     recordingSession=null;
