@@ -236,3 +236,10 @@ test('generation ranges are independent, bounded and reject invalid or overlong 
   assert.throws(()=>generationRange({scope:'whole',duration:601}),/10 分钟/);
   assert.throws(()=>generationRange({scope:'whole',duration:Infinity}),/有效/);
 });
+
+test('generation uses the custom paragraph instead of the current recording range and applies the shared limits',()=>{
+  const {generationRange}=require('../extension/karaoke.js');
+  assert.deepEqual(generationRange({scope:'paragraph',current:{start:0,end:5,speed:1},paragraph:{start:20,end:50,speed:1},duration:900}),{start:20,end:50,speed:1});
+  assert.throws(()=>generationRange({scope:'paragraph',paragraph:{start:0,end:601,speed:1},duration:900}),/10 分钟/);
+  assert.throws(()=>generationRange({scope:'paragraph',duration:900}),/有效/);
+});

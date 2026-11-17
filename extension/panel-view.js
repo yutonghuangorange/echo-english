@@ -99,6 +99,7 @@
     .panel:not([data-mode="idle"]) .pages:not([data-spacious="true"]) #captionNext{font-size:16px;max-height:24px}
     .panel[data-mode="recording"] .live-meter canvas{height:48px}
     #singDetails:not([hidden]){flex-shrink:0;margin-top:10px}
+    #generationParagraph .row label{flex:0 0 40px}
     .paragraphSelection{display:grid;grid-template-columns:1fr 1fr;gap:8px}#paragraphSelection .row{margin:0 0 8px;gap:4px}#paragraphSelection .row label{flex:0 0 28px;font-size:11px}#paragraphSelection>p{display:none}
     .tab-bar{display:flex;align-items:stretch;gap:10px;padding:0 20px;border-bottom:1px solid #2b3946;flex-shrink:0}.tab-bar .tabs{padding:0;gap:10px;border:0;flex:1;min-width:0}.tab-bar .tabs button{font-size:12px;padding-left:8px;padding-right:8px}.tab-setup{align-self:center;font-size:11px;padding:6px 8px;white-space:nowrap;background:transparent;color:#b3eedb}
   </style><div class="panel" id="panel">
@@ -263,7 +264,8 @@
         </section><section id="settings-generation" class="fold-content" hidden>
           <div class="utility-row"><p class="hint">选择要准备的音频范围，不改变录音选段。</p><button id="generationSettings" class="text-button">伴奏与背景音设置 →</button></div>
           <div class="field-heading"><label for="generationScope">生成范围</label></div>
-          <select id="generationScope"><option id="generationCurrentOption" value="current">当前练习范围</option><option id="generationWholeOption" value="whole">整首／整段视频</option><option value="custom">自定义时间区间</option></select>
+          <select id="generationScope"><option id="generationWholeOption" value="whole">整首／整段视频</option><option id="generationCurrentOption" value="current" selected>当前练习范围</option><option id="generationParagraphOption" value="paragraph">自定义段落</option><option value="custom">自定义时间区间</option></select>
+          <div id="generationParagraph" hidden><div class="row"><label for="generationFirst">起句</label><select id="generationFirst" aria-label="生成段落起句"></select></div><div class="row"><label for="generationLast">止句</label><select id="generationLast" aria-label="生成段落止句"></select></div><p class="hint">包含起止句及中间的连续多句，最长 10 分钟。</p></div><p id="generationParagraphHint" class="hint" hidden>读取或导入至少两句字幕后，可按句选择自定义段落。</p>
           <div id="generationCustom" hidden><div class="row"><label for="generationStart">起点（秒）</label><input id="generationStart" type="number" min="0" step="0.1" value="0"></div><div class="row"><label for="generationEnd">终点（秒）</label><input id="generationEnd" type="number" min="0" step="0.1" value="30"></div></div>
           <p id="generationRangeHint" class="hint" role="status"></p><p id="backingSettingsHint" class="hint"></p>
           <div class="backing-actions"><button id="prepareBacking">生成伴奏</button><button id="previewBacking" disabled>▷ 试听伴奏</button></div>

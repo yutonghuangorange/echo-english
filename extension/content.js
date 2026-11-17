@@ -390,17 +390,26 @@
   function renderParagraphOptions(){
     paragraphFirst=Math.max(0,Math.min(Number.isInteger(paragraphFirst)?paragraphFirst:0,Math.max(0,cues.length-2)));
     paragraphLast=Math.max(paragraphFirst+1,Math.min(Number.isInteger(paragraphLast)?paragraphLast:paragraphFirst+1,Math.max(1,cues.length-1)));
-    for(const id of ['paragraphFirst','paragraphLast']){
+    renderCueRangeOptions('paragraphFirst','paragraphLast',paragraphFirst,paragraphLast);renderClipOptions();renderGenerationParagraphOptions();
+  }
+  function renderCueRangeOptions(firstId,lastId,first,last){
+    for(const id of [firstId,lastId]){
       $(id).replaceChildren();
       cues.forEach((cue,i)=>{
         const option=document.createElement('option');option.value=String(i);
         option.textContent=cueOptionLabel(cue,i);
-        option.disabled=id==='paragraphFirst'?i>=cues.length-1:i<=paragraphFirst;
+        option.disabled=id===firstId?i>=cues.length-1:i<=first;
         $(id).append(option);
       });
     }
-    $('paragraphFirst').value=String(paragraphFirst);$('paragraphLast').value=String(paragraphLast);renderClipOptions();
+    $(firstId).value=String(first);$(lastId).value=String(last);
   }
+  function renderGenerationParagraphOptions(first=Number($('generationFirst').value),last=Number($('generationLast').value)){
+    first=Math.max(0,Math.min(Number.isInteger(first)?first:0,Math.max(0,cues.length-2)));
+    last=Math.max(first+1,Math.min(Number.isInteger(last)?last:first+1,Math.max(1,cues.length-1)));
+    renderCueRangeOptions('generationFirst','generationLast',first,last);
+  }
+
   function syncParagraphBounds(){
     if(!isParagraph() || cues.length<2)return;
     const r=EchoPractice.paragraphRange(cues,paragraphFirst,paragraphLast);
@@ -424,8 +433,9 @@
     try {
       const scope=$('generationScope').value || 'current';
       const current=scope==='current'?selectedRange():undefined;
+      const paragraph=scope==='paragraph'?{...EchoSelection.paragraphRange(cues,Number($('generationFirst').value),Number($('generationLast').value)),speed:1}:undefined;
       const start=String($('generationStart').value).trim(),end=String($('generationEnd').value).trim();
-      return {value:{...EchoKaraoke.generationRange({scope,current,duration:video().duration,start:start===''?NaN:Number(start),end:end===''?NaN:Number(end)}),model:modelPreferences[activity],quality:qualityPreferences[activity]}};
+      return {value:{...EchoKaraoke.generationRange({scope,current,paragraph,duration:video().duration,start:start===''?NaN:Number(start),end:end===''?NaN:Number(end)}),model:modelPreferences[activity],quality:qualityPreferences[activity]}};
     } catch(error){return {error};}
   }
   function updateBackingControls() {
@@ -440,18 +450,21 @@
     $('backingModelHint').textContent=modelPreferences[activity]===EchoModels.BANDIT_MODEL
       ?selectedModel?.ready?'BandIt 已就绪 · 适合电影背景音；Mac 暂用 CPU，耗时较长。':'首次安装约 0.8 GiB，建议预留 2 GiB。Mac 暂用 CPU；模型权重 CC BY-SA 4.0。'
       :selectedModel?.ready?'Demucs 已就绪 · 歌曲推荐，也可用于电影背景音。': 'Demucs · 首次使用需下载约 80 MiB 权重。';
-    const busy=mode!=='idle', scope=$('generationScope').value || 'current',whole=scope==='whole' || (scope==='current' && $('practiceScope').value==='whole'),paragraph=scope==='current' && isParagraph(),name=backingName();
+    const busy=mode!=='idle', scope=$('generationScope').value || 'current',whole=scope==='whole' || (scope==='current' && $('practiceScope').value==='whole'),paragraph=scope==='paragraph' || (scope==='current' && isParagraph()),name=backingName();
     const selection=selectionState(),target=selection.value?.range,error=selection.error?.message || '';
     const ready=target && backingFor(target);
 
     const generated=generationSelection(),generationReady=generated.value && backingFor(generated.value);
-    $('generationCustom').hidden=$('generationScope').value!=='custom';
+    $('generationCustom').hidden=scope!=='custom';
+    $('generationParagraph').hidden=scope!=='paragraph';
+    $('generationParagraphOption').disabled=cues.length<2;
+    $('generationParagraphHint').hidden=cues.length>=2;
     $('generationRangeHint').textContent=generated.error?.message || `${recordingTime(generated.value.start)}–${recordingTime(generated.value.end)} · ${Math.round(generated.value.end-generated.value.start)} 秒`;
     $('generationReadiness').textContent=karaokeIssue || (mode==='separating'?`正在生成${name}…`:generationReady?`${name}已就绪，可试听或关闭后开始录音。`:serviceState==='offline'?'本机服务未连接，请打开「伴奏与背景音设置」查看启动说明并重新检测。':`此范围尚未准备${name}。`);
     $('generationProgress').hidden=mode!=='separating';$('generationStage').hidden=mode!=='separating';
     $('generationWholeOption').textContent=isSinging()?'整首歌曲':'整段视频';
-    $('generationCurrentOption').textContent=isParagraph()?'当前练习段落':'当前练习范围';
-    for(const id of ['generationScope','generationStart','generationEnd'])$(id).disabled=busy;
+    $('generationCurrentOption').textContent='当前练习范围';
+    for(const id of ['generationScope','generationStart','generationEnd','generationFirst','generationLast'])$(id).disabled=busy;
     $('previewBacking').disabled=busy || !generationReady;
     $('songReadiness').textContent=!usesBacking()?(isSinging()?'清唱 · 不播放伴奏':'录音时不播放背景音'):ready?`${name}已就绪`:mode==='separating'?`正在准备${name}…`:restoringBacking?`正在查找已有${name}…`:`尚未准备${name}`;
     $('backingSettingsTitle').textContent=`${ready?'调整':'准备'}${name} →`;
@@ -992,13 +1005,15 @@
   $('openBacking').onclick=()=>{
     if(mode!=='idle')return;
     $('generationScope').value='current';
+    renderGenerationParagraphOptions(isParagraph()?paragraphFirst:Math.max(0,index),isParagraph()?paragraphLast:Math.max(0,index)+1);
     try{const range=selectedRange();$('generationStart').value=String(range.start);$('generationEnd').value=String(range.end);}catch{}
     controls();settings.open('generation','openBacking');
   };
   $('generationSettings').onclick=()=>settings.open('backing','openBacking');
   $('backToGeneration').onclick=()=>{controls();settings.open('generation','openBacking');};
-  for(const id of ['generationScope','generationStart','generationEnd'])$(id).onchange=()=>{
+  for(const id of ['generationScope','generationStart','generationEnd','generationFirst','generationLast'])$(id).onchange=()=>{
     if(mode!=='idle')return;
+    if(['generationFirst','generationLast'].includes(id))renderGenerationParagraphOptions();
     backingRestoreRequest++;restoringBacking=false;karaokeIssue='';controls();
     const range=generationSelection().value;
     if(range)void restoreServerBacking({explicit:true,range});

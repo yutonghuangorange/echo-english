@@ -3,8 +3,8 @@
   function modelOf(value){return value?.model || DEFAULT_MODEL;}
   function qualityOf(value){return value?.quality || 'standard';}
   // Generation has its own range; changing it never changes the recording selection.
-  function generationRange({scope='current',current,duration,start,end}) {
-    const range=scope==='whole'?{start:0,end:duration,speed:1}:scope==='custom'?{start,end,speed:1}:current;
+  function generationRange({scope='current',current,paragraph,duration,start,end}) {
+    const range=scope==='whole'?{start:0,end:duration,speed:1}:scope==='custom'?{start,end,speed:1}:scope==='paragraph'?paragraph:current;
     if(!range || !Number.isFinite(range.start) || !Number.isFinite(range.end) || range.start<0 || range.end<=range.start)
       throw Error('请选择有效的音频时间区间，终点须晚于起点。');
     if(!Number.isFinite(duration) || duration<=0)throw Error('请等待视频时长加载后再生成。');

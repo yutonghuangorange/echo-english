@@ -1919,3 +1919,32 @@ test('custom generation validates the independent interval and submits it withou
   assert.deepEqual(starts.map(m=>[m.start,m.end]),[[30,90]]);assert.equal(nodes.get('end').value,'5');
   await new Promise(r=>setTimeout(r,5));(await storage.ready).close();
 });
+
+test('custom generation paragraph selects consecutive cues independently of recording and keeps the choice across settings',async()=>{
+  const storage=createStorage(new IDBFactory()),starts=[];
+  await storage.saveSession({videoId:'video',activity:'speech',scopes:{speech:'clip',sing:'whole'},start:0,end:5,index:0,cues:[0,5,10,15].map((start,i)=>({start,end:start+5,text:`Line ${i+1}`}))});
+  const {nodes}=await mount(storage,{video:{duration:60,pause(){}},globals:{chrome:{runtime:{onMessage:{addListener(){}},async sendMessage(message){
+    if(message.action==='start'){starts.push(message);return {id:'d'.repeat(32),state:'ready',quality:'standard'};}
+    return {audio:'UklGRg==',mime:'audio/wav'};
+  }}}}});
+  nodes.get('openBacking').onclick();assert.equal(nodes.get('generationParagraphOption').disabled,false);
+  nodes.get('generationScope').value='paragraph';nodes.get('generationScope').onchange();
+  nodes.get('generationFirst').value='1';nodes.get('generationFirst').onchange();
+  assert.equal(nodes.get('generationLast').value,'2');
+  nodes.get('generationLast').value='3';nodes.get('generationLast').onchange();
+  assert.equal(nodes.get('generationParagraph').hidden,false);assert.equal(nodes.get('generationCustom').hidden,true);
+  nodes.get('generationSettings').onclick();nodes.get('backToGeneration').onclick();
+  assert.equal(nodes.get('generationScope').value,'paragraph');assert.equal(nodes.get('generationFirst').value,'1');assert.equal(nodes.get('generationLast').value,'3');
+  await nodes.get('prepareBacking').onclick();assert.deepEqual(starts.map(m=>[m.start,m.end]),[[5,20]]);
+  assert.equal(nodes.get('start').value,0);assert.equal(nodes.get('end').value,5);assert.equal(nodes.get('practiceScope').value,'clip');
+  await new Promise(r=>setTimeout(r,5));(await storage.ready).close();
+});
+
+test('generation without subtitles offers time ranges and explains why custom paragraphs are unavailable',async()=>{
+  const storage=createStorage(new IDBFactory()),{nodes}=await mount(storage);
+  nodes.get('openBacking').onclick();assert.equal(nodes.get('generationParagraphOption').disabled,true);assert.equal(nodes.get('generationParagraphHint').hidden,false);
+  assert.equal(nodes.get('generationScope').disabled,false);
+  nodes.get('generationScope').value='paragraph';nodes.get('generationScope').onchange();assert.equal(nodes.get('prepareBacking').disabled,true);
+  nodes.get('generationScope').value='custom';nodes.get('generationStart').value='10';nodes.get('generationEnd').value='20';nodes.get('generationScope').onchange();assert.equal(nodes.get('prepareBacking').disabled,false);
+  (await storage.ready).close();
+});
