@@ -223,7 +223,7 @@
   });
   const settings=EchoSettingsDialog.attach({view:root,onOpen:section=>{
     if(section==='microphone')void refreshInputDevices();
-    if(section==='backing')$('settingsStatus').textContent=karaokeIssue || '';
+    if(section==='backing'){$('settingsStatus').textContent=karaokeIssue || '';void checkKaraokeService();void restoreServerBacking({explicit:true});}
     if(section==='captions' && !captionTracks.length && mode==='idle')void $('refreshCaptionTracks').onclick();
   }});
   $('practiceTools').onclick=()=>{if(mode==='idle')settings.open('practice','practiceTools');};
@@ -270,12 +270,6 @@
     renderActivity();chooseCurrentTake();updateSummaries();controls();saveMicrophonePreferences();saveProgress();
     if(usesBacking())void restoreServerBacking();
   }
-  function setupNext(){
-    if(!cues.length)return {label:'准备字幕 →',target:'captions'};
-    if(!selectionState().value?.range)return {label:'调整练习范围 →',target:'practice'};
-    if(usesBacking() && !backingFor(selectedRange()))return {label:'准备'+backingName()+' →',target:'backing'};
-    return {label:null,target:'ready'};
-  }
   const tools=EchoPracticeTools.attach({view:root,doc:document,env:globalThis,recording:EchoRecording,meter:EchoLiveMeter,
     getSettings:()=>({activity,losslessSupported:EchoMicrophone.supportsLossless(globalThis.MediaRecorder),constraints:microphoneConstraints(),gainDb:gainPreferences[activity]?0:manualGainPreferences[activity],quality:recordingQuality,sidetone:sidetoneEnabled,sidetoneVolume,sidetoneMode,
       description:`${$('inputDevice').selectedOptions?.[0]?.textContent || (inputDeviceId?'所选麦克风':'系统默认麦克风')} · ${isSinging()?'唱歌':'配音'} · ${gainPreferences[activity]?'自动增益':`增益 +${manualGainPreferences[activity]} dB`} · 回声消除${echoPreferences[activity]?'开':'关'} · 耳返${sidetoneEnabled?'开':'关'}`}),
@@ -286,29 +280,22 @@
       if(mode!=='idle')return null;
       if(p.quality==='lossless' && !EchoMicrophone.supportsLossless(globalThis.MediaRecorder)){status('当前浏览器不支持无损 PCM，请选择日常练习。');return null;}
       scopePreferences[activity]=$('practiceScope').value;backingPreferences[activity]=$('useBacking').checked;
-      setupUndo={videoId,activity,scopes:{...scopePreferences},backings:{...backingPreferences},echo:{...echoPreferences},gain:{...gainPreferences},sidetone:sidetoneEnabled,quality:recordingQuality,lead:$('leadInMode').value,leadSeconds:$('leadInSeconds').value};
-      activity=p.activity;scopePreferences[activity]=p.scope;backingPreferences[activity]=p.backing;
+      setupUndo={videoId,activity,echo:{...echoPreferences},gain:{...gainPreferences},sidetone:sidetoneEnabled,quality:recordingQuality};
+      activity=p.activity;
       echoPreferences[activity]=p.echo;gainPreferences[activity]=p.gain;sidetoneEnabled=p.sidetone;recordingQuality=p.quality;
-      $('leadInMode').value=p.lead;$('leadInSeconds').value=3;
       refreshSetupSettings();showPage('practice');
-      const next=setupNext(),message='推荐设置已应用。'+(next.target==='captions'?'先读取或导入字幕，也可关闭弹窗手动选择范围。':next.target==='backing'?'请先准备'+backingName()+'，再回到主界面录音。':next.target==='practice'?'当前范围超出限制，请先在主界面调整范围。':'可在下方直接试音，或关闭弹窗回到主界面练习。');
-      status(message);return {message,nextLabel:next.label};
+      const message='推荐设置已应用。可在下方直接试音；选段和伴奏请在主界面按需调整。';
+      status(message);return {message,nextLabel:!cues.length?'准备字幕 →':null};
     },
     onUndo:()=>{
       if(mode!=='idle' || !setupUndo || setupUndo.videoId!==videoId)return false;
       const previous=setupUndo;setupUndo=null;
-      activity=previous.activity;Object.assign(scopePreferences,previous.scopes);Object.assign(backingPreferences,previous.backings);
+      activity=previous.activity;
       Object.assign(echoPreferences,previous.echo);Object.assign(gainPreferences,previous.gain);
-      sidetoneEnabled=previous.sidetone;recordingQuality=previous.quality;$('leadInMode').value=previous.lead;$('leadInSeconds').value=previous.leadSeconds;
+      sidetoneEnabled=previous.sidetone;recordingQuality=previous.quality;
       refreshSetupSettings();status('已撤销本次推荐设置。');return true;
     },
-    onContinue:()=>{
-      if(mode!=='idle')return;
-      const next=setupNext();
-      if(next.target==='ready')return;
-      if(next.target==='practice')showPage('practice');
-      else settings.open(next.target,'openPreparation');
-    }
+    onContinue:()=>{if(mode==='idle' && !cues.length)settings.open('captions','openPreparation');}
 
   });
   $('openPreparation').onclick=()=>{if(mode==='idle')tools.open('setup');};
@@ -347,9 +334,8 @@
     renderMicrophoneSettings();
     const singing=isSinging();
     $('useBacking').checked=backingPreferences[activity];
-    $('scopeControls').hidden=false;$('karaokeSettings').hidden=!hasBackingTools();
+    $('scopeControls').hidden=false;$('karaokeSettings').hidden=false;
     $('useBackingLabel').textContent=singing?'录唱时播放伴奏（仅录人声）':'保留背景音（电影配音，可选）';
-    $('backingSettingsTitle').textContent=singing?'伴奏设置':'背景音设置';
     $('backingHelpTitle').textContent=`首次使用：如何启用${backingName()}？`;
     $('backingSettingsHint').textContent=singing?'按主界面的录唱范围生成，最长 10 分钟。准备好后回到主区录唱。':'去掉原对白，尽量保留音乐和环境音。按主界面的配音范围提取，最长 10 分钟，建议先试短片段；可能残留对白或损失音效。录音只保存自己的人声。';
     $('backingVolumeLabel').textContent=singing?'录唱监听音量':'背景监听音量';
@@ -446,18 +432,16 @@
     $('backingModelHint').textContent=modelPreferences[activity]===EchoModels.BANDIT_MODEL
       ?selectedModel?.ready?'BandIt 已就绪 · 适合电影背景音；Mac 暂用 CPU，耗时较长。':'首次安装约 0.8 GiB，建议预留 2 GiB。Mac 暂用 CPU；模型权重 CC BY-SA 4.0。'
       :selectedModel?.ready?'Demucs 已就绪 · 歌曲推荐，也可用于电影背景音。': 'Demucs · 首次使用需下载约 80 MiB 权重。';
-    if(!hasBackingTools()){
-      for(const id of ['previewBacking','prepareBacking'])$(id).disabled=true;
-      return;
-    }
     const busy=mode!=='idle', whole=$('practiceScope').value==='whole',paragraph=isParagraph(),name=backingName();
     const selection=selectionState(),target=selection.value?.range,error=selection.error?.message || '';
     const ready=target && backingFor(target);
 
     $('previewBacking').disabled=busy || !ready;
-    $('songReadiness').textContent=!usesBacking()?'清唱 · 不播放伴奏':ready?`${name}已就绪`:mode==='separating'?`正在准备${name}…`:restoringBacking?`正在查找已有${name}…`:`尚未准备${name}`;
-    $('openBacking').title=ready?`调整${name}`:`准备${name} →`;
-    $('backingSummary').textContent=!usesBacking()?'清唱':ready?'就绪':mode==='separating'?'生成中':'未就绪';
+    $('songReadiness').textContent=!usesBacking()?(isSinging()?'清唱 · 不播放伴奏':'录音时不播放背景音'):ready?`${name}已就绪`:mode==='separating'?`正在准备${name}…`:restoringBacking?`正在查找已有${name}…`:`尚未准备${name}`;
+    $('backingSettingsTitle').textContent=`${ready?'调整':'准备'}${name} →`;
+    $('openBacking').title=`为当前练习范围${ready?'调整':'准备'}${name}`;
+    $('backingSummary').textContent=mode==='separating'?'正在生成…':ready?(usesBacking()?'当前范围已就绪':'已就绪 · 录音播放未启用'):!usesBacking()?(isSinging()?'清唱 · 伴奏可选':'背景音可选'):'当前范围未准备';
+    $('openBacking').title+=` · ${$('backingSummary').textContent}`;
     $('prepareBacking').disabled=busy || !!ready;
     $('karaokeNotice').hidden=!karaokeIssue;
     $('karaokeNotice').textContent=karaokeIssue;
@@ -587,21 +571,21 @@
     $('scopeControls').hidden=recording;
     $('wholeScopeHint').hidden=$('practiceScope').value!=='whole';
     $('paragraphSelection').hidden=!isParagraph();$('paragraphScopeOption').disabled=cues.length<2;
-    $('singDetails').hidden=!hasBackingTools() || recording;
-    $('karaokeSettings').hidden=!hasBackingTools() || recording;
+    $('singDetails').hidden=recording || (!hasBackingTools() && mode!=='separating' && !karaokeIssue);
+    $('karaokeSettings').hidden=recording;
     $('backingOption').hidden=recording;
     for(const id of ['practiceTools','practiceSettings','quickSpeed'])$(id).hidden=recording;
     for(const id of ['practiceTools','practiceSettings','captionSettings','openBacking','adjustClipBounds'])$(id).disabled=busy;
     $('captionSetup').hidden=recording || cues.length>0;
     $('clipBounds').hidden=recording || $('practiceScope').value!=='clip';
     syncClipSelection();
-    $('songReadinessRow').hidden=!hasBackingTools() || recording;
+    $('songReadinessRow').hidden=recording;
     $('songResult').hidden=!isSinging() || !songTake;
     for (const id of ['useHeadphoneSettings','sidetoneMode','sidetoneEnabled','sidetoneVolume','inputDevice','detectInputs','paragraphFirst','paragraphLast','recordingQuality','echoCancellation','autoGainControl','manualGainDb','captionSource','refreshCaptionTracks','contentLanguage','captionLayout','activityMode','read','import','openCaptionSetup','openLanguageSettings','prepareBacking','practiceScope','useBacking','backingVolume','prev','next','markStart','markEnd','original','speed','start','end','leadInMode','leadInSeconds','record','startEarlier','startLater','endEarlier','endLater','loop','loopCount','autoPractice','prepSeconds','autoNext']) $(id).disabled = busy;
     if(isParagraph())for(const id of ['start','end','markStart','markEnd','startEarlier','startLater','endEarlier','endLater'])$(id).disabled=true;
     $('autoNext').disabled=busy || $('practiceScope').value!=='clip';
     $('useBacking').disabled=busy;
-    $('backingVolume').disabled=!hasBackingTools() || !['idle','backing','lead-in','recording'].includes(mode);
+    $('backingVolume').disabled=!['idle','backing','lead-in','recording'].includes(mode);
     renderBackingVolume();
     $('prev').disabled=busy || index<=0;
     $('next').disabled=busy || index<0 || index>=cues.length-1;
@@ -950,8 +934,8 @@
     try{await storage.saveBacking(value);return true;}
     catch{if(value.videoId===videoId)status('伴奏可以使用，但本地保存失败；刷新后可能需要从本机服务重新取回。');return false;}
   }
-  async function restoreServerBacking() {
-    if(!hasBackingTools() || mode!=='idle' || restoringBacking)return;
+  async function restoreServerBacking({explicit=false}={}) {
+    if((!explicit && !hasBackingTools()) || mode!=='idle' || restoringBacking)return;
     let r;try{r=selectedRange();}catch{return;}
     if(backingFor(r))return;
     const id=videoId, request=++backingRestoreRequest;
@@ -1035,7 +1019,7 @@
     catch(error){assemblyContext=null;throw error;}
   });
   $('prepareBacking').onclick=guarded(async()=>{
-    if(mode!=='idle' || !hasBackingTools())return;
+    if(mode!=='idle')return;
     const name=backingName();
     // Explicit generation takes priority over the optional cache lookup.
     backingRestoreRequest++;restoringBacking=false;
@@ -1103,7 +1087,7 @@
     }
   });
   $('previewBacking').onclick=guarded(async()=>{
-    if(mode!=='idle' || !hasBackingTools())return;
+    if(mode!=='idle')return;
     const r=selectedRange(), ready=backingFor(r);if(!ready)return;
     const v=video(), token=++generation, url=URL.createObjectURL(ready.blob);
     mode='backing';controls();saveVideo(v);v.muted=true;v.playbackRate=r.speed;

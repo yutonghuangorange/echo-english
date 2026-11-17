@@ -41,7 +41,8 @@
     .history-actions:has(>button[hidden]:only-child){display:none}
     .danger{color:#ffb4ad;background:transparent}.text-button{font-size:11px;padding:4px 8px;background:transparent;color:#b3eedb}
     #clipBounds{margin-bottom:14px}
-    .readiness-row{margin:4px 0 10px}.readiness-row #openBacking{flex:0 0 auto}.cue-nav{gap:6px;flex-wrap:wrap}.cue-nav>span:last-child{margin-left:auto}.caption-phase:empty{display:none}
+    .cue-backing{display:inline-flex;align-items:center;flex-shrink:0}
+    .readiness-row{margin:4px 0 10px}.cue-nav{gap:6px;flex-wrap:wrap}.cue-nav>span:last-child{margin-left:auto}.caption-phase:empty{display:none}
     #songResult .fold{margin-top:8px}
     .history-delete{flex-shrink:0;font-size:11px;padding:7px;color:#ffb4ad;background:transparent;opacity:0}.history-item:hover .history-delete,.history-item:focus-within .history-delete{opacity:1}@media(hover:none){.history-delete{opacity:1}}
     .version-toolbar{display:flex;align-items:center;gap:8px;justify-content:space-between}.version-toolbar #deleteTake{flex-shrink:0}.version-toolbar .version-choices{flex:1}.row>label.hint{flex:0 0 82px}.row>label:has(input[type="number"]){flex-direction:column;align-items:stretch;gap:4px}
@@ -68,7 +69,7 @@
     .settings-group{margin:18px 0 0;padding:18px 0 0;border-top:1px solid #30414e}.settings-group:first-child{margin-top:12px;padding-top:0;border-top:0}.settings-group h3{font-size:13px;color:#c6dedb;margin:0 0 14px}.settings-group>.field-heading:first-of-type{margin-top:0}.settings-group>label:has(input[type="checkbox"]){display:flex;align-items:center;gap:8px;margin-top:14px}.settings-group>label:has(input[type="checkbox"]) input{flex-shrink:0}.settings-body .service-tools{margin:12px 0 0;padding:0;border:0}.settings-body .service-tools .utility-row{margin:10px 0 0}.settings-group .monitor-control{border:0;padding-top:0;margin-top:16px}.settings-footer-row{display:flex;align-items:center;justify-content:space-between;gap:12px}.settings-footer-row button{font-size:12px;padding:6px 12px}.settings-body .secondary-actions{padding:0;margin:18px 0}
     .scope-label{position:absolute;width:1px;height:1px;overflow:hidden;clip-path:inset(50%)}
     .scope-row{gap:8px;margin:0 0 10px}.scope-row>select{flex:1;min-width:0}.header-actions #favoriteVideo{font-size:18px;padding:4px 6px}
-    .practice-utilities{display:grid;grid-auto-flow:column;grid-auto-columns:minmax(0,1fr);gap:6px;padding:6px 20px;border-top:1px solid #30414e;background:#16222e;flex-shrink:0}.practice-utilities #karaokeSettings{display:contents}
+    .practice-utilities{display:grid;grid-auto-flow:column;grid-auto-columns:minmax(0,1fr);gap:6px;padding:6px 20px;border-top:1px solid #30414e;background:#16222e;flex-shrink:0}
     .utility-setting{display:flex;align-items:center;justify-content:center;gap:5px;min-width:0;padding:8px 6px;text-align:left;font-size:11px;background:#1c2b3a;border-color:#3a4d60}.utility-setting small,.utility-setting>span:last-child[aria-hidden]{display:none}.utility-setting #backingSummary{display:block;font-size:9px;white-space:nowrap;color:#90a4b6}
     .dock-heading-row{display:flex;align-items:center;justify-content:space-between;gap:10px;margin-bottom:8px}.dock-heading-row .dock-heading{margin:0}.dock-heading-row #quickSpeed .row{margin:0;gap:6px}.dock-heading-row #quickSpeed label{flex:0 0 auto;font-size:10px}.dock-heading-row #speed{width:110px;padding:5px 8px;font-size:11px}
     .pages:has(#page-practice:not([hidden])){--page-padding:12px;padding:12px 20px}.clip-selector-row{display:flex;gap:6px;align-items:center;margin:0 0 12px}.clip-selector-row select{min-width:0;flex:1}.clip-selector-row button{font-size:10px;padding:9px 7px;flex:0 0 auto}#clipBounds{margin-bottom:0}
@@ -118,7 +119,8 @@
           <div class="clip-selector-row"><label class="scope-label" for="clipCue">选择句子</label><select id="clipCue" aria-label="当前片段的句子"></select><button id="adjustClipBounds" aria-haspopup="dialog" title="微调当前片段时间"><span id="clipSummary">0.0–5.0 秒</span> ✎</button></div>
 
           </div>
-        <div class="cue-card"><div class="cue-nav"><span class="eyebrow" id="cueHeading">当前台词</span><button id="openLanguageSettings" class="text-button">调整语言</button><span><button id="prev" aria-label="上一句">‹</button><span aria-label="当前练习句">练习 <span id="position">手动片段</span></span><button id="next" aria-label="下一句">›</button></span></div>
+
+        <div class="cue-card"><div class="cue-nav"><span class="eyebrow" id="cueHeading">当前台词</span><button id="openLanguageSettings" class="text-button">调整语言</button><span id="karaokeSettings" class="cue-backing"><button id="openBacking" class="text-button" aria-haspopup="dialog"><span id="backingSettingsTitle">准备伴奏 →</span></button><small id="backingSummary" class="scope-label">当前范围未准备</small></span><span><button id="prev" aria-label="上一句">‹</button><span aria-label="当前练习句">练习 <span id="position">手动片段</span></span><button id="next" aria-label="下一句">›</button></span></div>
           <div id="captionPrevious" class="caption-context" aria-label="上一句" hidden></div><div id="captionPhase" class="caption-phase"></div>
           <div class="caption-stage"><div class="caption" id="caption">从一句台词开始，听见自己的进步。</div></div><div id="translation" hidden></div>
           <div id="captionNext" class="caption-context" aria-label="下一句预告" hidden></div>
@@ -167,7 +169,7 @@
       </section>
     </div>
     <div id="practiceUtilities" class="practice-utilities">        <button id="practiceTools" class="utility-setting" aria-haspopup="dialog"><span id="practiceToolsSummary">练习设置</span><small id="practiceToolsState"></small><span aria-hidden="true">›</span></button>
-        <div id="karaokeSettings" hidden><button id="openBacking" class="utility-setting" aria-haspopup="dialog"><span id="backingSettingsTitle">伴奏设置</span><small id="backingSummary"></small><span aria-hidden="true">›</span></button></div>
+
 <button id="practiceSettings" class="utility-setting" aria-haspopup="dialog"><span>录音设置</span><small id="speedSummary"></small><span aria-hidden="true">›</span></button>
 </div><div id="practiceDock" class="practice-dock">
       <div class="dock-heading-row"><div class="dock-heading">播放与录音</div>        <div id="quickSpeed">          <div class="row"><label class="hint" for="speed">播放速度</label><select id="speed" aria-label="练习速度"><option value="0.75">0.75× 慢速</option><option value="1" selected>1× 原速</option><option value="1.25">1.25×</option></select></div></div></div><div class="main-actions"><button id="original">▶ 听原声</button><button id="replay" disabled>▷ 回听录音</button><button class="primary" id="record">● 开始配音</button></div>
@@ -262,13 +264,11 @@
         </section></div><div class="library-foot"><div class="settings-footer-row"><p class="hint">设置自动保存。</p><button id="settingsStop" hidden>■ 停止</button></div><p id="settingsStatus" role="status"></p></div>
   </dialog>
   <dialog id="toolsDialog" class="library-dialog" aria-labelledby="toolsTitle"><header><h2 id="toolsTitle">练习准备</h2><button id="closeTools" class="close" aria-label="关闭练习准备">×</button></header><div class="tools-body">
-    <section id="setupSection"><h3>帮我设置</h3><p class="hint">回答几个问题，查看适合这次练习的推荐组合。已有录音、字幕、麦克风设备和手动增益保留。</p>
+    <section id="setupSection"><h3>帮我设置</h3><p class="hint">回答几个问题，查看适合这次练习的推荐组合。只调整录音环境与音质，已有录音、字幕、设备和手动增益保留。选段与伴奏请在主界面操作。</p>
       <div class="wizard-layout"><div class="wizard-questions">
         <label for="wizardActivity">1 · 想练什么？</label><select id="wizardActivity"><option value="speech">配音／对白跟读</option><option value="sing">唱歌</option></select>
-        <div id="wizardSongRow" hidden><label for="wizardSongBacking">2 · 唱歌时播放什么？</label><select id="wizardSongBacking"><option value="yes">伴奏 · 去掉原唱</option><option value="no">清唱 · 不播放伴奏</option></select></div>
-        <div id="wizardSpeechRow"><label for="wizardSpeechBacking">2 · 要保留视频背景音吗？</label><select id="wizardSpeechBacking"><option value="no">只录自己的声音</option><option value="yes">保留音乐和环境音 · 去掉原对白</option></select></div>
-        <label for="wizardListening">3 · 怎么听声音？</label><select id="wizardListening"><option value="headphones">戴耳机（推荐）</option><option value="speakers">外放</option></select>
-        <label for="wizardQuality">文件用途（可选）</label><select id="wizardQuality"><option value="high">日常练习 · 文件小</option><option id="wizardLossless" value="lossless">后期制作 · 无损 PCM</option></select><p class="hint">无损文件较大，不能修复回音、麦克风失真或房间混响。</p>
+        <label for="wizardListening">2 · 怎么听声音？</label><select id="wizardListening"><option value="headphones">戴耳机（推荐）</option><option value="speakers">外放</option></select>
+        <label for="wizardQuality">3 · 文件用途（可选）</label><select id="wizardQuality"><option value="high">日常练习 · 文件小</option><option id="wizardLossless" value="lossless">后期制作 · 无损 PCM</option></select><p class="hint">无损文件较大，不能修复回音、麦克风失真或房间混响。</p>
       </div><div class="wizard-result"><h4>推荐设置</h4><p id="wizardSummary"></p><label class="check" id="wizardSidetoneRow"><input id="wizardSidetone" type="checkbox">开启耳返 · 在耳机里听到自己</label><p class="hint" id="wizardHint"></p><button id="wizardApply" class="primary">应用推荐设置</button><p id="wizardMessage" class="hint" role="status"></p><div class="wizard-actions"><button id="wizardContinue" hidden>继续准备</button><button id="wizardUndo" class="text-button" hidden>撤销本次设置</button></div></div></div></section>
     <section id="micTestSection"><h3>麦克风试音</h3><p id="micTestSettings" class="hint"></p><p class="hint">最多录制 10 秒，使用当前已生效的录音设置；上方推荐需先应用。请戴耳机，试音不会保存到练习库。</p><div id="testMeter" class="live-meter" hidden><div class="meter-heading"><span>输入音量</span><output id="testMeterValue"></output></div><canvas id="testMeterCanvas" width="660" height="64" aria-label="试音音量波形"></canvas><div class="meter-track"><div id="testMeterBar" class="meter-fill"></div></div></div><div class="row"><button id="micTestStart">开始试音</button><button id="micTestStop" hidden>结束并回听</button><button id="micTestConfigure">调整麦克风</button></div><audio id="micTestAudio" controls hidden></audio><p id="micTestMessage" class="hint" role="status"></p></section>
     <details class="fold" id="shortcutHelp"><summary>键盘快捷键</summary><div class="fold-content shortcut-list">面板打开且光标不在输入框时生效，其他弹窗中停用。录音键再次按下可结束录音；对比依次播放原声和当前录音，没有录音时不可用。Mac 使用 Option + Shift；Windows / Linux 使用 Alt + Shift。<br><kbd>Alt / Option + Shift + R</kbd> 开始／结束录音<br><kbd>Alt / Option + Shift + O</kbd> 听原声／原曲<br><kbd>Alt / Option + Shift + P</kbd> 回放当前录音<br><kbd>Alt / Option + Shift + ← / →</kbd> 上一句／下一句<br><kbd>Alt / Option + Shift + C</kbd> 对比原声与当前录音<br><kbd>Alt / Option + Shift + /</kbd> 打开此说明<br><kbd>Esc</kbd> 停止当前操作／关闭弹窗</div></details>

@@ -1,9 +1,9 @@
 (function(root){
-  function recommend({activity='speech',backing=false,listening='headphones',quality='high',sidetone=false}={}){
+  function recommend({activity='speech',listening='headphones',quality='high',sidetone=false}={}){
     const singing=activity==='sing',speakers=listening==='speakers';
-    return {activity:singing?'sing':'speech',scope:singing?'whole':'clip',backing:!!backing,
+    return {activity:singing?'sing':'speech',
       echo:speakers,gain:speakers && !singing,sidetone:!speakers && !!sidetone,
-      quality:quality==='lossless'?'lossless':'high',lead:singing?'none':'seconds'};
+      quality:quality==='lossless'?'lossless':'high'};
   }
   function shortcut(event){
     if(!event.altKey || !event.shiftKey || event.ctrlKey || event.metaKey || event.repeat || event.isComposing)return null;
@@ -14,7 +14,7 @@
   function attach({view,doc=root.document,env=root,getSettings,onApply,onUndo=()=>false,onContinue=()=>{},onConfigure,onBeforeTest=()=>{},onClose=()=>{},recording=root.EchoRecording,meter=root.EchoLiveMeter}){
     const $=id=>view.getElementById(id),dialog=$('toolsDialog'),audio=$('micTestAudio');
     let session=null,revision=0,timer=null,url=null,initialized=false,applied=false;
-    const wizardInputs=['wizardActivity','wizardSongBacking','wizardSpeechBacking','wizardListening','wizardQuality','wizardSidetone'];
+    const wizardInputs=['wizardActivity','wizardListening','wizardQuality','wizardSidetone'];
     function isOpen(){return !!dialog.open;}
     function clearAudio(){audio.pause?.();audio.removeAttribute('src');audio.load?.();audio.hidden=true;if(url)env.URL.revokeObjectURL(url);url=null;}
     function render(running=false){$('micTestStart').disabled=running;$('micTestStop').hidden=!running;$('micTestConfigure').disabled=running;for(const id of [...wizardInputs,'wizardApply','wizardUndo','wizardContinue'])$(id).disabled=running;
@@ -44,17 +44,14 @@
     }
     $('closeTools').onclick=close;dialog.oncancel=event=>{event.preventDefault();close();};
     function recommendation(){return recommend({activity:$('wizardActivity').value,
-      backing:($('wizardActivity').value==='sing'?$('wizardSongBacking'):$('wizardSpeechBacking')).value==='yes',
       listening:$('wizardListening').value,quality:$('wizardQuality').value,sidetone:$('wizardSidetone').checked});}
     function renderRecommendation(){
       const p=recommendation(),singing=p.activity==='sing',speakers=$('wizardListening').value==='speakers';
-      $('wizardSongRow').hidden=!singing;$('wizardSpeechRow').hidden=singing;
       $('wizardSidetone').disabled=speakers;$('wizardSidetoneRow').hidden=speakers;
-      $('wizardSummary').textContent=[`${singing?'唱歌 · 整首':'配音 · 当前片段'} · ${p.backing?(singing?'使用伴奏':'保留背景音'):(singing?'清唱':'仅录人声')}`,
+      $('wizardSummary').textContent=[singing?'唱歌':'配音',
         `回声消除：${p.echo?'开启':'关闭'}　自动增益：${p.gain?'开启':'关闭'}`,
-        `耳返：${p.sidetone?'开启':'关闭'}　保存：${p.quality==='lossless'?'无损 PCM':'高品质压缩'}`,
-        `${p.lead==='seconds'?'前置播放：3 秒':'前置播放：关闭'}`].join('\n');
-      $('wizardHint').textContent=(p.backing?'伴奏／背景音需本机分离服务；应用后可前往准备，不会自动安装或下载。':'录音时只录自己的人声，无需分离服务。')+(speakers?(singing?'外放已关闭耳返；唱歌时回声消除可能影响音质，建议优先戴耳机。':'外放已关闭耳返；回声消除与自动增益可在录音设置中调整。'):'耳返可选，开启后会听到少量延迟。');
+        `耳返：${p.sidetone?'开启':'关闭'}　保存：${p.quality==='lossless'?'无损 PCM':'高品质压缩'}`].join('\n');
+      $('wizardHint').textContent='选段、前置播放和伴奏在主界面按需调整。'+(speakers?(singing?'外放已关闭耳返；唱歌时回声消除可能影响音质，建议优先戴耳机。':'外放已关闭耳返；回声消除与自动增益可在录音设置中调整。'):'耳返可选，开启后会听到少量延迟。');
     }
     for(const id of wizardInputs)$(id).onchange=()=>{renderRecommendation();applied=false;$('wizardApply').disabled=false;if(!$('wizardUndo').hidden){$('wizardMessage').textContent='推荐已更新，点击应用后生效。';$('wizardContinue').hidden=true;}};
     $('wizardApply').onclick=()=>{
@@ -70,7 +67,7 @@
       $('micTestSettings').textContent='当前设置：'+getSettings().description;
     };
     $('wizardContinue').onclick=()=>{if(session)return;close();onContinue();};
-    for(const [id,value] of Object.entries({wizardActivity:'speech',wizardSongBacking:'yes',wizardSpeechBacking:'no',wizardListening:'headphones',wizardQuality:'high'}))$(id).value=value;
+    for(const [id,value] of Object.entries({wizardActivity:'speech',wizardListening:'headphones',wizardQuality:'high'}))$(id).value=value;
     $('wizardSidetone').checked=false;$('wizardUndo').hidden=true;$('wizardContinue').hidden=true;
     renderRecommendation();
     try{if((env.localStorage || env.window?.localStorage)?.getItem('echo-setup-discovered-v1')!=='true')$('openPreparation').textContent='帮我设置';}catch{}

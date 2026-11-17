@@ -43,8 +43,8 @@ test('closing pending microphone permission releases a late stream and never mak
 
 
 test('recommendations distinguish headphone singing from speaker dubbing and never enable speaker sidetone',()=>{
-  assert.deepEqual(tools.recommend({activity:'sing',backing:true,listening:'headphones',quality:'lossless'}),
-    {activity:'sing',scope:'whole',backing:true,echo:false,gain:false,sidetone:false,quality:'lossless',lead:'none'});
+  assert.deepEqual(tools.recommend({activity:'sing',listening:'headphones',quality:'lossless'}),
+    {activity:'sing',echo:false,gain:false,sidetone:false,quality:'lossless'});
   const speech=tools.recommend({listening:'speakers',sidetone:true});
   assert.equal(speech.echo,true);assert.equal(speech.gain,true);assert.equal(speech.sidetone,false);
   assert.equal(tools.recommend({activity:'sing',listening:'speakers'}).gain,false);
