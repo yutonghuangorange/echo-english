@@ -225,3 +225,14 @@ test('lossless cache lookup opts in without changing the legacy standard endpoin
   assert.deepEqual(urls,['http://127.0.0.1:8765/backings/jNQXAC9IVRw','http://127.0.0.1:8765/backings/jNQXAC9IVRw?quality=lossless']);
   await assert.rejects(request({action:'cached',videoId:'jNQXAC9IVRw',quality:'unknown'},sender,fetcher),/不支持/);
 });
+
+test('generation ranges are independent, bounded and reject invalid or overlong requests',()=>{
+  const {generationRange}=require('../extension/karaoke.js'),current={start:20,end:35,speed:0.8};
+  assert.deepEqual(generationRange({scope:'current',current,duration:300}),current);
+  assert.deepEqual(generationRange({scope:'whole',current,duration:300}),{start:0,end:300,speed:1});
+  assert.deepEqual(generationRange({scope:'custom',current,duration:900,start:100,end:700}),{start:100,end:700,speed:1});
+  assert.deepEqual(current,{start:20,end:35,speed:0.8});
+  for(const [start,end] of [[-1,5],[10,5],[0,NaN],[0,901],[0,601]])assert.throws(()=>generationRange({scope:'custom',duration:900,start,end}));
+  assert.throws(()=>generationRange({scope:'whole',duration:601}),/10 分钟/);
+  assert.throws(()=>generationRange({scope:'whole',duration:Infinity}),/有效/);
+});

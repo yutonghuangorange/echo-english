@@ -2,6 +2,16 @@
   const DEFAULT_MODEL='demucs-htdemucs';
   function modelOf(value){return value?.model || DEFAULT_MODEL;}
   function qualityOf(value){return value?.quality || 'standard';}
+  // Generation has its own range; changing it never changes the recording selection.
+  function generationRange({scope='current',current,duration,start,end}) {
+    const range=scope==='whole'?{start:0,end:duration,speed:1}:scope==='custom'?{start,end,speed:1}:current;
+    if(!range || !Number.isFinite(range.start) || !Number.isFinite(range.end) || range.start<0 || range.end<=range.start)
+      throw Error('请选择有效的音频时间区间，终点须晚于起点。');
+    if(!Number.isFinite(duration) || duration<=0)throw Error('请等待视频时长加载后再生成。');
+    if(range.end>duration+0.001)throw Error('生成范围不能超过视频时长。');
+    if(range.end-range.start>600)throw Error('每次最多生成 10 分钟，请选择当前练习范围或较短的自定义区间。');
+    return {...range};
+  }
   function key(videoId, range) {const base=`${videoId}:${Number(range.start).toFixed(3)}:${Number(range.end).toFixed(3)}`;const modelKey=modelOf(range)===DEFAULT_MODEL?base:`${base}:${modelOf(range)}`;return qualityOf(range)==='standard'?modelKey:`${modelKey}:lossless`;}
   function covers(backing, videoId, range) {return !!backing && backing.videoId===videoId && modelOf(backing)===modelOf(range) && qualityOf(backing)===qualityOf(range) && range.start>=backing.start-0.001 && range.end<=backing.end+0.001;}
   function canReplayBacking(take){return !!take && take.capture==='vocal' && !take.withBacking && (take.kind==='song' || !!take.backingKey);}
@@ -125,6 +135,6 @@
       }
     };
   }
-  const api={DEFAULT_MODEL,modelOf,qualityOf,fetchAudio,key,covers,canReplayBacking,backingForTake,progressText,blobFromBase64,createMonitor,createAudioOutput,createBackingOutput:createAudioOutput,followRecording};
+  const api={generationRange,DEFAULT_MODEL,modelOf,qualityOf,fetchAudio,key,covers,canReplayBacking,backingForTake,progressText,blobFromBase64,createMonitor,createAudioOutput,createBackingOutput:createAudioOutput,followRecording};
   if(typeof module!=='undefined')module.exports=api;else root.EchoKaraoke=api;
 })(globalThis);

@@ -345,7 +345,7 @@ test('song mode exposes main recording and guides missing accompaniment without 
   assert.equal(nodes.get('scopeControls').hidden,false);assert.equal(nodes.get('practiceDock').hidden,false);
   assert.notEqual(nodes.get('settingsDialog').open,true);assert.equal(nodes.get('practiceToolsSummary').hidden,false);
   assert.equal(nodes.get('karaokeSettings').hidden,false);assert.equal(nodes.get('record').disabled,false);
-  await nodes.get('record').onclick();assert.equal(micRequests,0);assert.equal(nodes.get('settingsDialog').open,true);assert.equal(nodes.get('settings-backing').hidden,false);
+  await nodes.get('record').onclick();assert.equal(micRequests,0);assert.equal(nodes.get('settingsDialog').open,true);assert.equal(nodes.get('settings-generation').hidden,false);
   nodes.get('activityMode').value='speech';nodes.get('activityMode').onchange();
   assert.equal(nodes.get('scopeControls').hidden,false);assert.equal(nodes.get('karaokeSettings').hidden,false);
   assert.equal(nodes.get('practiceDock').hidden,false);assert.equal(nodes.get('practiceToolsSummary').hidden,false);
@@ -355,13 +355,17 @@ test('song mode exposes main recording and guides missing accompaniment without 
 test('volume remains adjustable during accompaniment preview and saves the chosen gain',async()=>{
   const storage=createStorage(new IDBFactory());let gain=1,sound;
   await storage.saveBacking({key:'music',videoId:'video',start:0,end:60,createdAt:1,blob:new Blob(['audio'])});
-  const video={duration:60,currentTime:0,muted:false,playbackRate:1,pause(){},async play(){},addEventListener(){},removeEventListener(){}};
+  const listeners=new Map();let time=0;
+  const video={duration:60,get currentTime(){return time;},set currentTime(value){time=value;queueMicrotask(()=>listeners.get('seeked')?.());},muted:false,playbackRate:1,pause(){},async play(){},addEventListener(name,fn){listeners.set(name,fn);},removeEventListener(name,fn){if(listeners.get(name)===fn)listeners.delete(name);}};
   class Audio{constructor(){sound=this;}pause(){}async play(){}}
   const {nodes}=await mount(storage,{video,globals:{Audio,EchoKaraoke:{...require('../extension/karaoke.js'),async createBackingOutput(){return {setVolume(value){gain=value;},dispose(){}};}}}});
   nodes.get('activityMode').value='sing';nodes.get('activityMode').onchange();
   nodes.get('openBacking').onclick();assert.equal(nodes.get('settingsDialog').open,true);
+  nodes.get('generationScope').value='custom';nodes.get('generationStart').value='10';nodes.get('generationEnd').value='50';nodes.get('generationScope').onchange();
   const playing=nodes.get('previewBacking').onclick();
   for(let i=0;i<30 && !nodes.get('transportProgress').oninput;i++)await new Promise(r=>setTimeout(r,1));
+  assert.equal(video.currentTime,10);assert.equal(sound.currentTime,10);
+  nodes.get('generationSettings').onclick();assert.equal(nodes.get('settings-backing').hidden,false);
   assert.equal(nodes.get('backingVolume').disabled,false);
   nodes.get('backingVolume').value='1.5';nodes.get('backingVolume').oninput();
   assert.equal(gain,1.5);assert.equal(nodes.get('backingVolumeValue').textContent,'150%');
@@ -821,7 +825,7 @@ test('generation displays live separation progress, encoding state and completio
       if(message.action==='start')return {id:'e'.repeat(32),state:'separating',progress:40,elapsedSeconds:16,remainingSeconds:23};
       if(message.action==='status'){
         if(polls++===0){
-          assert.equal(nodes.get('karaokeProgress').hidden,false);assert.equal(nodes.get('karaokeProgress').value,40);
+          assert.equal(nodes.get('karaokeProgress').hidden,false);assert.equal(nodes.get('karaokeProgress').value,40);assert.equal(nodes.get('generationProgress').value,40);assert.match(nodes.get('generationStage').textContent,/40%/);
           assert.match(nodes.get('karaokeInfo').textContent,/40%.*已用.*预计剩余/);
           assert.doesNotMatch(nodes.get('status').textContent,/%|已用|预计剩余/);
           return {id:'e'.repeat(32),state:'encoding',progress:null,elapsedSeconds:30};
@@ -929,7 +933,7 @@ test('whole-song validation remains beside the generation button without sending
   nodes.get('activityMode').value='sing';nodes.get('activityMode').onchange();
   await nodes.get('prepareBacking').onclick();
   assert.equal(requests,0);assert.match(nodes.get('karaokeInfo').textContent,/超过 10 分钟/);assert.match(nodes.get('status').textContent,/超过 10 分钟/);
-  assert.equal(nodes.get('prepareBacking').disabled,false);
+  assert.equal(nodes.get('prepareBacking').disabled,true);
   (await storage.ready).close();
 });
 
@@ -1716,7 +1720,7 @@ test('infrequent settings open in one modal, preserve the practice page and supp
   nodes.get('openLanguageSettings').onclick();assert.equal(nodes.get('settings-captions').hidden,false);assert.equal(nodes.get('page-practice').hidden,false);
   await waitUntil(()=>nodes.get('read').disabled===false);nodes.get('closeSettings').onclick();
   nodes.get('openPreparation').onclick();nodes.get('micTestConfigure').onclick();assert.equal(nodes.get('toolsDialog').open,false);assert.equal(nodes.get('settingsDialog').open,true);assert.equal(nodes.get('settings-microphone').hidden,false);
-  nodes.get('closeSettings').onclick();nodes.get('useBacking').checked=true;nodes.get('useBacking').onchange();nodes.get('openBacking').onclick();assert.equal(nodes.get('settings-backing').hidden,false);
+  nodes.get('closeSettings').onclick();nodes.get('useBacking').checked=true;nodes.get('useBacking').onchange();nodes.get('openBacking').onclick();assert.equal(nodes.get('settings-generation').hidden,false);
   nodes.get('close').onclick();assert.equal(nodes.get('settingsDialog').open,false);
   const restored=await mount(storage,{globals});assert.equal(restored.nodes.get('manualGainDb').value,6);assert.equal(restored.nodes.get('settingsDialog').open,undefined);
   (await storage.ready).close();
@@ -1868,7 +1872,7 @@ test('main background entry generates each selected clip without requiring prior
   }}}}});
   assert.equal(nodes.get('useBacking').checked,false);assert.equal(nodes.get('karaokeSettings').hidden,false);
   assert.match(nodes.get('backingSettingsTitle').textContent,/准备背景音/);
-  nodes.get('openBacking').onclick();assert.equal(nodes.get('settings-backing').hidden,false);
+  nodes.get('openBacking').onclick();assert.equal(nodes.get('settings-generation').hidden,false);
   assert.equal(nodes.get('prepareBacking').disabled,false);
   await nodes.get('prepareBacking').onclick();
   assert.equal(nodes.get('useBacking').checked,true);assert.match(nodes.get('backingSettingsTitle').textContent,/调整背景音/);
@@ -1878,4 +1882,40 @@ test('main background entry generates each selected clip without requiring prior
   assert.deepEqual(starts.map(r=>[r.start,r.end]),[[0,5],[5,10]]);
   assert.match(nodes.get('backingSettingsTitle').textContent,/调整背景音/);
   assert.equal((await storage.listBackings('video')).length,2);(await storage.ready).close();
+});
+
+test('generation page separates settings and reuses whole-video backing for the unchanged recording clip',async()=>{
+  const storage=createStorage(new IDBFactory()),starts=[];
+  const {nodes}=await mount(storage,{video:{duration:120,pause(){}},globals:{chrome:{runtime:{onMessage:{addListener(){}},async sendMessage(message){
+    if(message.action==='start'){starts.push(message);return {id:'b'.repeat(32),state:'ready',quality:'standard'};}
+    return {audio:'UklGRg==',mime:'audio/wav'};
+  }}}}});
+  nodes.get('openBacking').onclick();
+  assert.equal(nodes.get('settings-generation').hidden,false);assert.equal(nodes.get('settings-backing').hidden,true);assert.equal(nodes.get('settingsTabs').hidden,true);
+  nodes.get('generationScope').value='whole';nodes.get('generationScope').onchange();
+  nodes.get('generationSettings').onclick();assert.equal(nodes.get('settings-backing').hidden,false);assert.equal(nodes.get('settings-generation').hidden,true);
+  nodes.get('backToGeneration').onclick();assert.equal(nodes.get('generationScope').value,'whole');
+  await nodes.get('prepareBacking').onclick();
+  assert.deepEqual(starts.map(m=>[m.start,m.end]),[[0,120]]);
+  assert.equal(nodes.get('start').value,'0');assert.equal(nodes.get('end').value,'5');assert.equal(nodes.get('practiceScope').value,'clip');
+  nodes.get('generationScope').value='current';nodes.get('generationScope').onchange();
+  assert.equal(nodes.get('prepareBacking').disabled,true);assert.equal(nodes.get('previewBacking').disabled,false);
+  nodes.get('closeSettings').onclick();await new Promise(r=>setTimeout(r,5));(await storage.ready).close();
+});
+
+test('custom generation validates the independent interval and submits it without changing recording bounds',async()=>{
+  const storage=createStorage(new IDBFactory()),starts=[];
+  const {nodes}=await mount(storage,{video:{duration:900,pause(){}},globals:{chrome:{runtime:{onMessage:{addListener(){}},async sendMessage(message){
+    if(message.action==='start'){starts.push(message);return {id:'c'.repeat(32),state:'ready',quality:'standard'};}
+    return {audio:'UklGRg==',mime:'audio/wav'};
+  }}}}});
+  nodes.get('openBacking').onclick();nodes.get('generationScope').value='whole';nodes.get('generationScope').onchange();
+  assert.equal(nodes.get('prepareBacking').disabled,true);assert.match(nodes.get('generationRangeHint').textContent,/10 分钟/);
+  nodes.get('generationScope').value='custom';nodes.get('generationScope').onchange();
+  nodes.get('generationStart').value='30';nodes.get('generationEnd').value='20';nodes.get('generationEnd').oninput();
+  assert.equal(nodes.get('prepareBacking').disabled,true);await nodes.get('prepareBacking').onclick();assert.equal(starts.length,0);
+  nodes.get('generationEnd').value='90';nodes.get('generationEnd').onchange();
+  assert.equal(nodes.get('prepareBacking').disabled,false);await nodes.get('prepareBacking').onclick();
+  assert.deepEqual(starts.map(m=>[m.start,m.end]),[[30,90]]);assert.equal(nodes.get('end').value,'5');
+  await new Promise(r=>setTimeout(r,5));(await storage.ready).close();
 });
