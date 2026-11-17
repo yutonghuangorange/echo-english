@@ -3,19 +3,35 @@
   function create({env = root} = {}) {
     let frame = 0, timer = 0, completion = null;
     let watchRevision = 0, timerRevision = 0;
+    let removeWatch = () => {};
 
     function watchEnd(media, end, done) {
+      removeWatch();
       env.cancelAnimationFrame(frame);
       const revision = ++watchRevision;
-      function tick() {
-        if (revision !== watchRevision) return;
-        frame = 0;
+      let finished=false;
+      const cleanup=()=>{
+        env.cancelAnimationFrame(frame);frame=0;
+        media.removeEventListener?.('timeupdate',check);
+        media.removeEventListener?.('ended',check);
+      };
+      function check() {
+        if (revision !== watchRevision || finished) return;
         if (media.currentTime >= end || media.ended) {
+          finished=true;cleanup();
           done();
-          return;
         }
+      }
+      function tick() {
+        if (revision !== watchRevision || finished) return;
+        frame = 0;check();
+        if(finished)return;
         frame = env.requestAnimationFrame(tick);
       }
+      removeWatch=cleanup;
+      // Media events continue when rendering is throttled or the tab is hidden.
+      media.addEventListener?.('timeupdate',check);
+      media.addEventListener?.('ended',check);
       frame = env.requestAnimationFrame(tick);
     }
 
@@ -67,6 +83,7 @@
     function cancel() {
       ++watchRevision;
       ++timerRevision;
+      removeWatch();removeWatch=()=>{};
       env.cancelAnimationFrame(frame);
       env.clearTimeout(timer);
       frame = timer = 0;

@@ -70,3 +70,14 @@ test('seek failures and timeouts clean up before reporting the error',async()=>{
   const media={currentTime:0,pause(){},addEventListener(name,fn){listeners.set(name,fn);},removeEventListener(name){listeners.delete(name);}};
   const waiting=playback.seek(media,8);const [id,timer]=[...env.timers.entries()][0];env.timers.delete(id);timer.fn();await assert.rejects(waiting,/定位超时/);assert.equal(listeners.size,0);assert.equal(env.timers.size,0);
 });
+
+test('media time events stop a clip even without rendering frames and are removed after completion or cancellation',()=>{
+  const env=clock(),playback=create({env}),listeners=new Map();let stopped=0;
+  const media={currentTime:0,addEventListener(name,fn){listeners.set(name,fn);},removeEventListener(name,fn){if(listeners.get(name)===fn)listeners.delete(name);}};
+  playback.watchEnd(media,3,()=>stopped++);const stale=listeners.get('timeupdate');
+  media.currentTime=2;stale();assert.equal(stopped,0);
+  media.currentTime=3;stale();assert.equal(stopped,1);assert.equal(listeners.size,0);assert.equal(env.frames.size,0);
+  stale();assert.equal(stopped,1);
+  playback.watchEnd(media,5,()=>stopped++);const cancelled=listeners.get('timeupdate');playback.cancel();
+  assert.equal(listeners.size,0);media.currentTime=5;cancelled();assert.equal(stopped,1);
+});

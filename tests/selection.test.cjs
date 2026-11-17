@@ -28,3 +28,12 @@ test('all scopes validate duration, selected bounds, speed and paragraph prerequ
   for(const change of [{speed:0},{speed:NaN},{duration:NaN},{end:25},{start:-1},{end:2},{scope:'unknown'},{scope:'paragraph',first:1,last:1},{scope:'whole',duration:601},{scope:'clip',duration:900,end:603}])assert.throws(()=>resolve({...input,...change}));
   assert.equal(resolve({...input,scope:'whole',duration:600}).range.end,600);
 });
+
+test('default clip bounds stop at the next distinct subtitle start without extending gaps or trimming manual edits',()=>{
+  const {clipRange}=require('../extension/selection.js');
+  const cues=[{start:1,end:8,text:'first'},{start:1,end:8,text:'translation'},{start:4,end:6,text:'next'},{start:10,end:12,text:'last'}];
+  assert.deepEqual(clipRange(cues,0,1,8),{start:1,end:4});
+  assert.deepEqual(clipRange(cues,2,4,6),{start:4,end:6});
+  assert.deepEqual(clipRange(cues,3,10,12),{start:10,end:12});
+  assert.deepEqual(clipRange(cues,0,1.2,7),{start:1.2,end:7});
+});

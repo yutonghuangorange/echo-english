@@ -15,6 +15,16 @@
     return cue ? (cue.key || `cue:${Number(cue.start).toFixed(3)}:${cue.text}`) : `manual:${Number(start).toFixed(2)}:${Number(end).toFixed(2)}`;
   }
 
+  // Caption display durations may overlap the following spoken line. Only
+  // shorten the default selection; an explicitly adjusted range remains owned
+  // by the learner. Equal-start captions do not create zero-length clips.
+  function clipRange(cues,index,start,end) {
+    const cue=cues[index];
+    if(!cue || Math.abs(start-cue.start)>0.011 || Math.abs(end-cue.end)>0.011)return {start,end};
+    const next=cues.slice(index+1).find(c=>c.start>cue.start);
+    return {start,end:next?Math.min(end,next.start):end};
+  }
+
   function paragraphRange(cues, first, last) {
     if (!Number.isInteger(first) || !Number.isInteger(last) || first < 0 || last >= cues.length || last <= first) throw Error('请选择至少两句连续字幕作为段落。');
     const start = cues[first].start, end = Math.max(...cues.slice(first, last + 1).map(cue => cue.end));
@@ -47,7 +57,7 @@
     return {range: {start, end, speed}, key: activity === 'sing' ? `song:${key}` : key, label};
   }
 
-  const api = {MAX_SECONDS, restoreScopes, cueKey, paragraphRange, resolve};
+  const api = {MAX_SECONDS, restoreScopes, cueKey, clipRange, paragraphRange, resolve};
   if (typeof module !== 'undefined') module.exports = api;
   else root.EchoSelection = api;
 })(globalThis);

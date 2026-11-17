@@ -8,7 +8,7 @@
   root.innerHTML = EchoPanelView.html;
   const $ = id => root.getElementById(id);
   EchoPanelSize.attach({panel:$('panel'),host,handle:$('resizePanel'),moveHandle:$('movePanel'),env:window});
-  let cues = [], index = -1, take = null, mode = 'idle', generation = 0;
+  let cues = [], index = -1, take = null, mode = 'idle', generation = 0,clipRangeAdjusted=false;
   let recordingSession = null, audio = null, savedVideo = null;
   const playback = EchoPlayback.create();
   const transport = EchoTransport.create({
@@ -319,7 +319,8 @@
   function cueOptionLabel(cue,i){return `第 ${i+1} 句 · ${recordingTime(cue.start)} · ${captionText(cue).slice(0,50)}`;}
   function syncClipSelection(){
     const cue=cues[index],start=Number($('start').value),end=Number($('end').value);
-    $('clipCue').value=cue && Math.abs(cue.start-start)<0.011 && Math.abs(cue.end-end)<0.011?String(index):'';
+    const standard=cue && EchoSelection.clipRange(cues,index,cue.start,cue.end);
+    $('clipCue').value=cue && Math.abs(standard.start-start)<0.011 && Math.abs(standard.end-end)<0.011?String(index):'';
     $('clipCue').disabled=mode!=='idle' || !cues.length;
   }
   function renderClipOptions(){
@@ -691,7 +692,7 @@
     if (!Number.isFinite(start) || !Number.isFinite(end) || start < 0 || end <= start) return;
     const title=currentVideoTitle();
     scopePreferences[activity]=$('practiceScope').value;
-    const session = {qualityPreferences:{...qualityPreferences},modelPreferences:{...modelPreferences},title:title || videoId,scopes:{...scopePreferences},assemblyChoices,loopCount:$('loopCount').value,prepSeconds:$('prepSeconds').value,autoNext:$('autoNext').checked,leadInMode:$('leadInMode').value,leadInSeconds:EchoPractice.leadInSeconds($('leadInSeconds').value),activity,paragraphFirst,paragraphLast,useBacking:$('useBacking').checked,backingPreferences:{...backingPreferences,[activity]:$('useBacking').checked},captionSource,captionSourceName,loadedCaptionSource,replayVocalVolume:replayMix().vocal,replayBackingVolume:replayMix().backing,replayWithBacking:$('replayWithBacking').checked,backingVolume:Number($('backingVolume').value),contentLanguage:$('contentLanguage').value,captionLayout:$('captionLayout').value,videoId,cues:cues.map(c=>({...c})),index,start,end,speed:$('speed').value,showChinese:$('showChinese').checked,hideText:$('hideText').checked,followCaptions:$('followCaptions').checked,selectedTakeId:take?.id,updatedAt:Date.now()};
+    const session = {clipRangeAdjusted,qualityPreferences:{...qualityPreferences},modelPreferences:{...modelPreferences},title:title || videoId,scopes:{...scopePreferences},assemblyChoices,loopCount:$('loopCount').value,prepSeconds:$('prepSeconds').value,autoNext:$('autoNext').checked,leadInMode:$('leadInMode').value,leadInSeconds:EchoPractice.leadInSeconds($('leadInSeconds').value),activity,paragraphFirst,paragraphLast,useBacking:$('useBacking').checked,backingPreferences:{...backingPreferences,[activity]:$('useBacking').checked},captionSource,captionSourceName,loadedCaptionSource,replayVocalVolume:replayMix().vocal,replayBackingVolume:replayMix().backing,replayWithBacking:$('replayWithBacking').checked,backingVolume:Number($('backingVolume').value),contentLanguage:$('contentLanguage').value,captionLayout:$('captionLayout').value,videoId,cues:cues.map(c=>({...c})),index,start,end,speed:$('speed').value,showChinese:$('showChinese').checked,hideText:$('hideText').checked,followCaptions:$('followCaptions').checked,selectedTakeId:take?.id,updatedAt:Date.now()};
     void storage.saveSession(session).catch(()=>{
       if (!progressWarning && session.videoId === videoId) { progressWarning=true; status('练习位置未能保存，请检查本地存储空间。录音仍可下载。'); }
     });
@@ -800,6 +801,11 @@
         $('showChinese').checked=!!session.showChinese; $('hideText').checked=!!session.hideText; $('followCaptions').checked=session.followCaptions!==false;
         displayCues(session.cues || [],session.index);
         $('start').value=session.start; $('end').value=session.end; index=session.index>=0 && session.index<cues.length?session.index:-1;syncParagraphBounds();
+        clipRangeAdjusted=session.clipRangeAdjusted===true;
+        if($('practiceScope').value==='clip' && !clipRangeAdjusted){
+          const range=EchoSelection.clipRange(cues,index,Number($('start').value),Number($('end').value));
+          $('start').value=range.start;$('end').value=range.end;
+        }
         updateCaption(); $('list').style.display=$('hideText').checked?'none':'';
         status(index>=0 ? `已回到上次练习的第 ${index+1} 句。` : '已恢复上次的手动片段。');
       } else if(values.length) {
@@ -1445,7 +1451,7 @@
   },true);
   function select(i, fromList=false) {
     if (mode !== 'idle' || !cues[i]) return;
-    index = i; if(isParagraph())syncParagraphBounds();else{$('start').value = cues[i].start.toFixed(2); $('end').value = cues[i].end.toFixed(2);}
+    index = i;clipRangeAdjusted=false; if(isParagraph())syncParagraphBounds();else{const range=EchoSelection.clipRange(cues,i,cues[i].start,cues[i].end);$('start').value = range.start.toFixed(2); $('end').value = range.end.toFixed(2);}
     if(fromList && !isParagraph()){$('practiceScope').value='clip';karaokeIssue='';}
     updateCaption(); chooseCurrentTake();updateSummaries();saveProgress();showPage('practice');renderCueList();
     if(fromList){$('record').focus();}
@@ -1459,7 +1465,7 @@
     if (cues.length && preferredIndex >= 0) select(Math.min(preferredIndex,cues.length-1)); else {updateCaption();chooseCurrentTake();saveProgress();}
   }
   function rememberBounds() {
-    updateSummaries();
+    clipRangeAdjusted=true;updateSummaries();
     // Recording boundaries must not rewrite or reorder the original subtitle timeline.
     chooseCurrentTake(); saveProgress();
   }
@@ -1526,7 +1532,7 @@
   $('prev').onclick = () => select(index - 1,true); $('next').onclick = () => select(index + 1,true);
   $('markStart').onclick = guarded(() => { $('start').value = video().currentTime.toFixed(2); index = -1; updateCaption();chooseCurrentTake();saveProgress(); });
   $('markEnd').onclick = guarded(() => { $('end').value = video().currentTime.toFixed(2); index = -1; updateCaption();chooseCurrentTake();saveProgress(); });
-  $('original').onclick = guarded(async () => { const r = selectedRange(), token = ++generation; mode = 'original'; controls(); status('正在播放原声…'); await original(r, token); if (token === generation) { finish(); status('原声播放完成。'); } });
+  $('original').onclick = guarded(async () => { const r = selectedRange(), token = ++generation; mode = 'original'; controls(); status('正在播放原声…'); await original(r, token); if (token === generation) { finish();if($('practiceScope').value==='clip')updateCaption();status('原声播放完成。'); } });
   $('record').onclick = guarded(() => {
     if(mode!=='idle')return;
     if(!hasBackingTools())return record();
@@ -1619,7 +1625,7 @@
   $('search').onclick = () => { window.open(`https://www.youtube.com/results?search_query=${encodeURIComponent($('query').value || ({'zh':'中文 歌词','ja':'日本語 字幕 歌詞','ko':'한국어 자막 가사','en':'english conversation subtitles'}[contentLanguage()] || 'subtitles lyrics'))}`, '_blank', 'noopener'); };
   chrome.runtime.onMessage.addListener(message => { if (message.type === 'echo-toggle') { const open = host.style.display === 'none'; host.style.display = open ? 'block' : 'none'; if (!open) {tools.close();library.close(true);stop();} } });
   function resetVideo(id) {
-    tools.close();favorite=false;favoriteRequest++;
+    tools.close();favorite=false;favoriteRequest++;clipRangeAdjusted=false;
     library.close(true);
     stop();
     recordingSession=null;

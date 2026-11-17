@@ -1650,3 +1650,25 @@ test('document shortcuts only act when the panel is visible and no input or dial
   handler(key());await waitUntil(()=>nodes.get('favoriteVideo').getAttribute('aria-pressed')==='true');assert.equal(prevented,1);
   assert.equal((await storage.getFavorite('video')).videoId,'video');(await storage.ready).close();
 });
+
+test('current-clip original playback stops before an overlapping next cue and restores explicit manual bounds',async()=>{
+  const storage=createStorage(new IDBFactory()),listeners=new Map();let time=0,paused=true;
+  const video={duration:30,muted:false,playbackRate:1,get currentTime(){return time;},set currentTime(value){time=value;queueMicrotask(()=>emit('seeked'));},get paused(){return paused;},pause(){paused=true;},async play(){paused=false;},
+    addEventListener(name,fn){if(!listeners.has(name))listeners.set(name,new Set());listeners.get(name).add(fn);},removeEventListener(name,fn){listeners.get(name)?.delete(fn);}};
+  function emit(name){for(const listener of [...listeners.get(name) || []])listener({type:name});}
+  const cues=[{start:1,end:8,text:'First line'},{start:4,end:8,text:'Next line'}];
+  await storage.saveSession({videoId:'video',activity:'speech',scopes:{speech:'clip',sing:'whole'},start:1,end:8,index:0,speed:'1',leadInMode:'none',cues});
+  const {nodes}=await mount(storage,{video});
+  assert.equal(Number(nodes.get('end').value),4);assert.equal(nodes.get('clipCue').value,'0');
+  const playing=nodes.get('original').onclick();await waitUntil(()=>!paused && listeners.get('timeupdate')?.size>1);
+  time=3.9;emit('timeupdate');assert.equal(paused,false);
+  time=4;emit('timeupdate');await playing;assert.equal(paused,true);
+  assert.equal(Number(nodes.get('end').value),4);assert.equal(Number(nodes.get('start').value),1);
+  nodes.get('clipCue').value='1';nodes.get('clipCue').onchange();assert.equal(Number(nodes.get('start').value),4);
+  nodes.get('clipCue').value='0';nodes.get('clipCue').onchange();assert.equal(Number(nodes.get('end').value),4);
+  // A deliberate extension is not silently shortened, including after reload.
+  nodes.get('end').value='8';nodes.get('end').onchange();await new Promise(r=>setTimeout(r,5));
+  assert.equal((await storage.getSession('video')).clipRangeAdjusted,true);
+  const restored=await mount(storage,{video});assert.equal(Number(restored.nodes.get('end').value),8);
+  (await storage.ready).close();
+});
