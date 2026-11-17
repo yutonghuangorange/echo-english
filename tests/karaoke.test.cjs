@@ -5,6 +5,22 @@ const {key,blobFromBase64,createMonitor}=require('../extension/karaoke.js');
 const sender={tab:{url:'https://www.youtube.com/watch?v=jNQXAC9IVRw'}};
 const id='a'.repeat(32);
 
+test('backing identity preserves legacy Demucs caches and separates future model outputs',()=>{
+  const {DEFAULT_MODEL,modelOf,covers,canReplayBacking,backingForTake}=require('../extension/karaoke.js');
+  const range={start:1,end:4},legacy={key:'old',videoId:'video',start:0,end:10};
+  assert.equal(modelOf(legacy),DEFAULT_MODEL);
+  assert.equal(key('video',range),'video:1.000:4.000');
+  assert.notEqual(key('video',{...range,model:'future-model'}),key('video',range));
+  assert.equal(covers(legacy,'video',range),true);
+  assert.equal(covers({...legacy,model:'future-model'},'video',range),false);
+  const movie={capture:'vocal',backingKey:'old',start:1,end:4};
+  assert.equal(canReplayBacking(movie),true);
+  assert.equal(canReplayBacking({...movie,withBacking:true}),false);
+  assert.equal(canReplayBacking({capture:'vocal'}),false);
+  assert.equal(backingForTake([legacy],movie,'video'),legacy);
+  assert.equal(backingForTake([legacy],{...movie,backingModel:'future-model'},'video'),null);
+});
+
 test('service detection uses the fixed health endpoint without creating a job',async()=>{
   await request({action:'health'},sender,async(url,options)=>{
     assert.equal(url,'http://127.0.0.1:8765/health');assert.equal(options.method,'GET');assert.equal(options.body,undefined);

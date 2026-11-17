@@ -8,7 +8,7 @@
     function isOpen(){return !!dialog.open;}
     function confirm(kind,videoId,label,count){
       if(busy)return;pending={kind,videoId};$('libraryConfirm').hidden=false;
-      $('libraryConfirmText').textContent=kind==='backings'?`清理${label}的 ${count} 条浏览器伴奏？人声录音和本机服务文件会保留。`:`删除${label}的 ${count} 条人声录音？此操作不可撤销，请先在录音页下载备份。`;
+      $('libraryConfirmText').textContent=kind==='backings'?`清理${label}的 ${count} 条浏览器伴奏／背景音？人声录音和本机服务文件会保留。`:`删除${label}的 ${count} 条人声录音？此操作不可撤销，请先在录音页下载备份。`;
       $('libraryConfirmYes').focus();
     }
     function render(){
@@ -21,19 +21,19 @@
       $('clearAllBackings').hidden=page!=='cache';
       $('clearAllBackings').disabled=busy || !items.some(i=>i.backings);
       const totals=items.reduce((s,i)=>({recordings:s.recordings+i.recordings,backings:s.backings+i.backings,recordingBytes:s.recordingBytes+i.recordingBytes,backingBytes:s.backingBytes+i.backingBytes}),{recordings:0,backings:0,recordingBytes:0,backingBytes:0});
-      $('librarySummary').textContent=page==='recent'?`${items.filter(i=>i.hasSession || i.recordings).length} 个练习视频 · 点“继续练习”返回上次片段`:`浏览器伴奏 ${totals.backings} 条 · ${bytes(totals.backingBytes)} ｜ 录音 ${totals.recordings} 条 · ${bytes(totals.recordingBytes)}`;
+      $('librarySummary').textContent=page==='recent'?`${items.filter(i=>i.hasSession || i.recordings).length} 个练习视频 · 点“继续练习”返回上次片段`:`浏览器伴奏／背景音 ${totals.backings} 条 · ${bytes(totals.backingBytes)} ｜ 录音 ${totals.recordings} 条 · ${bytes(totals.recordingBytes)}`;
       const visible=items.filter(i=>(page==='cache'?(i.backings || i.recordings):(i.hasSession || i.recordings)) && `${i.title} ${i.videoId}`.toLowerCase().includes(query));
       $('libraryEmpty').hidden=!!visible.length;
-      $('libraryEmpty').textContent=query?'没有匹配的视频。':page==='recent'?'还没有练习记录，打开视频开始练习即可。':'浏览器中没有缓存的伴奏或录音。';
+      $('libraryEmpty').textContent=query?'没有匹配的视频。':page==='recent'?'还没有练习记录，打开视频开始练习即可。':'浏览器中没有缓存的伴奏、背景音或录音。';
       for(const item of visible){
         const card=element('article','','library-card'),title=item.title || `视频 ${item.videoId}`;
-        card.append(element('strong',title),element('small',`${item.recordings} 条录音 · ${item.backings} 条伴奏${item.updatedAt?' · '+new Date(item.updatedAt).toLocaleDateString():''}`));
+        card.append(element('strong',title),element('small',`${item.recordings} 条录音 · ${item.backings} 条伴奏／背景音${item.updatedAt?' · '+new Date(item.updatedAt).toLocaleDateString():''}`));
         const actions=element('div','','library-actions');
         const link=element('a',page==='recent'?'继续练习 →':'打开视频 →');
         if(/^[\w-]{11}$/.test(item.videoId)){link.href=`https://www.youtube.com/watch?v=${encodeURIComponent(item.videoId)}&t=${Math.floor(Math.max(0,item.start))}s`;actions.append(link);}
         if(page==='cache'){
-          card.append(element('small',`伴奏 ${bytes(item.backingBytes)} · 录音 ${bytes(item.recordingBytes)}`));
-          if(item.backings){const clear=element('button','清理伴奏');clear.disabled=busy;clear.onclick=()=>confirm('backings',item.videoId,`“${title}”`,item.backings);actions.append(clear);}
+          card.append(element('small',`伴奏／背景音 ${bytes(item.backingBytes)} · 录音 ${bytes(item.recordingBytes)}`));
+          if(item.backings){const clear=element('button','清理背景音');clear.disabled=busy;clear.onclick=()=>confirm('backings',item.videoId,`“${title}”`,item.backings);actions.append(clear);}
           if(item.recordings){const remove=element('button','删除录音','danger');remove.disabled=busy;remove.onclick=()=>confirm('recordings',item.videoId,`“${title}”`,item.recordings);actions.append(remove);}
         }
         card.append(actions);list.append(card);

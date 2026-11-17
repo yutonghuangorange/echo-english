@@ -8,13 +8,13 @@
     name=short.trim().replace(/[. ]+$/g,'');
     const time=value=>{const tenths=Math.round(Math.max(0,value)*10),minutes=Math.floor(tenths/600),seconds=((tenths%600)/10).toFixed(1).padStart(4,'0');return `${String(minutes).padStart(2,'0')}m${seconds}s`;};
     const range=Number.isFinite(start) && Number.isFinite(end)?`_${time(start)}-${time(end)}`:'';
-    const type=({vocals:'人声',mixed:'人声+伴奏',dubbing:'配音',recording:'录音'})[kind] || '录音';
+    const type=({vocals:'人声',mixed:'人声+伴奏',background:'人声+背景音',dubbing:'配音',recording:'录音'})[kind] || '录音';
     return `${name}${range}${assembled?'_整首合成':''}_${type}.${extension==='wav'?'wav':'webm'}`;
   }
   function plan(takes,duration){
     if(!Number.isFinite(duration) || duration<=0 || duration>600)throw Error('合成范围需在 10 分钟内。');
     const latest=new Map();
-    for(const take of takes.filter(t=>t.capture==='vocal' && !t.withBacking && t.kind==='song')){
+    for(const take of takes.filter(t=>t.capture==='vocal' && !t.withBacking)){
       const key=take.cueKey || `${take.start}:${take.end}`,previous=latest.get(key);
       if(!previous || take.createdAt>previous.createdAt || take.createdAt===previous.createdAt && take.id.localeCompare(previous.id)>0)latest.set(key,take);
     }
@@ -36,14 +36,14 @@
   function selectionPlan(takes,duration,selection){
     if(!Number.isFinite(duration) || duration<=0 || duration>600)throw Error('合成范围需在 10 分钟内。');
     if(!Array.isArray(selection))throw Error('拼接选择无效。');
-    const available=new Map(takes.filter(t=>t.capture==='vocal' && !t.withBacking && t.kind==='song').map(t=>[t.id,t]));
+    const available=new Map(takes.filter(t=>t.capture==='vocal' && !t.withBacking).map(t=>[t.id,t]));
     const segments=[],gaps=[];let end=0;
     for(const part of [...selection].sort((a,b)=>a.start-b.start)){
       if(!Number.isFinite(part.start) || !Number.isFinite(part.end) || part.start<0 || part.end>duration+0.0001 || part.end<=part.start)throw Error('拼接片段超出导出范围。');
       if(part.takeId===null)continue;
       const take=available.get(part.takeId);
       if(!take)throw Error('所选录音已不存在，请重新选择。');
-      if(take.speed!==1)throw Error('合成下载暂支持 1× 录唱。');
+      if(take.speed!==1)throw Error('合成下载暂支持 1× 录音。');
       const capturedEnd=Math.min(take.end,Number.isFinite(take.capturedEnd)?take.capturedEnd:take.end);
       if(part.start<Math.max(0,take.start)-0.0001 || part.end>capturedEnd+0.0001)throw Error('所选录音未覆盖该片段。');
       if(part.start<end-0.0001)throw Error('拼接片段不能重叠，请为每个时段选择一个版本。');

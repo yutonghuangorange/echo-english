@@ -64,6 +64,7 @@
           <div class="row"><button id="markStart">此刻设为起点</button><button id="markEnd">此刻设为终点</button></div><p class="hint">配音时原声静音；每段最长 10 分钟。</p>
         </div></details>
           </div>
+          <label class="check" id="backingOption"><input id="useBacking" type="checkbox"><span id="useBackingLabel">保留背景音（电影配音，可选）</span></label>
           <div class="row readiness-row" id="songReadinessRow" hidden><span class="hint" id="songReadiness">先准备伴奏，再开始录唱</span><button id="openBacking" class="text-button">准备伴奏 →</button></div>
         <div class="cue-card"><div class="cue-nav"><span class="eyebrow" id="cueHeading">当前台词</span><button id="openLanguageSettings" class="text-button">调整语言</button><span><button id="prev" aria-label="上一句">‹</button><span aria-label="当前练习句">练习 <span id="position">手动片段</span></span><button id="next" aria-label="下一句">›</button></span></div>
           <div id="captionPrevious" class="caption-context" aria-label="上一句" hidden></div><div id="captionPhase" class="caption-phase"></div>
@@ -75,7 +76,7 @@
         <div id="singDetails" hidden>
           <div id="karaokeNotice" role="alert" style="padding:10px 12px;border:1px solid #d8aa69;border-radius:10px;color:#ffe0ac;font-size:13px;overflow-wrap:anywhere" hidden></div>
           <p class="hint" id="karaokeInfo"></p>
-          <progress id="karaokeProgress" max="100" aria-label="去原唱阶段进度" style="width:100%;accent-color:#b3eedb" hidden></progress>
+          <progress id="karaokeProgress" max="100" aria-label="音源分离阶段进度" style="width:100%;accent-color:#b3eedb" hidden></progress>
           <div id="songResult" class="row" hidden><small id="songInfo"></small><button id="openSongRecording" class="text-button">版本与下载 →</button></div>
         </div>
         <div id="captionSetup" class="setup"><span id="practiceSetup">先读取或导入字幕，也可直接设置练习范围。</span><button id="openCaptionSetup">准备字幕 →</button></div>
@@ -90,18 +91,17 @@
           <label class="check"><input type="checkbox" id="autoNext">回放结束后自动练下一句</label><p class="hint" id="practiceFlowHint">自动跟读：原声 → 准备 → 配音 → 回放。</p>
 </div>
         </details>
-        <details class="fold" id="karaokeSettings" hidden><summary>伴奏设置<span id="backingSummary"></span></summary><div class="fold-content">
-          <p class="hint">按上方录唱范围生成，最长 10 分钟。准备好后回到主区录唱。</p>
-          <label class="check"><input id="useBacking" type="checkbox">录唱时播放伴奏（仅录人声）</label>
+        <details class="fold" id="karaokeSettings" hidden><summary><span id="backingSettingsTitle">伴奏设置</span><span id="backingSummary"></span></summary><div class="fold-content">
+          <p class="hint" id="backingSettingsHint">按上方录唱范围生成，最长 10 分钟。准备好后回到主区录唱。</p>
           <div class="row"><span class="hint" id="karaokeService" role="status">伴奏服务 · 尚未检测</span><button id="checkKaraoke">重新检测</button></div>
           <div class="row"><button id="prepareBacking">生成整首伴奏</button><button id="previewBacking" disabled>▷ 试听伴奏</button></div>
-          <label class="hint">录唱监听音量 · <output id="backingVolumeValue" for="backingVolume">100%</output><input id="backingVolume" type="range" min="0" max="2" step="0.05" value="1" aria-label="录唱监听音量"></label><div class="hint">用于试听和录唱时的耳机伴奏；回听音量在底部单独调整。</div>
-          <details class="fold" id="karaokeHelp"><summary>首次使用：如何启用伴奏？</summary><div class="fold-content hint">
-            <p>只需安装一个 Echo 扩展。生成伴奏还需要这台电脑上的 Python、FFmpeg 和分离模型；普通配音、录音与回放无需这些组件。</p>
+          <label class="hint"><span id="backingVolumeLabel">录唱监听音量</span> · <output id="backingVolumeValue" for="backingVolume">100%</output><input id="backingVolume" type="range" min="0" max="2" step="0.05" value="1" aria-label="录唱监听音量"></label><div class="hint">用于试听和录音时的耳机背景；回听音量在底部单独调整。</div>
+          <details class="fold" id="karaokeHelp"><summary id="backingHelpTitle">首次使用：如何启用伴奏？</summary><div class="fold-content hint">
+            <p>只需安装一个 Echo 扩展。提取伴奏和电影背景音共用这台电脑上的 Python、FFmpeg 和分离模型；普通配音、录音与回放无需这些组件。</p>
             <p>① macOS / Linux：在项目目录运行 <code>bash start-karaoke.sh</code>。Windows：按下方说明准备组件，再运行 <code>powershell -NoProfile -ExecutionPolicy Bypass -File .\\start-karaoke.ps1</code>。以后使用同一命令启动。<br>② 保持终端开启，回到这里点击“重新检测”，再生成伴奏。首次下载模型及分离歌曲可能需要几分钟。</p>
             <p>Linux 已验证；macOS / Windows 已提供适配，尚待实机验证。macOS 缺少组件时需已有 Homebrew；Windows 需先准备 Python 3.10–3.12、FFmpeg 和 Node.js 22+ 或 Deno。</p>
             <a href="https://github.com/zexiangliu/echo-english/blob/master/karaoke/README.md" target="_blank" rel="noopener noreferrer">查看伴奏服务安装说明 ↗</a>
-            <p>建议戴耳机录唱。分离结果可能残留原唱。</p>
+            <p>建议戴耳机录音。分离结果可能残留原唱或对白，也可能损失部分环境音。</p>
           </div></details>
         </div></details>
         <details class="fold" id="practiceSettings"><summary>速度与麦克风<span id="speedSummary">1×</span></summary><div class="fold-content">
@@ -162,9 +162,9 @@
     </div>
     <details id="mixControls" class="mix-controls" hidden>
       <summary>回听音量<span id="mixSummary">人声 100% · 伴奏 100%</span></summary>
-      <div class="mix-options"><label id="replayMusicOption" class="check" hidden><input id="replayWithBacking" type="checkbox" checked>回听带伴奏</label><button id="resetReplayMix" class="text-button">重置音量</button></div>
+      <div class="mix-options"><label id="replayMusicOption" class="check" hidden><input id="replayWithBacking" type="checkbox" checked><span id="replayBackingOptionLabel">回听带伴奏</span></label><button id="resetReplayMix" class="text-button">重置音量</button></div>
       <label class="mix-row"><span id="replayVocalLabel">人声</span><input id="replayVocalVolume" type="range" min="0" max="2" step="0.05" value="1" aria-label="回听人声音量"><output id="replayVocalValue" for="replayVocalVolume">100%</output></label>
-      <label id="replayBackingRow" class="mix-row"><span>伴奏</span><input id="replayBackingVolume" type="range" min="0" max="2" step="0.05" value="1" aria-label="回听伴奏音量"><output id="replayBackingValue" for="replayBackingVolume">100%</output></label>
+      <label id="replayBackingRow" class="mix-row"><span id="replayBackingLabel">伴奏</span><input id="replayBackingVolume" type="range" min="0" max="2" step="0.05" value="1" aria-label="回听伴奏音量"><output id="replayBackingValue" for="replayBackingVolume">100%</output></label>
       <p id="mixHint" class="hint"></p>
     </details>
     <footer><div class="status" id="status" role="status">准备好了，从一句开始。</div><button id="stop" disabled hidden>■ 停止</button></footer>
@@ -182,7 +182,7 @@
     <div id="libraryBody" class="library-body" role="tabpanel" aria-labelledby="libraryRecentTab">
       <p id="librarySummary" class="hint"></p><input type="search" id="librarySearch" aria-label="查找练习视频" placeholder="查找歌曲或视频">
       <div id="libraryConfirm" class="library-confirm" hidden><p id="libraryConfirmText"></p><button id="libraryConfirmYes" class="danger">确认清理</button> <button id="libraryConfirmNo">取消</button></div>
-      <button id="clearAllBackings" hidden>清空浏览器伴奏缓存</button><div id="libraryEmpty" class="empty" hidden></div><div id="libraryList"></div>
+      <button id="clearAllBackings" hidden>清空伴奏／背景音缓存</button><div id="libraryEmpty" class="empty" hidden></div><div id="libraryList"></div>
     </div><div class="library-foot"><p id="libraryNote" hidden>这里只管理浏览器中的音频。字幕与练习进度保留；本机服务的 .cache/karaoke 文件和已下载文件不受影响。</p><p id="libraryMessage" role="status"></p></div>
   </dialog>`;
   const api = { html };

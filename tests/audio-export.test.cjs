@@ -22,6 +22,13 @@ test('assembly keeps gaps and lets the newest recording replace overlapping rang
   assert.deepEqual(result.segments.map(s=>[s.start,s.end,s.take.id]),[[0,2,'a'],[2,4,'b'],[6,8,'c']]);
   assert.deepEqual(result.gaps, [{start:4,end:6},{start:8,end:10}]);
 });
+
+test('the shared export planner accepts dry dubbing without pretending it is a song',()=>{
+  const spoken=voice('spoken',0,2,1,{kind:undefined,backingKey:'background'});
+  const result=plan([spoken],2);
+  assert.equal(result.segments[0].take.id,'spoken');
+  assert.equal(filename({title:'电影',start:0,end:2,kind:'background',extension:'wav'}),'电影_00m00.0s-00m02.0s_人声+背景音.wav');
+});
 test('latest version wins, partial recordings leave silence, legacy mixed audio is never treated as vocals',()=>{
   const latest=voice('new',1,4,2,{cueKey:'line',capturedEnd:2});
   const result=plan([voice('old',1,4,1,{cueKey:'line',speed:0.75}),latest],5);
