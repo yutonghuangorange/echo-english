@@ -81,9 +81,14 @@
     .cue-card .caption-phase:empty{display:none}
     .cue-card .caption-context{margin:8px 0}
     .cue-card #captionNext{margin-bottom:14px}
-    .pages[data-spacious="true"] .caption{font-size:28px;line-height:1.7}
+    .pages[data-spacious="true"] .caption{font-size:26px;line-height:1.7}
     .panel[data-mode="idle"] .pages[data-spacious="true"] .caption-context{display:-webkit-box}
-    .pages[data-spacious="true"] .cue-card{padding:18px}
+    .pages[data-spacious="true"] .cue-card{padding:14px}
+    .caption-surrounding{color:#a5bdc8;font-size:13px;line-height:1.6;opacity:.6;flex-shrink:0}
+    .caption-surrounding-line{white-space:nowrap;overflow:hidden;text-overflow:ellipsis;padding:3px 0}
+    #captionLater{margin-top:-8px;margin-bottom:10px}
+    .pages:not([data-spacious="true"]) .caption-surrounding{display:none}
+    .pages[data-spacious="true"] .caption-context{-webkit-line-clamp:1;max-height:22px;min-height:0;margin:4px 0}.pages[data-spacious="true"] #captionNext{margin-bottom:8px}
     .panel:not([data-mode="idle"]) .pages:not([data-spacious="true"]) .caption{min-height:40px;padding:6px 0}
     .panel:not([data-mode="idle"]) .pages:not([data-spacious="true"]) .caption-context{font-size:12px;margin:4px 0;min-height:0;max-height:21px;-webkit-line-clamp:1}
     .panel:not([data-mode="idle"]) .pages:not([data-spacious="true"]) #captionNext{margin-bottom:8px}
@@ -110,10 +115,10 @@
 
           </div>
         <div class="cue-card"><div class="cue-nav"><span class="eyebrow" id="cueHeading">当前台词</span><button id="openLanguageSettings" class="text-button">调整语言</button><span><button id="prev" aria-label="上一句">‹</button><span aria-label="当前练习句">练习 <span id="position">手动片段</span></span><button id="next" aria-label="下一句">›</button></span></div>
-          <div id="captionPrevious" class="caption-context" aria-label="上一句" hidden></div><div id="captionPhase" class="caption-phase"></div>
+          <div id="captionEarlier" class="caption-surrounding" aria-label="更早的台词" hidden></div><div id="captionPrevious" class="caption-context" aria-label="上一句" hidden></div><div id="captionPhase" class="caption-phase"></div>
           <div class="caption-stage"><div class="caption" id="caption">从一句台词开始，听见自己的进步。</div></div><div id="translation" hidden></div>
           <div id="captionNext" class="caption-context" aria-label="下一句预告" hidden></div>
-          <div class="caption-options" id="captionOptions"><label class="check"><input type="checkbox" id="followCaptions" checked>字幕跟随视频</label><label class="check" id="referenceToggle" hidden><input type="checkbox" id="showChinese">显示参考</label><label class="check"><input type="checkbox" id="hideText">脱稿练习</label></div>
+          <div id="captionLater" class="caption-surrounding" aria-label="后续台词" hidden></div><div class="caption-options" id="captionOptions"><label class="check"><input type="checkbox" id="followCaptions" checked>字幕跟随视频</label><label class="check" id="referenceToggle" hidden><input type="checkbox" id="showChinese">显示参考</label><label class="check"><input type="checkbox" id="hideText">脱稿练习</label></div>
           <details id="rawDetails" class="fold" hidden><summary>完整原文</summary><div id="rawCaption"></div></details>
         </div>
         <div id="singDetails" hidden>
