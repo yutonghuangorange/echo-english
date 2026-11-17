@@ -55,6 +55,10 @@
   function renderMicrophoneSettings(){
     const losslessSupported=EchoMicrophone.supportsLossless(globalThis.MediaRecorder);
     $('sidetoneEnabled').checked=sidetoneEnabled;
+    const processing=[echoPreferences[activity]?'回声消除':'',gainPreferences[activity]?'自动增益':''].filter(Boolean);
+    const warn=sidetoneEnabled && processing.length>0;
+    $('sidetoneProcessingWarning').hidden=!warn;
+    $('sidetoneProcessingWarning').textContent=warn?`耳返与${processing.join('、')}同时开启，可能使人声断续或音量起伏。戴耳机时建议关闭下方对应处理，下次录音生效。`:'';
     $('sidetoneMode').value=sidetoneMode;
     $('sidetoneModeRow').hidden=!sidetoneEnabled;
     $('sidetoneVolume').value=sidetoneVolume;

@@ -1546,3 +1546,19 @@ test('sidetone defaults to minimum latency without enabling monitoring or replac
     (await storage.ready).close();
   }
 });
+
+test('sidetone processing warning names only enabled processing and follows activity preferences',async()=>{
+  const storage=createStorage(new IDBFactory()),{nodes}=await mount(storage);
+  const warning=nodes.get('sidetoneProcessingWarning');assert.equal(warning.hidden,true);assert.equal(warning.textContent,'');
+  nodes.get('sidetoneEnabled').checked=true;nodes.get('sidetoneEnabled').onchange();
+  assert.equal(warning.hidden,false);assert.match(warning.textContent,/回声消除、自动增益/);
+  nodes.get('echoCancellation').checked=false;nodes.get('echoCancellation').onchange();
+  assert.match(warning.textContent,/自动增益/);assert.doesNotMatch(warning.textContent,/回声消除/);
+  nodes.get('autoGainControl').checked=false;nodes.get('autoGainControl').onchange();assert.equal(warning.hidden,true);assert.equal(warning.textContent,'');
+  nodes.get('echoCancellation').checked=true;nodes.get('echoCancellation').onchange();assert.match(warning.textContent,/回声消除/);assert.doesNotMatch(warning.textContent,/自动增益/);
+  nodes.get('activityMode').value='sing';nodes.get('activityMode').onchange();assert.equal(warning.hidden,true);
+  nodes.get('activityMode').value='speech';nodes.get('activityMode').onchange();assert.equal(warning.hidden,false);
+  nodes.get('sidetoneEnabled').checked=false;nodes.get('sidetoneEnabled').onchange();assert.equal(warning.hidden,true);
+  assert.equal(nodes.get('echoCancellation').checked,true); // Inform without changing the user's processing preference.
+  (await storage.ready).close();
+});
