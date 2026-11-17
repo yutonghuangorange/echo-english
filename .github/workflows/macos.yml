@@ -62,6 +62,8 @@ jobs:
         with:
           path: .cache/models
           key: bandit-v1-${{ runner.os }}-${{ matrix.architecture }}-py312-${{ hashFiles('karaoke/bandit-requirements.txt') }}
+          # Weights/source are portable; models.py rebuilds deps when the platform stamp differs.
+          restore-keys: bandit-v1-${{ runner.os }}-
       - name: Install optional BandIt in isolation and separate with CPU
         run: |
           .venv/bin/python karaoke/smoke_test.py --model bandit-v2-multi --device cpu --seconds 2

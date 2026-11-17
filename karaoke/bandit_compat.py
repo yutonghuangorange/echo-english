@@ -7,14 +7,16 @@ modify installed source. Remove when Intel Mac can use a newer PyTorch wheel.
 """
 from contextlib import contextmanager
 import sys
+from types import ModuleType
 
 
-class EagerTorch:
+class EagerTorch(ModuleType):
     def __init__(self, torch):
-        self.torch = torch
-
-    def __getattr__(self, name):
-        return getattr(self.torch, name)
+        super().__init__("torch")
+        # Upstream also uses torch.__dict__[window_fn]. A module namespace copy
+        # preserves that interface while leaving the original module untouched.
+        self.__dict__.update(vars(torch))
+        self.__dict__.pop("compile", None)
 
     def compile(self, model, *, disable=False, **kwargs):
         if disable is not True:
@@ -22,10 +24,14 @@ class EagerTorch:
         return model
 
 
+def requires_eager_construction(torch):
+    version = tuple(int(v) for v in torch.__version__.split("+")[0].split(".")[:2])
+    return version < (2, 3) and sys.version_info >= (3, 12)
+
+
 @contextmanager
 def eager_construction(torch):
-    version = tuple(int(v) for v in torch.__version__.split("+")[0].split(".")[:2])
-    if version >= (2, 3) or sys.version_info < (3, 12):
+    if not requires_eager_construction(torch):
         yield
         return
     names = ("src.models.bandit.bandit", "src.models.bandit.bandsplit", "src.models.bandit.maskestim")

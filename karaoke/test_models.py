@@ -146,7 +146,7 @@ class ModelsTests(unittest.TestCase):
         from bandit_compat import eager_construction
         def unsupported(*args, **kwargs):
             raise RuntimeError("Dynamo is not supported on Python 3.12+")
-        torch = SimpleNamespace(__version__="2.2.2", compile=unsupported, Tensor=object())
+        torch = SimpleNamespace(__version__="2.2.2", compile=unsupported, Tensor=object(), hann_window=object())
         names = ("src.models.bandit.bandit", "src.models.bandit.bandsplit", "src.models.bandit.maskestim")
         modules = {name: SimpleNamespace(torch=torch) for name in names}
         with patch.dict(sys.modules, modules), patch("bandit_compat.sys.version_info", (3, 12)):
@@ -156,6 +156,7 @@ class ModelsTests(unittest.TestCase):
                     for module in modules.values():
                         self.assertIs(module.torch.compile(model, disable=True), model)
                         self.assertIs(module.torch.Tensor, torch.Tensor)
+                        self.assertIs(module.torch.__dict__["hann_window"], torch.hann_window)
                         with self.assertRaisesRegex(RuntimeError, "显式禁用"):
                             module.torch.compile(model)
                     self.assertIs(torch.compile, unsupported)
