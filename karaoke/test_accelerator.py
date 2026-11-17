@@ -10,6 +10,23 @@ from server import Jobs, Cancelled, probe_device
 
 
 class AcceleratorTests(unittest.TestCase):
+    def setUp(self):
+        platform = patch("accelerator.sys.platform", "linux")
+        platform.start()
+        self.addCleanup(platform.stop)
+
+    def test_mac_auto_uses_cpu_without_importing_or_probing_cuda(self):
+        for arch in ("arm64", "x86_64"):
+            with self.subTest(arch=arch), patch("accelerator.sys.platform", "darwin"), \
+                    patch("server.subprocess.check_output") as process:
+                torch = Mock()
+                self.assertEqual(select_device("auto", torch)["device"], "cpu")
+                self.assertEqual(torch.mock_calls, [])
+                self.assertNotIn("NVIDIA", probe_device("auto")["deviceNote"])
+                process.assert_not_called()
+                with self.assertRaisesRegex(RuntimeError, "macOS.*--device auto"):
+                    probe_device("cuda")
+
     def test_cpu_does_not_touch_cuda(self):
         torch = Mock()
         self.assertEqual(select_device("cpu", torch)["device"], "cpu")

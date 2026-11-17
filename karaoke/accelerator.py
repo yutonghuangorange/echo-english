@@ -1,6 +1,7 @@
 """Probe CUDA in a short-lived process so the HTTP server owns no GPU context."""
 import argparse
 import json
+import sys
 
 
 def select_device(requested="auto", torch_module=None):
@@ -8,6 +9,11 @@ def select_device(requested="auto", torch_module=None):
         raise ValueError("Unknown device")
     if requested == "cpu":
         return {"device": "cpu", "deviceName": "CPU"}
+    if sys.platform == "darwin":
+        if requested == "cuda":
+            raise RuntimeError("macOS 不支持 CUDA；请使用 --device auto 或 --device cpu。")
+        return {"device": "cpu", "deviceName": "CPU",
+                "deviceNote": "macOS 使用 CPU；Apple GPU 加速尚未启用。"}
     try:
         if torch_module is None:
             import torch as torch_module

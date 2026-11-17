@@ -18,7 +18,11 @@ fi
 echo 'Echo 伴奏服务：首次安装需要联网和约 1–2 GB 磁盘空间，模型在首次生成时下载。'
 echo 'Linux 已验证；macOS 安装路径尚待实机验证。Ctrl+C 可停止，稍后重新运行可继续。'
 if [[ "$system" == Darwin ]]; then
-  export PATH="/opt/homebrew/bin:/usr/local/bin:$PATH"
+  # Respect an explicitly selected Homebrew / Python (and avoid mixing layouts).
+  if ! command -v brew >/dev/null 2>&1; then
+    if [[ "$(uname -m)" == arm64 ]]; then export PATH="$PATH:/opt/homebrew/bin";
+    else export PATH="$PATH:/usr/local/bin";fi
+  fi
   if command -v brew >/dev/null 2>&1; then
     export PATH="$(brew --prefix)/opt/python@3.12/libexec/bin:$(brew --prefix)/opt/python@3.12/bin:$PATH"
   fi
@@ -38,7 +42,8 @@ if ! find_python; then
   if [[ "$system" == Darwin ]]; then packages+=(python@3.12);else packages+=(python3 python3-venv);fi
 fi
 if ! command -v ffmpeg >/dev/null 2>&1 || ! command -v ffprobe >/dev/null 2>&1; then packages+=(ffmpeg);fi
-if [[ ${#packages[@]} -gt 0 ]]; then
+# macOS ships Bash 3.2: set -u treats a declared empty array as unset.
+if [[ -n "${packages[*]-}" ]]; then
   if [[ "$system" == Darwin ]] && command -v brew >/dev/null 2>&1; then
     brew install "${packages[@]}"
     export PATH="$(brew --prefix)/opt/python@3.12/libexec/bin:$(brew --prefix)/opt/python@3.12/bin:$PATH"
@@ -74,6 +79,9 @@ if [[ ! -x "$project_dir/.venv/bin/python" ]]; then
 fi
 venv_python="$project_dir/.venv/bin/python"
 "$venv_python" -c 'import sys; assert (3,10) <= sys.version_info[:2] <= (3,12), "现有 .venv 需要 Python 3.10–3.12"'
+if [[ "$system" == Darwin ]]; then
+  "$venv_python" -c 'import platform,sys; assert sys.platform == "darwin" and platform.machine() == sys.argv[1], "Python / .venv 架构与当前终端不一致；请用原生终端与对应架构 Python 重建 .venv"' "$(uname -m)"
+fi
 if [[ -x "$project_dir/.cache/node/bin/node" ]]; then export PATH="$project_dir/.cache/node/bin:$PATH";fi
 if ! { command -v node >/dev/null 2>&1 && node -e 'process.exit(Number(process.versions.node.split(".")[0])>=22?0:1)' 2>/dev/null; } && ! command -v deno >/dev/null 2>&1; then
   echo '下载项目专用 Node.js 22（不修改系统 Node）…'
@@ -112,9 +120,11 @@ if ! cmp -s "$project_dir/karaoke/requirements.txt" "$marker" || ! "$venv_python
   fi
   "$venv_python" -m pip install --upgrade pip
   # Preserve a compatible CUDA installation when other requirements change.
-  torch_variant="$("$venv_python" -c 'import torch,torchaudio; print("cuda" if torch.__version__.split("+")[0] == torchaudio.__version__.split("+")[0] == "2.5.1" and torch.version.cuda else "cpu")' 2>/dev/null || true)"
-  if [[ "$system" == Linux && "$torch_variant" != cuda ]]; then
-    "$venv_python" -m pip install --index-url https://download.pytorch.org/whl/cpu torch==2.5.1 torchaudio==2.5.1
+  if [[ "$system" == Linux ]]; then
+    torch_variant="$("$venv_python" -c 'import torch,torchaudio; print("cuda" if torch.__version__.split("+")[0] == torchaudio.__version__.split("+")[0] == "2.5.1" and torch.version.cuda else "cpu")' 2>/dev/null || true)"
+    if [[ "$torch_variant" != cuda ]]; then
+      "$venv_python" -m pip install --index-url https://download.pytorch.org/whl/cpu torch==2.5.1 torchaudio==2.5.1
+    fi
   fi
   "$venv_python" -m pip install -r "$project_dir/karaoke/requirements.txt"
   "$venv_python" -m pip check

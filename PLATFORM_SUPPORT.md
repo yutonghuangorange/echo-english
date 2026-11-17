@@ -7,13 +7,19 @@
 | 平台 | 安装入口 | 分离依赖 | 验证状态 |
 | --- | --- | --- | --- |
 | Linux x86_64 | `bash start-karaoke.sh` | torch / torchaudio 2.5.1，默认 CPU，可选 CUDA 12.1 | 本机自动化、CPU / RTX 3060 Laptop 短片段分离已验证 |
-| macOS Apple 芯片 | `bash start-karaoke.sh` | torch / torchaudio 2.5.1，CPU | 代码适配；等待实机安装与录音验证 |
-| macOS Intel | `bash start-karaoke.sh` | torch / torchaudio 2.2.2，CPU | 已修正版本选择；等待实机验证 |
+| macOS Apple 芯片 | `bash start-karaoke.sh` | torch / torchaudio 2.5.1，CPU | 已加入原生双架构 CI（安装、测试、短音频分离）；Chrome 录音待人工验证 |
+| macOS Intel | `bash start-karaoke.sh` | torch / torchaudio 2.2.2，CPU | 已加入原生双架构 CI，固定 2.2.2；Chrome 录音待人工验证 |
 | Windows x64 | `start-karaoke.ps1` | torch / torchaudio 2.5.1，默认 CPU，可选 CUDA 12.1 | 已补安装入口和进程清理；CPU / GPU 均等待实机验证 |
 
 Windows ARM64 原生 Python 不在本次目标内。Apple 芯片使用原生 arm64 Python，避免混用 Rosetta、Intel Homebrew 和 arm64 虚拟环境。所有系统使用 Python 3.10–3.12；不要复制其他机器的 `.venv` 或项目专用 Node，重新运行本机安装脚本即可。
 
 Intel Mac 的固定版本依据：[PyTorch 官方宣布从 2.3 起停止 macOS x86 构建](https://dev-discuss.pytorch.org/t/pytorch-macos-x86-builds-deprecation-starting-january-2024/1690)。版本由 `requirements.txt` 的环境标记自动选择。显式安装 SoundFile，作为 TorchAudio 无法加载 FFmpeg 共享库时的 WAV 读写后备；参见 [TorchAudio 后端文档](https://docs.pytorch.org/audio/2.5.0/torchaudio.html) 和 [SoundFile 安装说明](https://python-soundfile.readthedocs.io/en/latest/#installation)。
+
+## macOS 持续验证
+
+[macOS compatibility 工作流](https://github.com/zexiangliu/echo-english/actions/workflows/macos.yml) 在 `macos-15`（arm64）和 `macos-15-intel` 上分别运行 Python 3.12。每次推送 / PR 会实际安装对应依赖，使用系统 `/bin/bash` 验证安装脚本、执行 npm / Python 测试，并通过正式 Demucs CPU worker 分离两秒合成音频、检查输出与 MP3 编码。当前运行结果以工作流页面为准；自动化不包含真实麦克风、蓝牙耳机或实际 YouTube 字幕验收。
+
+Mac 的 `auto` 使用 CPU，不探测 CUDA，也不尝试未经验证的 MPS。`--device cuda` 会明确说明 macOS 不支持，并给出 `auto` / `cpu` 参数。手动短音频验收可运行 `.venv/bin/python karaoke/smoke_test.py`；首次会下载约 80 MB 模型，不使用私人媒体或 YouTube。
 
 ## 给当地 agent 的执行步骤
 

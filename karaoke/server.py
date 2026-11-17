@@ -25,6 +25,9 @@ ACTIVE_STATES = ("queued", "downloading", "converting", "separating", "encoding"
 def probe_device(requested):
     if requested == "cpu":
         return {"device": "cpu", "deviceName": "CPU"}
+    if sys.platform == "darwin":
+        from accelerator import select_device
+        return select_device(requested)
     try:
         output = subprocess.check_output(
             [sys.executable, str(Path(__file__).with_name("accelerator.py")), "--device", requested],

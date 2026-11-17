@@ -2,6 +2,12 @@
 
 最新更新列在前面，迁移自原 README 的历史记录保留原有顺序。历史版本的界面和限制可能与当前版本不同；当前安装与使用方法见 [项目首页](README.md)。
 
+## 0.21.2 macOS 兼容性
+
+- macOS 自动模式直接使用 CPU，不提示安装 NVIDIA 驱动；显式指定 CUDA 时给出 Mac 对应的说明。
+- 安装入口兼容系统 Bash 3.2，保留用户已选 Homebrew 路径，检查 Python / venv 与当前终端架构一致，避免混用 Apple 芯片与 Intel 环境。
+- 新增 Apple 芯片 / Intel Mac 的 GitHub Actions：实际安装依赖、运行前端与服务测试，并用正式 CPU worker 分离两秒合成音频、编码 MP3。真实 Chrome 麦克风录音仍需当地人工验证。
+
 ## 0.21.1 可选 CUDA 加速
 
 - 本机服务默认自动检测 CUDA，支持 `--device cpu` / `--device cuda`；自动模式下 CUDA 显存不足等运行错误仅重试一次 CPU，取消和普通失败不触发重试。

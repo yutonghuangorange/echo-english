@@ -14,7 +14,7 @@ bash start-karaoke.sh
 
 首次运行会检查 Python 3.10–3.12、FFmpeg，创建 `.venv`，安装分离依赖，再启动服务。以后运行同一命令会复用环境。缺少 JS 运行时会下载经 SHA-256 校验的项目专用 Node.js 22 到 `.cache/node/`，不覆盖系统 Node。模型仍在首次生成时下载。下载中断或安装失败后可重新运行。
 
-支持 Linux x86_64（系统组件自动安装使用 apt，可能要求 sudo 密码）；macOS Intel / Apple 芯片使用已有 Homebrew 安装缺少的系统组件，但尚待实机验证。其他 Linux 发行版请自行安装缺少的 Python / FFmpeg。Windows 使用下方 PowerShell 入口；服务不是浏览器内自动安装。安装包可能占约 1–2 GB，需联网下载；服务启动后保持终端开启，Ctrl+C 停止。脚本可从任意目录调用其完整路径。
+支持 Linux x86_64（系统组件自动安装使用 apt，可能要求 sudo 密码）；macOS Intel / Apple 芯片使用已有 Homebrew 安装缺少的系统组件，双架构安装与分离的持续验证见 [Mac CI](https://github.com/zexiangliu/echo-english/actions/workflows/macos.yml)。其他 Linux 发行版请自行安装缺少的 Python / FFmpeg。Windows 使用下方 PowerShell 入口；服务不是浏览器内自动安装。安装包可能占约 1–2 GB，需联网下载；服务启动后保持终端开启，Ctrl+C 停止。脚本可从任意目录调用其完整路径。
 
 ### Windows x64
 
@@ -70,7 +70,7 @@ powershell -NoProfile -ExecutionPolicy Bypass -File .\start-karaoke.ps1
 
 CUDA 环境明显大于 CPU 版，建议至少预留 10 GB 磁盘空间。后续普通启动与依赖更新会保留兼容的 CUDA 安装，不改回 CPU。服务默认 `--device auto`：实际运行一个 CUDA 小运算确认可用后选择 GPU；不支持时使用 CPU。自动模式分离过程中遇到显存不足等 CUDA 运行错误，会释放子进程后仅重试一次 CPU，界面显示回退原因。模型、4 秒分段和缓存身份均保持一致，歌曲与电影背景音共用加速。
 
-终端显示设备名称；扩展的现有服务状态显示「GPU 加速」或「CPU」，生成进度显示实际使用的设备。需要排查时可指定 `bash start-karaoke.sh --device cpu`；`--device cuda` 则要求 GPU 可用，失败时报错，不静默回退。Windows 在上述启动命令末尾加同样参数。macOS 仍用 CPU，暂不启用 MPS。
+终端显示设备名称；扩展的现有服务状态显示「GPU 加速」或「CPU」，生成进度显示实际使用的设备。需要排查时可指定 `bash start-karaoke.sh --device cpu`；`--device cuda` 则要求 GPU 可用，失败时报错，不静默回退。Windows 在上述启动命令末尾加同样参数。macOS 自动模式直接使用 CPU，不检查 NVIDIA 驱动；暂不启用 MPS。安装脚本支持系统 Bash 3.2，并检查 Python / venv 与当前终端架构一致，架构不一致时会提示重建环境。
 
 Linux / RTX 3060 Laptop 6 GB 实测同一段约 20 秒电影素材：Demucs CPU 30.89 秒，GPU 5.06 秒，约快 6.1 倍；不包含提取 YouTube 音频或下载模型，不能按此保证整曲耗时。BandIt 独立实验结果见 [性能对比](../CINEMATIC_EVALUATION.md#gpu-补测)，尚未接入正式服务。
 
