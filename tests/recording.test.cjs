@@ -63,7 +63,7 @@ test('sidetone stays silent during preparation and mutes immediately on pause, s
   f.options.microphone.createInput=async(mic,db,env,options)=>{setup=options;return f.input;};
   f.input.setMonitoring=value=>states.push(value);
   const session=create(f.options);await session.prepare();assert.deepEqual(states,[]);
-  assert.deepEqual(setup,{sidetone:true,sidetoneVolume:0.4});
+  assert.deepEqual(setup,{sidetone:true,sidetoneVolume:0.4,sidetoneMode:'standard'});
   session.start();session.pause();session.resume();session.pauseFeedback();session.stop();
   assert.deepEqual(states,[true,false,true,false,false]);
   assert.equal(f.count.input,0); // Encoder is still flushing; headphones are already muted.
@@ -76,4 +76,14 @@ test('disconnecting the selected microphone stops capture and preserves captured
   f.options.env.navigator.mediaDevices.getUserMedia=async()=>({getTracks:()=>[track]});
   const session=create(f.options);await session.prepare();session.start();ended();
   await session.completed;assert.equal(f.errors.length,1);assert.match(f.errors[0].message,/麦克风已断开/);assert.equal(f.results.length,1);assert.equal(removed,1);
+});
+
+test('requested monitoring mode and latest diagnostics belong to the saved recording',async()=>{
+  const f=fixture(),info={mode:'minimum',inputLatency:0.01,baseLatency:0.003,outputLatency:0.02};let requested;
+  f.options.sidetone=true;f.options.sidetoneMode='minimum';
+  f.input.monitoringInfo=()=>({...info});
+  f.options.microphone.createInput=async(mic,db,env,options)=>{requested=options;return f.input;};
+  const session=create(f.options);await session.prepare();assert.equal(requested.sidetoneMode,'minimum');assert.deepEqual(session.sidetoneInfo,info);
+  session.start();info.outputLatency=0.03;await session.stop();
+  assert.equal(f.results[0].recordingInfo.monitoring.outputLatency,0.03);
 });

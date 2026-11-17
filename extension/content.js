@@ -22,7 +22,7 @@
   let qualityPreferences={speech:'standard',sing:'standard'};
   let modelPreferences={speech:EchoKaraoke.DEFAULT_MODEL,sing:EchoKaraoke.DEFAULT_MODEL};
   let paragraphFirst=0,paragraphLast=1,assemblyChoices=[],assemblyContext=null;
-  let recordingQuality='high',inputDeviceId='',sidetoneEnabled=false,sidetoneVolume=0.35;
+  let recordingQuality='high',inputDeviceId='',sidetoneEnabled=false,sidetoneVolume=0.35,sidetoneMode='standard';
   let inputDeviceRequest=0,inputDeviceList=[];
   const microphonePreferenceKey='echo-microphone-v1';
   const echoPreferences={speech:true,sing:false};
@@ -31,6 +31,7 @@
   try {
     const saved=JSON.parse(window.localStorage.getItem(microphonePreferenceKey));
     sidetoneEnabled=saved?.sidetoneEnabled===true;
+    if(saved?.sidetoneMode==='minimum')sidetoneMode='minimum';
     sidetoneVolume=EchoMicrophone.clampMonitorVolume(saved?.sidetoneVolume);
     if(typeof saved?.inputDeviceId==='string')inputDeviceId=saved.inputDeviceId;
     if(saved?.recordingQuality==='lossless')recordingQuality='lossless';
@@ -48,12 +49,14 @@
     return {...(song?{echoCancellation,noiseSuppression:false,autoGainControl}:{echoCancellation,autoGainControl}),...(inputDeviceId?{deviceId:{exact:inputDeviceId}}:{}),...(sidetoneEnabled?{latency:{ideal:0}}:{})};
   }
   function saveMicrophonePreferences(){
-    try {window.localStorage.setItem(microphonePreferenceKey,JSON.stringify({...echoPreferences,autoGainControl:gainPreferences,manualGainDb:manualGainPreferences,recordingQuality,inputDeviceId,sidetoneEnabled,sidetoneVolume}));}
+    try {window.localStorage.setItem(microphonePreferenceKey,JSON.stringify({...echoPreferences,autoGainControl:gainPreferences,manualGainDb:manualGainPreferences,recordingQuality,inputDeviceId,sidetoneEnabled,sidetoneVolume,sidetoneMode}));}
     catch {status('录音设置已调整，但无法保存；刷新后将恢复原来的设置。');}
   }
   function renderMicrophoneSettings(){
     const losslessSupported=EchoMicrophone.supportsLossless(globalThis.MediaRecorder);
     $('sidetoneEnabled').checked=sidetoneEnabled;
+    $('sidetoneMode').value=sidetoneMode;
+    $('sidetoneModeRow').hidden=!sidetoneEnabled;
     $('sidetoneVolume').value=sidetoneVolume;
     $('sidetoneLiveVolume').value=sidetoneVolume;
     $('sidetoneVolumeValue').textContent=$('sidetoneLiveValue').textContent=`${Math.round(sidetoneVolume*100)}%`;
@@ -101,6 +104,10 @@
   const onInputDevicesChanged=()=>{void refreshInputDevices();};
   globalThis.navigator?.mediaDevices?.addEventListener?.('devicechange',onInputDevicesChanged);
   renderInputDevices();
+  $('sidetoneMode').onchange=()=>{
+    if(mode==='idle'){sidetoneMode=$('sidetoneMode').value==='minimum'?'minimum':'standard';saveMicrophonePreferences();}
+    renderMicrophoneSettings();
+  };
   $('sidetoneEnabled').onchange=()=>{
     if(mode==='idle'){sidetoneEnabled=$('sidetoneEnabled').checked;saveMicrophonePreferences();}
     renderMicrophoneSettings();
@@ -435,6 +442,8 @@
     const recording=mode==='recording' || mode==='lead-in';
     $('panel').setAttribute('aria-busy',String(['loading','reading','importing','exporting','saving','permission'].includes(mode)));
     $('sidetoneLiveControls').hidden=!recording || !sidetoneEnabled;
+    $('sidetoneLatency').hidden=!recording || !sidetoneEnabled;
+    $('sidetoneLatency').textContent=EchoMicrophone.describeMonitoring(recordingSession?.sidetoneInfo);
     $('practiceDock').hidden=currentPage!=='practice' || mode!=='idle';
     $('historyBrowser').hidden=!videoHistory.length;
     $('playAll').hidden=!videoHistory.length;
@@ -463,7 +472,7 @@
     syncClipSelection();
     $('songReadinessRow').hidden=!hasBackingTools() || recording;
     $('songResult').hidden=!isSinging() || !songTake;
-    for (const id of ['sidetoneEnabled','sidetoneVolume','inputDevice','detectInputs','paragraphFirst','paragraphLast','recordingQuality','echoCancellation','autoGainControl','manualGainDb','captionSource','refreshCaptionTracks','contentLanguage','captionLayout','activityMode','read','import','openCaptionSetup','openLanguageSettings','prepareBacking','practiceScope','useBacking','backingVolume','prev','next','markStart','markEnd','original','speed','start','end','leadInMode','leadInSeconds','record','startEarlier','startLater','endEarlier','endLater','loop','loopCount','autoPractice','prepSeconds','autoNext']) $(id).disabled = busy;
+    for (const id of ['sidetoneMode','sidetoneEnabled','sidetoneVolume','inputDevice','detectInputs','paragraphFirst','paragraphLast','recordingQuality','echoCancellation','autoGainControl','manualGainDb','captionSource','refreshCaptionTracks','contentLanguage','captionLayout','activityMode','read','import','openCaptionSetup','openLanguageSettings','prepareBacking','practiceScope','useBacking','backingVolume','prev','next','markStart','markEnd','original','speed','start','end','leadInMode','leadInSeconds','record','startEarlier','startLater','endEarlier','endLater','loop','loopCount','autoPractice','prepSeconds','autoNext']) $(id).disabled = busy;
     if(isParagraph())for(const id of ['start','end','markStart','markEnd','startEarlier','startLater','endEarlier','endLater'])$(id).disabled=true;
     $('autoNext').disabled=busy || $('practiceScope').value!=='clip';
     $('useBacking').disabled=busy;
@@ -1051,7 +1060,7 @@
       void Promise.resolve(session.monitor?.sync()).then(()=>{if(active())session.resume();})
         .catch(()=>{if(active()){stop();status('伴奏播放失败，录音已停止，请重新生成伴奏。');}});
     };
-    const session=EchoRecording.create({constraints,quality:recordingQuality,sidetone:sidetoneEnabled,sidetoneVolume,gainDb:gainPreferences[gainKey]?0:manualGainPreferences[gainKey],active,
+    const session=EchoRecording.create({constraints,quality:recordingQuality,sidetone:sidetoneEnabled,sidetoneVolume,sidetoneMode,gainDb:gainPreferences[gainKey]?0:manualGainPreferences[gainKey],active,
       microphone:EchoMicrophone,env:globalThis,
       createMonitor:ready?()=>EchoKaraoke.createMonitor({blob:ready.blob,video:v,start:ready.start,speed:r.speed,volume:Number($('backingVolume').value)}):null,
       createMeter:input=>EchoLiveMeter.start({stream:input,container:$('liveMeter'),canvas:$('liveMeterCanvas'),value:$('liveMeterValue'),bar:$('liveMeterBar')}),
@@ -1099,6 +1108,7 @@
     if(session.state==='paused'){await session.monitor?.resume?.();if(!active())return session.completed;session.resume();}
     const position=session.monitor?.position?.();
     if(Number.isFinite(position) && Math.abs(v.currentTime-position)>0.15)v.currentTime=position;
+    $('sidetoneLatency').textContent=EchoMicrophone.describeMonitoring(session.sidetoneInfo);
     status(ready?'● 正在录制人声，伴奏仅在耳机播放…':singingTake?'● 正在录制清唱人声…':'● 正在配音，视频原声已静音…');
     showVideoTransport('录音',v,r);
     const endRecording=()=>{if(!active())return;cancelPlayback();restoreVideo();mode='saving';controls();session.stop();};

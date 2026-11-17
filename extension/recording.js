@@ -1,7 +1,7 @@
 // Own one capture's microphone, gain graph, monitor, meter and encoder.
 // UI state, video timing and persistence belong to the calling coordinator.
 (function(root) {
-  function create({constraints, gainDb, quality, sidetone=false, sidetoneVolume=0.35, active, createMonitor, createMeter, onComplete, onError, microphone = root.EchoMicrophone, env = root}) {
+  function create({constraints, gainDb, quality, sidetone=false, sidetoneVolume=0.35, sidetoneMode='standard', active, createMonitor, createMeter, onComplete, onError, microphone = root.EchoMicrophone, env = root}) {
     const options = microphone.recordingOptions(quality, env.MediaRecorder);
     let mic, micTrack, input, monitor, meter, recorder, info;
     let stopping = false, settled = false, released = false;
@@ -30,6 +30,7 @@
       if (settled) return;
       settled = true;
       const blob = new env.Blob(chunks, {type: recorder?.mimeType || options.mimeType || ''});
+      if(info && sidetone)info.monitoring=input?.monitoringInfo?.() || null;
       const result = blob.size ? {blob, recordingInfo: info, inputGainDb: input.db} : null;
       release();
       Promise.resolve().then(() => onComplete(result)).then(() => resolve(!!result), reject);
@@ -40,7 +41,7 @@
         if (!available()) { stopTracks(acquired); stop(); return false; }
         mic = acquired;micTrack=mic.getAudioTracks?.()[0] || mic.getTracks()[0];
         micTrack?.addEventListener?.('ended',inputEnded);
-        const processed = await microphone.createInput(mic, gainDb,env,{sidetone,sidetoneVolume});
+        const processed = await microphone.createInput(mic, gainDb,env,{sidetone,sidetoneVolume,sidetoneMode});
         if (!available()) { processed.dispose(); stop(); return false; }
         input = processed;
         const accompaniment = createMonitor ? await createMonitor() : null;
@@ -68,6 +69,7 @@
       prepare, stop, completed, pauseFeedback,
       get state() { return recorder?.state || 'inactive'; },
       get monitor() { return monitor; },
+      get sidetoneInfo(){return input?.monitoringInfo?.() || null;},
       start() { if (!available()) return false; recorder.start(250);input?.setMonitoring?.(sidetone); return true; },
       startMeter() { if (available() && !meter) meter = createMeter(input.stream); },
       setSidetoneVolume(value){input?.setMonitorVolume?.(value);},

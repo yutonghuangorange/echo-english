@@ -63,7 +63,7 @@ test('input enumeration excludes outputs and duplicate/default identifiers; sele
   await assert.rejects(api.requestStream({async getUserMedia(){requests++;throw Object.assign(Error('gone'),{name:'OverconstrainedError'});}},{deviceId:{exact:'usb'}}),/所选麦克风不可用/);
   assert.equal(requests,1);
 });
-for(const db of [0,6])test(`sidetone at gain ${db} uses one interactive graph and cannot enter the encoded branch`,async()=>{
+for(const db of [0,6])for(const sidetoneMode of ['standard','minimum'])test(`sidetone ${sidetoneMode} at gain ${db} uses one graph and cannot enter the encoded branch`,async()=>{
   const edges=[],gains=[];let contextOptions,closed=0,destinations=0;
   const speakers={},mic={};const source={connect:target=>edges.push(['source',target]),disconnect(){}};
   const encoded={stream:{getTracks:()=>[{stop(){}}]}};
@@ -74,8 +74,8 @@ for(const db of [0,6])test(`sidetone at gain ${db} uses one interactive graph an
     createMediaStreamDestination(){destinations++;return encoded;}
     async resume(){}async close(){closed++;}
   }
-  const input=await createInput(mic,db,{AudioContext},{sidetone:true,sidetoneVolume:0.35});
-  assert.equal(contextOptions.latencyHint,'interactive');assert.equal(destinations,db?1:0);
+  const input=await createInput(mic,db,{AudioContext},{sidetone:true,sidetoneVolume:0.35,sidetoneMode});
+  assert.equal(contextOptions.latencyHint,sidetoneMode==='minimum'?0:'interactive');assert.equal(destinations,db?1:0);
   assert.equal(input.stream,db?encoded.stream:mic);
   const monitor=gains.at(-1);assert.equal(monitor.gain.value,0);
   assert(edges.some(([from,to])=>from===monitor && to===speakers));
@@ -85,4 +85,22 @@ for(const db of [0,6])test(`sidetone at gain ${db} uses one interactive graph an
   if(db)assert(Math.abs(gains[0].gain.value-10**(db/20))<1e-6);
   input.setMonitoring(false);assert.equal(monitor.gain.value,0);
   input.dispose();input.dispose();assert.equal(closed,1);
+});
+
+test('latency diagnostics keep browser components separate and never turn absent estimates into zero',()=>{
+  const {monitoringInfo,describeMonitoring,describeRecording}=require('../extension/microphone.js');
+  const info=monitoringInfo({baseLatency:0,outputLatency:0.01},{getAudioTracks:()=>[{getSettings:()=>({latency:0.02,deviceId:'private'})}]},'minimum');
+  assert.deepEqual(info,{mode:'minimum',inputLatency:0.02,baseLatency:0,outputLatency:0.01});
+  const text=describeMonitoring(info);assert.match(text,/输入 20.0 ms/);assert.match(text,/图缓冲 0.0 ms/);assert.match(text,/输出 10.0 ms/);assert.match(text,/非完整耳返延迟/);
+  assert.doesNotMatch(text,/30.0 ms/);
+  assert.match(describeRecording({monitoring:info}),/更低延迟/);
+  const unknown=monitoringInfo({baseLatency:NaN,get outputLatency(){throw Error('not supported');}},{});
+  assert.deepEqual(unknown,{mode:'standard',inputLatency:null,baseLatency:null,outputLatency:null});
+  assert.equal(describeMonitoring(null),'');assert.match(describeMonitoring(unknown),/输入 未报告/);
+});
+
+test('failed experimental sidetone startup requests an explicit return to standard and releases its context',async()=>{
+  const f=fixture(true);
+  await assert.rejects(createInput('microphone',0,f.env,{sidetone:true,sidetoneMode:'minimum'}),/切回标准模式/);
+  assert.equal(f.closed,1);
 });

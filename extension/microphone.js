@@ -2,7 +2,7 @@
 (function(root){
   function clampDb(value){return Number.isFinite(value)?Math.max(0,Math.min(24,value)):0;}
   function clampMonitorVolume(value){return Number.isFinite(value)?Math.max(0,Math.min(1,value)):0.35;}
-  async function createInput(microphone,db=0,env=root,{sidetone=false,sidetoneVolume=0.35}={}){
+  async function createInput(microphone,db=0,env=root,{sidetone=false,sidetoneVolume=0.35,sidetoneMode='standard'}={}){
     db=clampDb(db);
     if(db===0 && !sidetone)return {stream:microphone,db,dispose(){}};
     let context,source,gain,destination,monitorGain,disposed=false,monitoring=false;
@@ -15,7 +15,7 @@
       if(context)void context.close().catch(()=>{});
     }
     try{
-      context=new env.AudioContext({latencyHint:'interactive'});
+      context=new env.AudioContext({latencyHint:sidetone && sidetoneMode==='minimum'?0:'interactive'});
       source=context.createMediaStreamSource(microphone);
       if(db>0){
         gain=context.createGain();gain.gain.value=10**(db/20);
@@ -29,11 +29,24 @@
       await context.resume();
       if(context.state==='suspended')throw Error('Audio context suspended');
       return {stream:destination?.stream || microphone,db,dispose,
+        monitoringInfo(){return sidetone?monitoringInfo(context,microphone,sidetoneMode):null;},
         setMonitoring(enabled){monitoring=!!enabled;updateMonitor();},
         setMonitorVolume(value){volume=clampMonitorVolume(value);updateMonitor();}};
     }catch(error){
-      dispose();throw Error(sidetone?'无法启用耳返，请关闭耳返后重试。':'无法启用手动录音增益，请将增益设为 0 dB 后重试。',{cause:error});
+      dispose();throw Error(sidetone?(sidetoneMode==='minimum'?'无法启用更低延迟耳返，请切回标准模式后重试。':'无法启用耳返，请关闭耳返后重试。'):'无法启用手动录音增益，请将增益设为 0 dB 后重试。',{cause:error});
     }
+  }
+  function monitoringInfo(context,stream,mode='standard'){
+    const valid=value=>typeof value==='number' && Number.isFinite(value) && value>=0?value:null;
+    const read=key=>{try{return valid(context?.[key]);}catch{return null;}};
+    let latency=null;
+    try{latency=valid((stream?.getAudioTracks?.()[0] || stream?.getTracks?.()[0])?.getSettings?.()?.latency);}catch{}
+    return {mode:mode==='minimum'?'minimum':'standard',inputLatency:latency,baseLatency:read('baseLatency'),outputLatency:read('outputLatency')};
+  }
+  function describeMonitoring(info){
+    if(!info)return '';
+    const ms=value=>typeof value==='number' && Number.isFinite(value) && value>=0?`${(value*1000).toFixed(1)} ms`:'未报告';
+    return `浏览器估计：输入 ${ms(info.inputLatency)} · 图缓冲 ${ms(info.baseLatency)} · 输出 ${ms(info.outputLatency)}（非完整耳返延迟）`;
   }
   async function requestStream(mediaDevices,constraints){
     try{return await mediaDevices.getUserMedia({audio:constraints,video:false});}
@@ -86,8 +99,9 @@
     if(format(encoded))parts.push(`编码输入：${format(encoded)}`);
     const processing=[['echoCancellation','回声消除'],['noiseSuppression','降噪'],['autoGainControl','自动增益']].map(([key,label])=>`${label}${typeof mic[key]==='boolean'?(mic[key]?'开':'关'):'未知'}`);
     parts.push(processing.join(' · '));
+    if(info.monitoring)parts.push(`耳返：${info.monitoring.mode==='minimum'?'更低延迟':'标准'} · ${describeMonitoring(info.monitoring)}`);
     return parts.join('\n');
   }
-  const api={clampMonitorVolume,requestStream,listInputs,clampDb,createInput,isLossless,supportsLossless,recordingOptions,captureSettings,describeRecording};
+  const api={monitoringInfo,describeMonitoring,clampMonitorVolume,requestStream,listInputs,clampDb,createInput,isLossless,supportsLossless,recordingOptions,captureSettings,describeRecording};
   if(typeof module!=='undefined')module.exports=api;else root.EchoMicrophone=api;
 })(globalThis);

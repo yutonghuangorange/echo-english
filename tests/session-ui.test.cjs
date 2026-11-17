@@ -1508,8 +1508,28 @@ test('sidetone is opt-in, persists volume and requests low latency only when ena
   const {nodes}=await mount(storage,{globals});assert.equal(nodes.get('sidetoneEnabled').checked,false);
   await nodes.get('record').onclick();assert.equal(requests.at(-1).audio.latency,undefined);
   nodes.get('sidetoneEnabled').checked=true;nodes.get('sidetoneEnabled').onchange();
+  nodes.get('sidetoneMode').value='minimum';nodes.get('sidetoneMode').onchange();
   nodes.get('sidetoneVolume').value='0.6';nodes.get('sidetoneVolume').oninput();nodes.get('sidetoneVolume').onchange();
   await nodes.get('record').onclick();assert.equal(requests.at(-1).audio.latency.ideal,0);
-  const refreshed=await mount(storage,{globals});assert.equal(refreshed.nodes.get('sidetoneEnabled').checked,true);assert.equal(refreshed.nodes.get('sidetoneVolume').value,0.6);
+  const refreshed=await mount(storage,{globals});assert.equal(refreshed.nodes.get('sidetoneEnabled').checked,true);assert.equal(refreshed.nodes.get('sidetoneVolume').value,0.6);assert.equal(refreshed.nodes.get('sidetoneMode').value,'minimum');
+  (await storage.ready).close();
+});
+
+test('live latency diagnostics follow the active capture and persist in recording details',async()=>{
+  const storage=createStorage(new IDBFactory()),video=leadInVideo({hold:true});let nodes;
+  const info={mode:'minimum',inputLatency:null,baseLatency:0.0027,outputLatency:0.032};
+  class MediaRecorder{
+    static isTypeSupported(){return true;}
+    constructor(){this.state='inactive';this.mimeType='audio/webm';}
+    start(){this.state='recording';}
+    stop(){this.state='inactive';this.ondataavailable({data:new Blob(['voice'])});queueMicrotask(()=>this.onstop());}
+  }
+  const mounted=await mount(storage,{video,globals:{MediaRecorder,navigator:{mediaDevices:{getUserMedia:async()=>({getTracks:()=>[{stop(){}}]})}},EchoMicrophone:{...require('../extension/microphone.js'),createInput:async(stream,db,env,options)=>{assert.equal(options.sidetoneMode,'minimum');return {stream,db:0,dispose(){},monitoringInfo:()=>info};}}}});
+  nodes=mounted.nodes;nodes.get('sidetoneEnabled').checked=true;nodes.get('sidetoneEnabled').onchange();nodes.get('sidetoneMode').value='minimum';nodes.get('sidetoneMode').onchange();
+  const recording=nodes.get('record').onclick();await waitUntil(()=>!nodes.get('sidetoneLatency').hidden);
+  assert.equal(nodes.get('sidetoneMode').disabled,true);assert.match(nodes.get('sidetoneLatency').textContent,/输入 未报告.*图缓冲 2.7 ms.*输出 32.0 ms/);
+  nodes.get('stop').onclick();await recording;
+  assert.equal(nodes.get('sidetoneLatency').hidden,true);assert.match(nodes.get('recordingTechnical').textContent,/更低延迟/);
+  const [take]=await storage.listTakes('video');assert.equal(take.recordingInfo.monitoring.baseLatency,0.0027);
   (await storage.ready).close();
 });
