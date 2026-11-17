@@ -40,6 +40,7 @@
     .selected-recording{padding:12px;margin:12px 0}.selected-recording .row{margin:9px 0}.selected-recording .eyebrow{font-size:10px}.selected-recording .fold{margin-top:10px}
     .history-actions:has(>button[hidden]:only-child){display:none}
     .danger{color:#ffb4ad;background:transparent}.text-button{font-size:11px;padding:4px 8px;background:transparent;color:#b3eedb}
+    #clipBounds{margin-bottom:14px}
     .readiness-row{margin:4px 0 10px}.readiness-row #openBacking{flex:0 0 auto}.cue-nav{gap:6px;flex-wrap:wrap}.cue-nav>span:last-child{margin-left:auto}.caption-phase:empty{display:none}
     #songResult .fold{margin-top:8px}
     .history-delete{flex-shrink:0;font-size:11px;padding:7px;color:#ffb4ad;background:transparent;opacity:0}.history-item:hover .history-delete,.history-item:focus-within .history-delete{opacity:1}@media(hover:none){.history-delete{opacity:1}}
