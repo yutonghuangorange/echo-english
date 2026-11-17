@@ -179,7 +179,7 @@ BandIt 建议额外预留 2 GiB（含下载、安装临时文件和处理中间�
 - Demucs 权重：`.cache/torch/hub/checkpoints/955717e8-8726e21a.th`，SHA-256 `8726e21a993978c7ba086d3872e7608d7d5bfca646ca4aca459ffda844faa8b4`。
 - BandIt 权重：`.cache/models/bandit-v2-multi/checkpoint.ckpt`，SHA-256 `abcfccf65446752a057f4a302c941479a54b7560ebf8d7bca039d2ea98e64cfc`；来自 [作者发布的 Zenodo 模型](https://zenodo.org/records/12701995)，权重 CC BY-SA 4.0。
 - BandIt 源码：`.cache/models/bandit-v2-multi/source`，固定 [官方仓库提交 d5563d9](https://github.com/kwatcharasupat/bandit-v2/tree/d5563d9031e95fdaa3e5a73d5020b9a0df61adb6)，Apache 2.0，下载压缩包同样校验 SHA-256。曾运行实验的电脑会将已校验的实验权重移动至正式路径，避免重复下载；实验依赖仍保留。
-- 额外依赖：`.cache/models/bandit-deps`；按 `karaoke/bandit-requirements.txt` 用 pip `--target --no-deps` 安装在独立目录，仅 BandIt 工作子进程加入搜索路径，不升级基础 PyTorch / TorchAudio。安装后执行导入检查，成功后才原子发布就绪标记。
+- 额外依赖：`.cache/models/bandit-deps`；按 `karaoke/bandit-requirements.txt` 用 pip `--target --no-deps` 安装在独立目录，仅 BandIt 工作子进程加入搜索路径，不升级基础 PyTorch / TorchAudio。安装后实际构造模型、校验并严格加载权重，成功后才原子发布就绪标记。Intel Mac 的 PyTorch 2.2 / Python 3.12 会在处理上游 `compile(disable=True)` 时先报版本不支持；`bandit_compat.py` 仅在模型构造期间对三个 BandIt 模块提供显式禁用编译的恒等适配，不改写全局 PyTorch 或上游源码。
 - 安装日志：`.cache/models/logs/<模型编号>/worker.log`；「安装并提取」的安装日志与该次音频任务共用 `.cache/karaoke/<任务编号>/worker.log`。
 
 旧 Demucs 缓存继续有效，BandIt 结果使用独立缓存标识，录音保存所用模型，回听和导出不会误用另一个模型的背景音。已有录音不会因切换模型而重新处理。

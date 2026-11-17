@@ -71,7 +71,7 @@ class ModelManager:
     @property
     def dependency_stamp(self):
         spec = (self.root / "karaoke/bandit-requirements.txt").read_bytes()
-        return hashlib.sha256(spec + f"{sys.platform}:{sys.version_info[:2]}:{platform.machine()}".encode()).hexdigest()
+        return hashlib.sha256(spec + f"check-v2:{sys.platform}:{sys.version_info[:2]}:{platform.machine()}".encode()).hexdigest()
 
     def valid(self, path, expected):
         try:
@@ -225,7 +225,8 @@ class ModelManager:
                               str(self.root / "karaoke/bandit-requirements.txt")], 1800, "BandIt 依赖安装失败，请查看安装日志后重试。")
                 job["state"] = "verifying"
                 command(job, [sys.executable, str(self.root / "karaoke/bandit.py"), "--check",
-                              "--deps", str(staging), "--source", str(self.source)], 120, "BandIt 依赖检查失败。")
+                              "--deps", str(staging), "--source", str(self.source),
+                              "--checkpoint", str(self.weight(model))], 120, "BandIt 模型加载检查失败。")
                 (staging / "echo-ready").write_text(self.dependency_stamp)
                 shutil.rmtree(self.deps, ignore_errors=True)
                 staging.replace(self.deps)

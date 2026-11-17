@@ -5,6 +5,8 @@ import json
 from pathlib import Path
 import tempfile
 import threading
+import sys
+from types import SimpleNamespace
 import unittest
 from unittest.mock import patch
 from http.server import ThreadingHTTPServer
@@ -139,6 +141,26 @@ class ModelsTests(unittest.TestCase):
         self.assertFalse(request("/models")[1]["busy"])
         self.assertEqual(request("/models/untrusted/install", {})[0], 400)
         self.assertEqual(request(f"/models/{BANDIT_MODEL}/remove", {})[0], 200)
+
+    def test_intel_compile_adapter_is_scoped_and_never_enables_compilation(self):
+        from bandit_compat import eager_construction
+        def unsupported(*args, **kwargs):
+            raise RuntimeError("Dynamo is not supported on Python 3.12+")
+        torch = SimpleNamespace(__version__="2.2.2", compile=unsupported, Tensor=object())
+        names = ("src.models.bandit.bandit", "src.models.bandit.bandsplit", "src.models.bandit.maskestim")
+        modules = {name: SimpleNamespace(torch=torch) for name in names}
+        with patch.dict(sys.modules, modules), patch("bandit_compat.sys.version_info", (3, 12)):
+            with self.assertRaisesRegex(RuntimeError, "expected failure"):
+                with eager_construction(torch):
+                    model = object()
+                    for module in modules.values():
+                        self.assertIs(module.torch.compile(model, disable=True), model)
+                        self.assertIs(module.torch.Tensor, torch.Tensor)
+                        with self.assertRaisesRegex(RuntimeError, "显式禁用"):
+                            module.torch.compile(model)
+                    self.assertIs(torch.compile, unsupported)
+                    raise RuntimeError("expected failure")
+            self.assertTrue(all(module.torch is torch for module in modules.values()))
 
     def test_windowed_audio_preserves_start_end_and_overlap_without_gain_pumping(self):
         import numpy as np

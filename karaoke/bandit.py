@@ -4,6 +4,7 @@ from pathlib import Path
 import sys
 
 from models import BANDIT_SHA, digest
+from bandit_compat import eager_construction
 
 SAMPLE_RATE = 48000
 
@@ -55,7 +56,8 @@ def load_model(source, checkpoint_path, device):
     if digest(checkpoint_path) != BANDIT_SHA:
         raise RuntimeError("BandIt 权重校验失败，请重新安装模型。")
     config = yaml.safe_load((source / "configs/models/bandit-mus64.yaml").read_text())
-    model = Bandit(fs=SAMPLE_RATE, stems=["speech", "music", "sfx"], **config["kwargs"])
+    with eager_construction(torch):
+        model = Bandit(fs=SAMPLE_RATE, stems=["speech", "music", "sfx"], **config["kwargs"])
     checkpoint = torch.load(checkpoint_path, map_location="cpu", weights_only=False)
     state = {key.removeprefix("model."): value for key, value in checkpoint["state_dict"].items() if key.startswith("model.")}
     model.load_state_dict(state, strict=True)
@@ -78,13 +80,15 @@ def main():
     import torch
     import soundfile
     from src.models.bandit.bandit import Bandit
-    if args.check:
-        return
-    if not all((args.input, args.output, args.checkpoint)):
+    if not args.check and not all((args.input, args.output, args.checkpoint)):
         parser.error("input, output and checkpoint are required")
+    if not args.checkpoint:
+        parser.error("checkpoint is required")
     torch.set_num_threads(2)
     torch.set_num_interop_threads(1)
     model = load_model(args.source, args.checkpoint, args.d)
+    if args.check:
+        return
     def infer(samples):
         # Upstream treats stereo channels as independent batch entries.
         tensor = torch.from_numpy(samples.T.copy()).unsqueeze(1).to(args.d)

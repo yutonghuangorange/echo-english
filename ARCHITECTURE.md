@@ -8,6 +8,7 @@
 | --- | --- |
 | `extension/models.js` | 独立模型管理弹窗、安装状态刷新与权重删除确认 |
 | `karaoke/models.py` | 固定模型注册、校验、续传、隔离依赖安装与取消；不加载 Torch |
+| `karaoke/bandit_compat.py` | Intel Mac 旧版 Torch 的局部 eager 构造适配；不修改全局 Torch |
 | `karaoke/bandit.py` | BandIt 子进程、共用模型加载与流式窗口拼接 |
 | `extension/content.js` | 连接页面、媒体和存储；管理当前视频、练习流程和界面事件 |
 | `extension/assembly.js` | 独立拼接弹窗；拆分重叠区间，管理手动版本选择、试听、取消、Blob URL 生命周期与选择持久化回调 |
@@ -106,6 +107,6 @@ python3 -m unittest discover -s karaoke -p test_server.py
 
 ## 模型生命周期
 
-`Jobs` 与 `ModelManager` 共用锁，只能有一个安装或分离任务；管理接口在锁内拒绝与音频任务冲突的操作。安装在后台线程运行，HTTP 立即返回，取消复用事件与工作子进程树清理。就绪状态来自权重 SHA-256、固定源码版本与成功导入后的依赖标记，不能由扩展写入。权重原子下载，`.part` 断点续传；额外依赖通过临时目录安装并检查后发布，基础环境保持独立。
+`Jobs` 与 `ModelManager` 共用锁，只能有一个安装或分离任务；管理接口在锁内拒绝与音频任务冲突的操作。安装在后台线程运行，HTTP 立即返回，取消复用事件与工作子进程树清理。就绪状态来自权重 SHA-256、固定源码版本与成功构造模型并严格载入权重后的依赖标记，不能由扩展写入。权重原子下载，`.part` 断点续传；额外依赖通过临时目录安装并检查后发布，基础环境保持独立。
 
 Demucs 缓存沿用旧 key，只有非默认模型增加 model 字段参与 key；服务元数据与浏览器音频均保存 model；BandIt 使用 v2 元数据，使旧版服务跳过其结果，避免降级后误读为 Demucs。录音的 backingModel 决定回听、导出所用背景音，不追随用户后来切换的模型。下载、转换、压缩、缓存、取消与 GPU 失败回退共用 Jobs 流程，BandIt 仅替换模型工作命令与输入采样率。
