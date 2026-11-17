@@ -1951,3 +1951,33 @@ test('generation without subtitles offers time ranges and explains why custom pa
   nodes.get('generationScope').value='custom';nodes.get('generationStart').value='10';nodes.get('generationEnd').value='20';nodes.get('generationScope').onchange();assert.equal(nodes.get('prepareBacking').disabled,false);
   (await storage.ready).close();
 });
+
+test('confirmed missing YouTube subtitles immediately explain unavailability without waiting for transcript polling',async()=>{
+  const storage=createStorage(new IDBFactory());let polls=0,available=false;
+  const {nodes}=await mount(storage,{globals:{EchoTranscript:{readRows:()=>[],async read(){polls++;}},chrome:{runtime:{onMessage:{addListener(){}},async sendMessage(message){
+    if(message.action==='list')return {tracks:available?[{id:'.en',language:'en',name:'English'}]:[]};
+    return {};
+  }}}}});
+  await nodes.get('read').onclick();assert.equal(polls,0);
+  for(const id of ['status','practiceSetup','transcriptEmpty','captionSourceInfo'])assert.match(nodes.get(id).textContent,/自动载入字幕不可用/);
+  assert.equal(nodes.get('read').disabled,false);assert.equal(nodes.get('import').disabled,false);assert.equal(nodes.get('read').textContent,'重新检测字幕');
+  nodes.get('file').files=[{size:50,text:async()=> '1\n00:00:00,000 --> 00:00:02,000\nImported words\n'}];await nodes.get('file').onchange();
+  assert.equal((await storage.getSession('video')).cues[0].text,'Imported words');assert.match(nodes.get('captionSourceInfo').textContent,/导入的字幕文件/);
+  available=true;await nodes.get('refreshCaptionTracks').onclick();assert.doesNotMatch(nodes.get('captionSourceInfo').textContent || '',/自动载入字幕不可用/);assert.equal(nodes.get('read').textContent,'读取台词');
+  (await storage.ready).close();
+});
+
+test('caption transport errors stay distinct from confirmed absence and retain the existing transcript fallback',async()=>{
+  const storage=createStorage(new IDBFactory());let polls=0;
+  const {nodes}=await mount(storage,{globals:{EchoTranscript:{async read(){polls++;return [{start:0,end:2,text:'Visible transcript'}];}},chrome:{runtime:{onMessage:{addListener(){}},async sendMessage(){return {error:'字幕语言列表连接失败'};}}}}});
+  await nodes.get('refreshCaptionTracks').onclick();assert.match(nodes.get('status').textContent,/连接失败/);assert.doesNotMatch(nodes.get('captionSourceInfo').textContent || '',/自动载入字幕不可用/);
+  await nodes.get('read').onclick();assert.equal(polls,1);assert.equal((await storage.getSession('video')).cues[0].text,'Visible transcript');
+  (await storage.ready).close();
+});
+
+test('an existing visible transcript is usable even when the caption API lists no tracks',async()=>{
+  const storage=createStorage(new IDBFactory());let polls=0;
+  const {nodes}=await mount(storage,{globals:{EchoTranscript:{readRows:()=>[{start:0,end:2,text:'Visible words'}],async read(){polls++;return [{start:0,end:2,text:'Visible words'}];}},chrome:{runtime:{onMessage:{addListener(){}},async sendMessage(){return {tracks:[]};}}}}});
+  await nodes.get('read').onclick();assert.equal(polls,1);assert.match(nodes.get('status').textContent,/已读取 1/);assert.doesNotMatch(nodes.get('captionSourceInfo').textContent || '',/自动载入字幕不可用/);
+  (await storage.ready).close();
+});

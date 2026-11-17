@@ -154,6 +154,8 @@
     renderMicrophoneSettings();
   };
   $('manualGainDb').onchange=()=>{if(mode==='idle')saveMicrophonePreferences();};
+  const noAutomaticCaptions='自动载入字幕不可用：此视频未提供可读取的字幕。可导入 SRT／VTT 字幕，或直接设置时间范围练习。';
+  let captionAvailability='unknown';
   let captionTracks=[],captionListRequest=0,captionSource='auto',captionSourceName='',loadedCaptionSource='';
   const captionClient=EchoCaptionTracks.createClient();
   let captionVideo = null, captionSignature = '', captionGhost = null;
@@ -224,7 +226,7 @@
   const settings=EchoSettingsDialog.attach({view:root,onOpen:section=>{
     if(section==='microphone')void refreshInputDevices();
     if(section==='backing' || section==='generation'){$('settingsStatus').textContent=karaokeIssue || '';void checkKaraokeService();void restoreServerBacking({explicit:true,range:generationSelection().value});}
-    if(section==='captions' && !captionTracks.length && mode==='idle')void $('refreshCaptionTracks').onclick();
+    if(section==='captions' && captionAvailability==='unknown' && mode==='idle')void $('refreshCaptionTracks').onclick();
   }});
   $('backingSettings').onclick=()=>{if(mode==='idle')settings.open('backing','backingSettings');};
   $('practiceTools').onclick=()=>{if(mode==='idle')settings.open('practice','practiceTools');};
@@ -1669,7 +1671,11 @@
     if(captionSource!=='auto' && !captionTracks.some(t=>t.id===captionSource))options.push([captionSource,captionSourceName || '上次选择的字幕（待刷新）']);
     $('captionSource').replaceChildren(...options.map(([value,text])=>{const option=document.createElement('option');option.value=value;option.textContent=text;return option;}));
     $('captionSource').value=captionSource;
-    $('captionSourceInfo').textContent=loadedCaptionSource?`已加载：${loadedCaptionSource}。切换来源后会加载新字幕，录音仍保留。`:'可刷新语言后选择字幕。内容语言只影响文本处理。';
+    const loaded=loadedCaptionSource?`已加载：${loadedCaptionSource}。现有字幕和录音仍保留。`:'';
+    $('captionSourceInfo').textContent=captionAvailability==='unavailable'?`${noAutomaticCaptions}${loaded}`:loaded || '可刷新语言后选择字幕。内容语言只影响文本处理。';
+    $('practiceSetup').textContent=captionAvailability==='unavailable'?noAutomaticCaptions:'先读取或导入字幕，也可直接设置练习范围。';
+    $('transcriptEmpty').textContent=captionAvailability==='unavailable'?noAutomaticCaptions:'还没有台词。点击上方按钮读取。';
+    $('read').textContent=captionAvailability==='unavailable'?'重新检测字幕':'读取台词';
   }
   async function captionsRequest(action,extra={}){
     const result=await captionClient.request({action,videoId,...extra});
@@ -1681,12 +1687,13 @@
     const id=videoId,request=++captionListRequest;
     const result=await captionsRequest('list',{refresh});
     if(id!==videoId || request!==captionListRequest)return null;
-    captionTracks=result.tracks || [];renderCaptionSources();return captionTracks;
+    if(!Array.isArray(result.tracks))throw Error('字幕语言列表无法识别，请稍后重试。');
+    captionTracks=result.tracks;captionAvailability=captionTracks.length?'available':'unavailable';renderCaptionSources();return captionTracks;
   }
   $('refreshCaptionTracks').onclick=guarded(async()=>{
     if(mode!=='idle')return;
     const token=++generation;mode='reading';controls();status('正在查找此视频的字幕语言…');
-    try{const tracks=await refreshCaptionTracks(true);if(token===generation && tracks)status(tracks.length?`找到 ${tracks.length} 个字幕轨道，请在“字幕来源”中选择。`:'此视频未返回可用字幕轨道，可尝试读取当前文字记录或导入字幕。');}
+    try{const tracks=await refreshCaptionTracks(true);if(token===generation && tracks)status(tracks.length?`找到 ${tracks.length} 个字幕轨道，请在“字幕来源”中选择。`:noAutomaticCaptions);}
     finally{if(token===generation){mode='idle';controls();}}
   });
   $('captionSource').onchange=()=>{
@@ -1709,6 +1716,13 @@
           const tracks=await refreshCaptionTracks();if(cancelled())return;
           track=tracks?.find(t=>t.id===current.id) || tracks?.find(t=>t.language===current.language && t.generated===current.generated);
           if(!track)throw Error('未找到播放器当前选择的字幕轨道，请刷新语言后手动选择。');
+        }else{
+          // A successful empty track list confirms absence; network failures do
+          // not. Preserve the transcript fallback when the API is unavailable.
+          let tracks;
+          try{tracks=await refreshCaptionTracks(captionAvailability==='unavailable');}catch{/* Try YouTube's visible transcript below. */}
+          if(cancelled())return;
+          if(tracks && !tracks.length && !EchoTranscript.readRows?.(document,v.duration)?.length){status(noAutomaticCaptions);return;}
         }
       }else{
         const tracks=await refreshCaptionTracks();if(cancelled())return;
@@ -1725,7 +1739,7 @@
         next=await EchoTranscript.read({doc:document,duration:v.duration,cancelled,progress:status});
       }
       if(!next || cancelled())return;
-      mode='idle';loadedCaptionSource=sourceLabel;renderCaptionSources();displayCues(next);showPage(page);
+      mode='idle';captionAvailability='available';loadedCaptionSource=sourceLabel;renderCaptionSources();displayCues(next);showPage(page);
       status(`已读取 ${next.length} 句 · ${sourceLabel}。${track?'':'末句终点为估算值，可手动调整。'}`);
     }finally{if(token===generation){mode='idle';controls();}}
   });
@@ -1741,7 +1755,7 @@
     restoringBacking = false;
     karaokeIssue = '';
     activity = 'speech';qualityPreferences={speech:'standard',sing:'standard'};modelPreferences={speech:EchoKaraoke.DEFAULT_MODEL,sing:EchoKaraoke.DEFAULT_MODEL};backingPreferences={speech:false,sing:true};scopePreferences={speech:'clip',sing:'whole'};paragraphFirst=0;paragraphLast=1;assemblyChoices=[];
-    captionTracks=[];captionListRequest++;captionSource='auto';captionSourceName='';loadedCaptionSource='';renderCaptionSources();
+    captionAvailability='unknown';captionTracks=[];captionListRequest++;captionSource='auto';captionSourceName='';loadedCaptionSource='';renderCaptionSources();
     $('contentLanguage').value = 'auto';
     $('captionLayout').value = 'original';
     $('hideText').checked=false;$('showChinese').checked=false;$('followCaptions').checked=true;
