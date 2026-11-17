@@ -57,6 +57,7 @@
     $('sidetoneEnabled').checked=sidetoneEnabled;
     const processing=[echoPreferences[activity]?'回声消除':'',gainPreferences[activity]?'自动增益':''].filter(Boolean);
     const warn=sidetoneEnabled && processing.length>0;
+    $('sidetoneProcessingNotice').hidden=!warn;
     $('sidetoneProcessingWarning').hidden=!warn;
     $('sidetoneProcessingWarning').textContent=warn?`耳返与${processing.join('、')}同时开启，可能使人声断续或音量起伏。戴耳机时建议关闭下方对应处理，下次录音生效。`:'';
     $('sidetoneMode').value=sidetoneMode;
@@ -108,6 +109,12 @@
   const onInputDevicesChanged=()=>{void refreshInputDevices();};
   globalThis.navigator?.mediaDevices?.addEventListener?.('devicechange',onInputDevicesChanged);
   renderInputDevices();
+  $('useHeadphoneSettings').onclick=()=>{
+    if(mode!=='idle')return;
+    echoPreferences[activity]=false;gainPreferences[activity]=false;
+    status(`已关闭${isSinging()?'唱歌':'配音'}的回声消除和自动增益，手动增益保持 +${manualGainPreferences[activity]} dB；下次录音生效。`);
+    saveMicrophonePreferences();renderMicrophoneSettings();$('sidetoneEnabled').focus();
+  };
   $('sidetoneMode').onchange=()=>{
     if(mode==='idle'){sidetoneMode=$('sidetoneMode').value==='minimum'?'minimum':'standard';saveMicrophonePreferences();}
     renderMicrophoneSettings();
@@ -476,7 +483,7 @@
     syncClipSelection();
     $('songReadinessRow').hidden=!hasBackingTools() || recording;
     $('songResult').hidden=!isSinging() || !songTake;
-    for (const id of ['sidetoneMode','sidetoneEnabled','sidetoneVolume','inputDevice','detectInputs','paragraphFirst','paragraphLast','recordingQuality','echoCancellation','autoGainControl','manualGainDb','captionSource','refreshCaptionTracks','contentLanguage','captionLayout','activityMode','read','import','openCaptionSetup','openLanguageSettings','prepareBacking','practiceScope','useBacking','backingVolume','prev','next','markStart','markEnd','original','speed','start','end','leadInMode','leadInSeconds','record','startEarlier','startLater','endEarlier','endLater','loop','loopCount','autoPractice','prepSeconds','autoNext']) $(id).disabled = busy;
+    for (const id of ['useHeadphoneSettings','sidetoneMode','sidetoneEnabled','sidetoneVolume','inputDevice','detectInputs','paragraphFirst','paragraphLast','recordingQuality','echoCancellation','autoGainControl','manualGainDb','captionSource','refreshCaptionTracks','contentLanguage','captionLayout','activityMode','read','import','openCaptionSetup','openLanguageSettings','prepareBacking','practiceScope','useBacking','backingVolume','prev','next','markStart','markEnd','original','speed','start','end','leadInMode','leadInSeconds','record','startEarlier','startLater','endEarlier','endLater','loop','loopCount','autoPractice','prepSeconds','autoNext']) $(id).disabled = busy;
     if(isParagraph())for(const id of ['start','end','markStart','markEnd','startEarlier','startLater','endEarlier','endLater'])$(id).disabled=true;
     $('autoNext').disabled=busy || $('practiceScope').value!=='clip';
     $('useBacking').disabled=busy;

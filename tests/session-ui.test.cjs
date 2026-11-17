@@ -1562,3 +1562,21 @@ test('sidetone processing warning names only enabled processing and follows acti
   assert.equal(nodes.get('echoCancellation').checked,true); // Inform without changing the user's processing preference.
   (await storage.ready).close();
 });
+
+test('headphone recommendation saves only the current activity, retains manual gain and leaves sidetone enabled',async()=>{
+  const storage=createStorage(new IDBFactory()),preferences=new Map([['echo-microphone-v1',JSON.stringify({speech:true,sing:true,autoGainControl:{speech:true,sing:true},manualGainDb:{speech:6,sing:12}})]]);
+  const globals={window:{localStorage:{getItem:key=>preferences.get(key)||null,setItem:(key,value)=>preferences.set(key,value)},addEventListener(){},speechSynthesis:{cancel(){}}}};
+  const {nodes}=await mount(storage,{globals});
+  nodes.get('sidetoneEnabled').checked=true;nodes.get('sidetoneEnabled').onchange();assert.equal(nodes.get('sidetoneProcessingNotice').hidden,false);
+  nodes.get('useHeadphoneSettings').onclick();
+  assert.equal(nodes.get('echoCancellation').checked,false);assert.equal(nodes.get('autoGainControl').checked,false);
+  assert.equal(nodes.get('sidetoneEnabled').checked,true);assert.equal(nodes.get('sidetoneProcessingNotice').hidden,true);assert.equal(nodes.get('manualGainDb').value,6);
+  assert.match(nodes.get('status').textContent,/手动增益保持 \+6 dB/);
+  nodes.get('activityMode').value='sing';nodes.get('activityMode').onchange();
+  assert.equal(nodes.get('echoCancellation').checked,true);assert.equal(nodes.get('autoGainControl').checked,true);assert.equal(nodes.get('sidetoneProcessingNotice').hidden,false);
+  const restored=await mount(storage,{globals});
+  restored.nodes.get('activityMode').value='speech';restored.nodes.get('activityMode').onchange();
+  assert.equal(restored.nodes.get('echoCancellation').checked,false);assert.equal(restored.nodes.get('autoGainControl').checked,false);
+  assert.equal(restored.nodes.get('manualGainDb').value,6);assert.equal(restored.nodes.get('sidetoneEnabled').checked,true);
+  (await storage.ready).close();
+});
