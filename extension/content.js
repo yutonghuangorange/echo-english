@@ -307,7 +307,7 @@
     $('useBackingLabel').textContent=singing?'录唱时播放伴奏（仅录人声）':'保留背景音（电影配音，可选）';
     $('backingSettingsTitle').textContent=singing?'伴奏设置':'背景音设置';
     $('backingHelpTitle').textContent=`首次使用：如何启用${backingName()}？`;
-    $('backingSettingsHint').textContent=singing?'按上方录唱范围生成，最长 10 分钟。准备好后回到主区录唱。':'去掉原对白，尽量保留音乐和环境音。按上方配音范围提取，最长 10 分钟，建议先试短片段；可能残留对白或损失音效。录音只保存自己的人声。';
+    $('backingSettingsHint').textContent=singing?'按主界面的录唱范围生成，最长 10 分钟。准备好后回到主区录唱。':'去掉原对白，尽量保留音乐和环境音。按主界面的配音范围提取，最长 10 分钟，建议先试短片段；可能残留对白或损失音效。录音只保存自己的人声。';
     $('backingVolumeLabel').textContent=singing?'录唱监听音量':'背景监听音量';
     $('backingLiveLabel').textContent=singing?'伴奏':'背景音';
     $('backingLiveVolume').setAttribute('aria-label',singing?'录音中伴奏监听音量':'录音中背景音监听音量');
@@ -425,7 +425,7 @@
     else if(error)$('karaokeInfo').textContent=error;
     else if(karaokeIssue)$('karaokeInfo').textContent='';
     else if(ready)$('karaokeInfo').textContent='';
-    else $('karaokeInfo').textContent=serviceState==='online'?'':serviceState==='offline'?'本机分离服务未连接。请查看下方启动说明，启动后点击“重新检测”。已有音频和录音仍可使用。':`首次使用需准备本机分离服务，点击“准备${name}”查看。`;
+    else $('karaokeInfo').textContent=serviceState==='online'?'':serviceState==='offline'?'本机分离服务未连接。请查看设置顶部的启动说明，启动后点击“重新检测”。已有音频和录音仍可使用。':`首次使用需准备本机分离服务，点击“准备${name}”查看。`;
   }
   function clampGain(value) {return Number.isFinite(Number(value))?Math.max(0,Math.min(2,Number(value))):1;}
   function replayMix() {
