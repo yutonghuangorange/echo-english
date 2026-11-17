@@ -5,16 +5,16 @@
     if(url.origin !== 'https://www.youtube.com')throw Error('请在 YouTube 视频页使用伴奏功能。');
     const action = message.action;
     if(!['health','start','cached','status','audio','audio-chunk','cancel','models','model-install','model-cancel','model-remove'].includes(action))throw Error('无效的伴奏操作。');
+    if(['start','cached'].includes(action) && message.quality!==undefined && !['standard','lossless'].includes(message.quality))throw Error('不支持的音质选项。');
     let path = '/jobs', body;
     if(action === 'start' || action === 'cached') {
       if(url.pathname !== '/watch')throw Error('请在 YouTube 视频页使用伴奏功能。');
       if(message.videoId !== url.searchParams.get('v') || !/^[\w-]{11}$/.test(message.videoId))throw Error('视频已切换，请重新生成伴奏。');
-      if(action==='cached')path='/backings/'+message.videoId;
+      if(action==='cached')path='/backings/'+message.videoId+(message.quality==='lossless'?'?quality=lossless':'');
       else {
       const {start,end}=message;
       if(!Number.isFinite(start) || !Number.isFinite(end) || start<0 || end<=start || end-start>600)throw Error('请选择不超过 10 分钟的片段。');
       if(message.model!==undefined && !['demucs-htdemucs','bandit-v2-multi'].includes(message.model))throw Error('不支持的分离模型。');
-      if(message.quality!==undefined && !['standard','lossless'].includes(message.quality))throw Error('不支持的音质选项。');
       body=JSON.stringify({videoId:message.videoId,start,end,...(message.quality==='lossless'?{quality:'lossless'}:{}),...(message.model && message.model!=='demucs-htdemucs'?{model:message.model}:{})});
       }
     } else if(action==='health')path='/health';

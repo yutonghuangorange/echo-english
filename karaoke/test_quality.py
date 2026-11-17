@@ -60,6 +60,14 @@ class QualityTests(unittest.TestCase):
         self.assertEqual(first[3] + last[3], payload)
         self.assertEqual(request(f"bytes=0-{AUDIO_CHUNK_BYTES+1}")[0], 416)
         self.assertEqual(request(f"bytes={len(payload)}-{len(payload)+10}")[0], 416)
+        # Old extensions do not know quality: their default listing must stay MP3-only.
+        for query, expected in (("", []), ("?quality=lossless", [job["id"]])):
+            connection = http.client.HTTPConnection("127.0.0.1", server.server_port, timeout=3)
+            connection.request("GET", f"/backings/{CLIP['videoId']}{query}", headers={"X-Echo-Client": "echo-english"})
+            response = connection.getresponse()
+            self.assertEqual(response.status, 200)
+            self.assertEqual([item["id"] for item in json.load(response)["backings"]], expected)
+            connection.close()
 
     @unittest.skipUnless(shutil.which("ffmpeg"), "FFmpeg is required")
     def test_flac_round_trip_preserves_24_bit_pcm_samples(self):

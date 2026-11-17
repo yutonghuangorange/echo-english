@@ -415,11 +415,12 @@ def handler(jobs):
                     result = jobs.models.catalog()
                     result["busy"] = result["busy"] or any(j["state"] in ACTIVE_STATES for j in jobs.jobs.values())
                 return self.reply(200, result)
-            cached = re.fullmatch(r"/backings/([A-Za-z0-9_-]{11})", self.path)
+            cached = re.fullmatch(r"/backings/([A-Za-z0-9_-]{11})(?:\?quality=(standard|lossless))?", self.path)
             if cached:
                 with jobs.lock:
                     values = [dict(jobs.public(j)) for j in reversed(list(jobs.jobs.values()))
-                              if j["videoId"] == cached[1] and j["state"] == "ready" and j["audio"].is_file()]
+                              if j["videoId"] == cached[1] and j.get("quality", "standard") == (cached[2] or "standard")
+                              and j["state"] == "ready" and j["audio"].is_file()]
                 return self.reply(200, {"backings": values})
             match = re.fullmatch(r"/jobs/([a-f0-9]{32})(/audio)?", self.path)
             if not match:

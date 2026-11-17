@@ -217,3 +217,11 @@ test('audio chunk relay requests bounded HTTP ranges and validates server ranges
   headers.set('Content-Range','bytes 0-2/13');
   await assert.rejects(request({action:'audio-chunk',jobId:id,offset:10},sender,fetcher),/分块响应无效/);
 });
+
+test('lossless cache lookup opts in without changing the legacy standard endpoint',async()=>{
+  const urls=[];const fetcher=async url=>{urls.push(url);return {ok:true,json:async()=>({backings:[]})};};
+  await request({action:'cached',videoId:'jNQXAC9IVRw'},sender,fetcher);
+  await request({action:'cached',videoId:'jNQXAC9IVRw',quality:'lossless'},sender,fetcher);
+  assert.deepEqual(urls,['http://127.0.0.1:8765/backings/jNQXAC9IVRw','http://127.0.0.1:8765/backings/jNQXAC9IVRw?quality=lossless']);
+  await assert.rejects(request({action:'cached',videoId:'jNQXAC9IVRw',quality:'unknown'},sender,fetcher),/不支持/);
+});

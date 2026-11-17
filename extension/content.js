@@ -766,7 +766,7 @@
     const id=videoId, request=++backingRestoreRequest;
     restoringBacking=true;controls();
     try{
-      const result=await karaokeRequest('cached',{videoId:id});
+      const result=await karaokeRequest('cached',{videoId:id,quality:r.quality});
       if(id!==videoId || request!==backingRestoreRequest)return;
       const cached=result.backings?.find(value=>EchoKaraoke.covers(value,id,r));
       if(!cached)return;

@@ -113,6 +113,6 @@ Demucs 缓存沿用旧 key，只有非默认模型增加 model 字段参与 key�
 
 ## 背景音音质与传输
 
-`quality` 仅允许 standard / lossless；默认值不参与旧缓存 key，lossless 使用独立 key 和 v3 服务元数据。`Jobs.audio_path`、`audio_mime`、`encode_audio` 统一决定扩展名、MIME 与编码，两种分离模型共用。无损分离链路保留浮点中间文件，最终编码 24 位 FLAC。
+`quality` 仅允许 standard / lossless；默认值不参与旧缓存 key，lossless 使用独立 key 和 v3 服务元数据。缓存列表默认仅返回标准音质，无损需显式 quality 查询，防止旧扩展把 FLAC 当成默认缓存。`Jobs.audio_path`、`audio_mime`、`encode_audio` 统一决定扩展名、MIME 与编码，两种分离模型共用。无损分离链路保留浮点中间文件，最终编码 24 位 FLAC。
 
 `EchoKaraoke.qualityOf`、`covers` 与 `backingForTake` 统一匹配录音的 backingQuality。`fetchAudio` 按 1 MiB 请求分块，验证连续位置、固定总长度与 MIME，保存为不可变 Blob 分块后组装，避免在 Chrome 消息中传递整个大文件。后台 relay 只能请求固定音频路径和固定分块上限，服务只读已完成任务的指定字节范围；取消和页面切换通过 active 回调丢弃过期返回。
