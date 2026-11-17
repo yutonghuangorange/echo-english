@@ -36,7 +36,7 @@ async function mount(storage, overrides = {}) {
   doc.title=overrides.title || '';
   const context={document:doc,location:{href:'https://www.youtube.com/watch?v=video',pathname:'/watch'},indexedDB:{},URL,Blob,console,setTimeout,clearTimeout,cancelAnimationFrame(){},requestAnimationFrame(){},crypto:globalThis.crypto,
     window:{addEventListener(){},speechSynthesis:{cancel(){}}},chrome:{runtime:{onMessage:{addListener(){}}}},
-    EchoCaptionTracks:require('../extension/caption-tracks.js'),EchoPanelView:require('../extension/panel-view.js'),EchoTransport:require('../extension/transport.js'),EchoPlayback:require('../extension/playback.js'),
+    EchoPracticeTools:require('../extension/practice-tools.js'),EchoCaptionTracks:require('../extension/caption-tracks.js'),EchoPanelView:require('../extension/panel-view.js'),EchoTransport:require('../extension/transport.js'),EchoPlayback:require('../extension/playback.js'),
     EchoAudioExport:require('../extension/audio-export.js'),EchoAssembly:require('../extension/assembly.js'),EchoPanelSize:require('../extension/panel-size.js'),EchoLanguages:require('../extension/languages.js'),EchoKaraoke:require('../extension/karaoke.js'),EchoStorage:{...require('../extension/storage.js'),createStorage:()=>storage},EchoSelection:require('../extension/selection.js'),EchoPractice:require('../extension/practice.js'),EchoDictionary:require('../extension/dictionary.js'),EchoSubtitles:require('../extension/subtitles.js'),EchoLibrary:require('../extension/library.js'),EchoModels:require('../extension/models.js'),EchoLiveMeter:require('../extension/live-meter.js'),EchoRecording:require('../extension/recording.js'),EchoMicrophone:require('../extension/microphone.js'),EchoAudioAnalysis:require('../extension/audio-analysis.js')};
   Object.assign(context,overrides.globals || {});
   // Existing UI fixtures provide a caption transport; integration fixtures can
@@ -1605,4 +1605,48 @@ for(const activity of ['sing','speech'])test(`${activity} capture exposes live b
   const saved=await storage.getSession('video');assert.equal(saved.backingVolume,0);
   const restored=await mount(storage,{video});assert.equal(restored.nodes.get('backingLiveVolume').value,0);assert.equal(restored.nodes.get('backingVolumeValue').textContent,'0%');
   (await storage.ready).close();
+});
+
+test('scene presets share existing settings, preserve microphone gain and quality, and favorites live in the library',async()=>{
+  const storage=createStorage(new IDBFactory());
+  const {nodes}=await mount(storage,{title:'收藏测试 - YouTube'});
+  nodes.get('openPresets').onclick();assert.equal(nodes.get('toolsDialog').open,true);
+  nodes.get('presetSong').onclick();assert.equal(nodes.get('toolsDialog').open,false);
+  assert.equal(nodes.get('activityMode').value,'sing');assert.equal(nodes.get('practiceScope').value,'whole');
+  assert.equal(nodes.get('useBacking').checked,true);assert.equal(nodes.get('echoCancellation').checked,false);assert.equal(nodes.get('autoGainControl').checked,false);
+  nodes.get('openPresets').onclick();nodes.get('presetSpeaker').onclick();
+  assert.equal(nodes.get('activityMode').value,'speech');assert.equal(nodes.get('practiceScope').value,'clip');assert.equal(nodes.get('useBacking').checked,false);
+  assert.equal(nodes.get('echoCancellation').checked,true);assert.equal(nodes.get('autoGainControl').checked,true);assert.equal(nodes.get('sidetoneEnabled').checked,false);
+  assert.equal(nodes.get('leadInMode').value,'seconds');assert.equal(Number(nodes.get('leadInSeconds').value),3);
+  await nodes.get('favoriteVideo').onclick();assert.equal(nodes.get('favoriteVideo').getAttribute('aria-pressed'),'true');
+  await nodes.get('openLibrary').onclick();nodes.get('libraryFavoritesTab').onclick();
+  assert.equal(nodes.get('libraryList').children.length,1);assert.equal(nodes.get('libraryList').children[0].children[0].textContent,'收藏测试');
+  const actions=nodes.get('libraryList').children[0].children.at(-1);await actions.children.at(-1).onclick();
+  assert.equal(nodes.get('libraryList').children.length,0);assert.equal(nodes.get('favoriteVideo').getAttribute('aria-pressed'),'false');
+  (await storage.ready).close();
+});
+test('practice library previews a pack, waits for explicit import, merges data and exports per-video original audio',async()=>{
+  const storage=createStorage(new IDBFactory()),pack=require('../extension/practice-package.js');
+  const data={sessions:[{videoId:'another',title:'迁移的歌曲',start:0,end:5,speed:'1',cues:[{start:0,end:5,text:'导入歌词'}]}],recordings:[{id:'imported',videoId:'another',cueKey:'one',start:0,end:5,speed:1,createdAt:1,blob:new Blob(['original audio'])}],backings:[],favorites:[{videoId:'another',title:'迁移的歌曲',createdAt:1}]};
+  const {nodes,downloads}=await mount(storage);await nodes.get('openLibrary').onclick();nodes.get('libraryBackupTab').onclick();
+  assert.equal(nodes.get('packageTools').hidden,false);assert.equal(nodes.get('librarySearch').hidden,true);
+  nodes.get('packageFile').files=[pack.encode(data)];await nodes.get('packageFile').onchange();
+  assert.equal(nodes.get('packagePreview').hidden,false);assert.equal((await storage.listTakes('another')).length,0);
+  await nodes.get('packageImport').onclick();assert.equal((await storage.listTakes('another')).length,1);assert.match(nodes.get('libraryMessage').textContent,/导入完成/);
+  nodes.get('packageScope').value='another';await nodes.get('packageExport').onclick();
+  const link=downloads.at(-1);assert.match(link.download,/Echo-another-.*\.echo/);
+  const exported=await pack.decode(await (await fetch(link.href)).blob());
+  assert.equal(exported.sessions.length,1);assert.equal(exported.sessions[0].title,'迁移的歌曲');assert.equal(await exported.recordings[0].blob.text(),'original audio');
+  (await storage.ready).close();
+});
+
+test('document shortcuts only act when the panel is visible and no input or dialog owns focus',async()=>{
+  const storage=createStorage(new IDBFactory()),{nodes,document,events}=await mount(storage);
+  const host=document.documentElement.children[0],handler=events.get('keydown');let prevented=0;
+  const key=extra=>({altKey:true,shiftKey:true,code:'KeyF',preventDefault(){prevented++;},stopPropagation(){},...extra});
+  host.style.display='none';handler(key());await new Promise(r=>setTimeout(r,5));assert.equal(await storage.getFavorite('video'),undefined);
+  host.style.display='block';handler(key({target:{tagName:'INPUT'}}));assert.equal(prevented,0);
+  nodes.get('openMicTest').onclick();handler(key());assert.equal(prevented,0);nodes.get('closeTools').onclick();
+  handler(key());await waitUntil(()=>nodes.get('favoriteVideo').getAttribute('aria-pressed')==='true');assert.equal(prevented,1);
+  assert.equal((await storage.getFavorite('video')).videoId,'video');(await storage.ready).close();
 });

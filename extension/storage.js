@@ -3,10 +3,11 @@
   const {cueKey} = typeof module !== 'undefined' ? require('./selection.js') : root.EchoSelection;
   function createStorage(factory = root.indexedDB, name = 'echo-dubbing-v1') {
     const ready = new Promise((resolve,reject) => {
-      const request = factory.open(name,4);
+      const request = factory.open(name,5);
       request.onupgradeneeded = () => {
         const db = request.result, tx = request.transaction;
         if (!db.objectStoreNames.contains('sessions')) db.createObjectStore('sessions',{keyPath:'videoId'});
+        if (!db.objectStoreNames.contains('favorites')) db.createObjectStore('favorites',{keyPath:'videoId'});
         if (!db.objectStoreNames.contains('backings')) {
           const backings=db.createObjectStore('backings',{keyPath:'key'});
           backings.createIndex('videoId','videoId');
@@ -42,9 +43,10 @@
     async function transaction(stores, mode, work) {
       const db = await ready;
       return new Promise((resolve,reject) => {
-        const tx=db.transaction(stores,mode); let result;
-        tx.oncomplete=()=>resolve(result); tx.onerror=()=>reject(tx.error); tx.onabort=()=>reject(tx.error || Error('本地保存已取消。'));
-        try { work(tx,value=>{result=value;}); } catch(e) { tx.abort(); reject(e); }
+        const tx=db.transaction(stores,mode); let result,failure;
+        const abort=error=>{failure=error;tx.abort();};
+        tx.oncomplete=()=>resolve(result);tx.onabort=()=>reject(failure || tx.error || Error('本地保存已取消。'));
+        try { work(tx,value=>{result=value;},abort); } catch(e) { abort(e); }
       });
     }
     return {
@@ -54,7 +56,7 @@
       listBackings(videoId) { return transaction(['backings'],'readonly',(tx,set)=>{tx.objectStore('backings').index('videoId').getAll(videoId).onsuccess=e=>set(e.target.result.sort((a,b)=>b.createdAt-a.createdAt));}); },
       saveBacking(value) { return transaction(['backings'],'readwrite',tx=>{
         const store=tx.objectStore('backings');store.put(value);
-        store.getAll().onsuccess=e=>{for(const old of e.target.result.sort((a,b)=>b.createdAt-a.createdAt).slice(8))store.delete(old.key);};
+        store.getAll().onsuccess=e=>{for(const old of e.target.result.filter(v=>!v.imported).sort((a,b)=>b.createdAt-a.createdAt).slice(8))store.delete(old.key);};
       }); },
       listTakes(videoId) { return transaction(['recordings'],'readonly',(tx,set)=>{tx.objectStore('recordings').index('videoId').getAll(videoId).onsuccess=e=>set(e.target.result.sort((a,b)=>b.createdAt-a.createdAt || b.id.localeCompare(a.id)));}); },
       saveTake(value) {
@@ -62,21 +64,44 @@
           const store=tx.objectStore('recordings'); store.put(value);
           store.index('segment').getAll([value.videoId,value.cueKey]).onsuccess=e=>{
             const takes=e.target.result.sort((a,b)=>b.createdAt-a.createdAt || b.id.localeCompare(a.id));
-            for (const old of takes.slice(MAX_TAKES)) store.delete(old.id);
-            set(takes.slice(0,MAX_TAKES));
+            const expired=takes.filter(t=>!t.imported).slice(MAX_TAKES);
+            for (const old of expired) store.delete(old.id);
+            set(takes.filter(t=>!expired.includes(t)));
           };
         });
       },
       deleteTake(id) { return transaction(['recordings'],'readwrite',tx=>tx.objectStore('recordings').delete(id)); },
-      library() { return transaction(['sessions','recordings','backings'],'readonly',(tx,set)=>{
-        const videos=new Map();let remaining=3;set([]);
+      setFavorite(value) { return transaction(['favorites'],'readwrite',tx=>tx.objectStore('favorites').put(value)); },
+      deleteFavorite(videoId) { return transaction(['favorites'],'readwrite',tx=>tx.objectStore('favorites').delete(videoId)); },
+      getFavorite(videoId) { return transaction(['favorites'],'readonly',(tx,set)=>{tx.objectStore('favorites').get(videoId).onsuccess=e=>set(e.target.result);}); },
+      snapshot(videoId=null,includeBackings=true) { return transaction(['sessions','recordings','backings','favorites'],'readonly',(tx,set)=>{
+        const result={sessions:[],recordings:[],backings:[],favorites:[]};set(result);
+        for(const name of Object.keys(result))tx.objectStore(name).getAll().onsuccess=e=>{result[name]=name==='backings' && !includeBackings?[]:e.target.result.filter(v=>videoId===null || v.videoId===videoId);};
+      }); },
+      // Import is one atomic merge. Existing media is never overwritten and
+      // imported audio is exempt from automatic rolling-cache eviction.
+      importSnapshot(data,replaceProgress=false) { return transaction(['sessions','recordings','backings','favorites'],'readwrite',(tx,set,abort)=>{
+        const counts={added:0,skipped:0};set(counts);
+        for(const name of ['sessions','recordings','backings','favorites']){
+          const store=tx.objectStore(name),key=name==='recordings'?'id':name==='backings'?'key':'videoId';
+          for(const value of data[name])store.get(value[key]).onsuccess=e=>{
+            try{
+              if(e.target.result && !(name==='sessions' && replaceProgress)){counts.skipped++;return;}
+              store.put(['recordings','backings'].includes(name)?{...value,imported:true}:value);counts.added++;
+            }catch(error){abort(error);}
+          };
+        }
+      }); },
+      library() { return transaction(['sessions','recordings','backings','favorites'],'readonly',(tx,set)=>{
+        const videos=new Map();let remaining=4;set([]);
         const item=id=>{if(!videos.has(id))videos.set(id,{videoId:id,title:'',updatedAt:0,recordings:0,recordingBytes:0,backings:0,backingBytes:0,start:0,activity:'speech'});return videos.get(id);};
-        for(const name of ['sessions','recordings','backings']){
+        for(const name of ['sessions','recordings','backings','favorites']){
           tx.objectStore(name).openCursor().onsuccess=event=>{
             const cursor=event.target.result;
             if(!cursor){if(--remaining===0)set([...videos.values()].sort((a,b)=>b.updatedAt-a.updatedAt));return;}
             const value=cursor.value,row=item(value.videoId);
-            if(name==='sessions'){row.title=value.title || '';row.start=value.start || 0;row.activity=value.activity || 'speech';row.hasSession=true;}
+            if(name==='favorites'){row.favorite=true;if(!row.title)row.title=value.title || '';}
+            else if(name==='sessions'){row.title=value.title || '';row.start=value.start || 0;row.activity=value.activity || 'speech';row.hasSession=true;}
             else if(name==='recordings'){row.recordings++;row.recordingBytes+=value.blob?.size || 0;}
             else {row.backings++;row.backingBytes+=value.blob?.size || 0;}
             row.updatedAt=Math.max(row.updatedAt,Number(value.updatedAt || value.createdAt)||0);

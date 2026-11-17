@@ -1,0 +1,63 @@
+const {test}=require('node:test');
+const assert=require('node:assert/strict');
+const {IDBFactory}=require('fake-indexeddb');
+const {createStorage}=require('../extension/storage.js');
+const pack=require('../extension/practice-package.js');
+function snapshot(){return {
+  sessions:[{videoId:'video',title:'中文 / 日本語 🎵',start:1,end:4,speed:'1',cues:[{key:'cue',start:1,end:4,text:'Hello 世界'}],assemblyChoices:[{start:1,end:4,choice:'take',enabled:true}],selectedTakeId:'take'}],
+  recordings:[{id:'take',videoId:'video',cueKey:'cue',start:1,end:4,speed:1,createdAt:1,blob:new Blob([new Uint8Array([0,255,17,18])],{type:'audio/webm'}),url:'blob:temporary'}],
+  backings:[{key:'background',videoId:'video',start:0,end:30,createdAt:1,blob:new Blob(['音乐'],{type:'audio/flac'})}],
+  favorites:[{videoId:'video',title:'收藏',createdAt:2}]
+};}
+test('practice pack preserves original audio bytes, Unicode, subtitles and assembly choices without temporary URLs',async()=>{
+  const source=snapshot(),file=pack.encode(source),restored=await pack.decode(file);
+  assert.deepEqual(restored.sessions,source.sessions);assert.deepEqual(restored.favorites,source.favorites);
+  for(const name of ['recordings','backings']){
+    assert.deepEqual(await restored[name][0].blob.arrayBuffer(),await source[name][0].blob.arrayBuffer());
+    assert.equal(restored[name][0].blob.type,source[name][0].blob.type);
+  }
+  assert.equal(restored.recordings[0].url,undefined);
+});
+test('truncated audio, appended garbage, unsupported versions, duplicate IDs and invalid captions are rejected',async()=>{
+  const file=pack.encode(snapshot());
+  await assert.rejects(pack.decode(file.slice(0,file.size-1)),/格式/);
+  await assert.rejects(pack.decode(new Blob([file,'extra'])),/格式/);
+  await assert.rejects(pack.decode(new Blob(['not a package'])),/格式/);
+  const bytes=new Uint8Array(await file.arrayBuffer());bytes[0]=0;await assert.rejects(pack.decode(new Blob([bytes])),/格式/);
+  const source=snapshot();source.recordings.push(source.recordings[0]);assert.throws(()=>pack.encode(source),/格式/);
+  source.recordings.pop();source.sessions[0].cues[0].text={bad:true};assert.throws(()=>pack.encode(source),/格式/);
+  const text=new TextEncoder().encode(JSON.stringify({format:'echo',version:2,data:{}})),size=new Uint8Array(4);new DataView(size.buffer).setUint32(0,text.length,true);
+  await assert.rejects(pack.decode(new Blob(['ECHOPACK1\n',size,text])),/格式/);
+});
+test('migration merges atomically and repeatedly without replacing current progress or media; optional progress overwrite is explicit',async()=>{
+  const source=createStorage(new IDBFactory()),dest=createStorage(new IDBFactory()),data=snapshot();
+  await source.saveSession(data.sessions[0]);await source.saveTake(data.recordings[0]);await source.saveBacking(data.backings[0]);await source.setFavorite(data.favorites[0]);
+  const decoded=await pack.decode(pack.encode(await source.snapshot()));
+  await dest.saveSession({videoId:'video',title:'Current',start:10,end:20});
+  assert.deepEqual(await dest.importSnapshot(decoded),{added:3,skipped:1});
+  assert.equal((await dest.getSession('video')).title,'Current');
+  assert.deepEqual(await dest.importSnapshot(decoded),{added:0,skipped:4});
+  assert.equal((await dest.listTakes('video')).length,1);
+  await dest.importSnapshot(decoded,true);assert.equal((await dest.getSession('video')).selectedTakeId,'take');
+  // Imported versions and backgrounds survive normal rolling-cache eviction.
+  for(let i=2;i<8;i++)await dest.saveTake({...data.recordings[0],id:String(i),createdAt:i});
+  assert.equal((await dest.listTakes('video')).length,4);assert((await dest.listTakes('video')).some(t=>t.id==='take'));
+  for(let i=2;i<12;i++)await dest.saveBacking({...data.backings[0],key:String(i),createdAt:i});
+  assert.equal((await dest.listBackings('video')).length,9);assert((await dest.listBackings('video')).some(t=>t.key==='background'));
+  const scoped=await dest.snapshot('missing');assert(Object.values(scoped).every(a=>a.length===0));
+  const noBackground=await dest.snapshot('video',false);assert.equal(noBackground.backings.length,0);assert(noBackground.recordings.length);
+  await dest.clearMedia('recordings','video');assert.equal((await dest.library())[0].favorite,true);
+  (await source.ready).close();(await dest.ready).close();
+});
+
+test('a write failure rolls back the entire import, including session and favorite writes',async()=>{
+  const storage=createStorage(new IDBFactory()),db=await storage.ready,original=db.transaction.bind(db);
+  db.transaction=(...args)=>{
+    const tx=original(...args),objectStore=tx.objectStore.bind(tx);
+    tx.objectStore=name=>{const store=objectStore(name);if(name==='recordings')store.put=()=>{throw Error('simulated quota failure');};return store;};
+    return tx;
+  };
+  await assert.rejects(storage.importSnapshot(snapshot()),/quota failure/);
+  db.transaction=original;
+  const data=await storage.snapshot();assert(Object.values(data).every(a=>a.length===0));db.close();
+});

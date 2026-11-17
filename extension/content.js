@@ -157,7 +157,8 @@
   let videoId = currentId();
   let savedTitle = '';
   const storage = EchoStorage.createStorage();
-  const library=EchoLibrary.attach({view:root,storage,doc:document,onChange:async()=>{
+  const library=EchoLibrary.attach({view:root,storage,doc:document,env:globalThis,onChange:async imported=>{
+    void refreshFavorite();if(imported && videoId){await loadVideo(videoId);return;}
     const id=videoId;if(!id)return;
     const values=await storage.listBackings(id);if(id!==videoId)return;
     savedBackings=values;deletedTake=null;$('undoDelete').hidden=true;
@@ -206,6 +207,46 @@
       if (next !== undefined) { event.preventDefault(); showPage(pageNames[next],true); }
     };
   });
+  let favorite=false,favoriteRequest=0,favoriteSaving=false;
+  function renderFavorite(){
+    $('favoriteVideo').textContent=favorite?'★ 已收藏':'☆ 收藏';$('favoriteVideo').setAttribute('aria-pressed',String(favorite));
+    $('favoriteVideo').disabled=mode!=='idle' || !videoId || favoriteSaving;
+  }
+  async function refreshFavorite(){
+    const id=videoId,request=++favoriteRequest;
+    try{const value=id?await storage.getFavorite(id):null;if(id===videoId && request===favoriteRequest){favorite=!!value;renderFavorite();}}
+    catch{if(id===videoId && request===favoriteRequest)status('收藏读取失败，请检查本地存储。');}
+  }
+  $('favoriteVideo').onclick=async()=>{
+    if(mode!=='idle' || !videoId || favoriteSaving)return;
+    const id=videoId;favoriteSaving=true;renderFavorite();
+    try{
+      if(favorite)await storage.deleteFavorite(id);
+      else await storage.setFavorite({videoId:id,title:currentVideoTitle() || savedTitle || id,createdAt:Date.now()});
+      if(id===videoId){await refreshFavorite();status(favorite?'已收藏视频，可在练习库「收藏」中找到。':'已取消收藏。');}
+    }catch(error){status(error.message || '收藏保存失败。');}
+    finally{favoriteSaving=false;renderFavorite();}
+  };
+  const tools=EchoPracticeTools.attach({view:root,doc:document,env:globalThis,recording:EchoRecording,meter:EchoLiveMeter,
+    getSettings:()=>({constraints:microphoneConstraints(),gainDb:gainPreferences[activity]?0:manualGainPreferences[activity],quality:recordingQuality,sidetone:sidetoneEnabled,sidetoneVolume,sidetoneMode,
+      description:`${$('inputDevice').selectedOptions?.[0]?.textContent || (inputDeviceId?'所选麦克风':'系统默认麦克风')} · ${isSinging()?'唱歌':'配音'} · ${gainPreferences[activity]?'自动增益':`增益 +${manualGainPreferences[activity]} dB`} · 回声消除${echoPreferences[activity]?'开':'关'} · 耳返${sidetoneEnabled?'开':'关'}`}),
+    onBeforeTest:()=>document.querySelector('video.html5-main-video')?.pause(),
+    onConfigure:()=>{showPage('practice');$('practiceSettings').open=true;$('practiceSettings').scrollIntoView?.({block:'start'});$('inputDevice').focus();},
+    onPreset:p=>{
+      if(mode!=='idle')return;
+      scopePreferences[activity]=$('practiceScope').value;backingPreferences[activity]=$('useBacking').checked;
+      activity=p.activity;scopePreferences[activity]=p.scope;backingPreferences[activity]=p.backing;
+      echoPreferences[activity]=p.echo;gainPreferences[activity]=p.gain;if(p.sidetone!==undefined)sidetoneEnabled=p.sidetone;
+      backingRestoreRequest++;restoringBacking=false;karaokeIssue='';
+      $('leadInMode').value=p.lead;$('leadInSeconds').value=3;
+      renderActivity();syncParagraphBounds();chooseCurrentTake();updateSummaries();controls();saveMicrophonePreferences();saveProgress();showPage('practice');
+      status('场景预设已应用，可继续调整设置或先试音。'+(p.backing?'录音前请先准备伴奏／背景音。':''));
+      if(p.backing)void restoreServerBacking();
+    }
+  });
+  $('openPresets').onclick=()=>{if(mode==='idle')tools.open('preset');};
+  $('openMicTest').onclick=()=>{if(mode==='idle')tools.open('mic');};
+  void refreshFavorite();
   $('openLanguageSettings').onclick=()=>{showPage('transcript',true);$('captionSettings').open=true;$('captionSettings').scrollIntoView?.({block:'start'});};
   $('backToPractice').onclick = () => showPage('practice',true);
   $('reviewReplay').onclick = () => playRecording(take);
@@ -473,7 +514,8 @@
       const covered=assemblyPlan.segments.reduce((sum,s)=>sum+s.end-s.start,0);
       $('assemblyInfo').textContent=`${EchoPractice.recordingQueue(voices).length} 段独立人声 · 已选 ${covered.toFixed(1)} / ${assemblyPlan.duration.toFixed(1)} 秒。`;
     }
-    $('activityMode').hidden=recording;
+    $('activityMode').hidden=recording;$('prepActions').hidden=recording;
+    for(const id of ['openPresets','openMicTest'])$(id).disabled=mode!=='idle';renderFavorite();
     $('scopeControls').hidden=recording;
     $('wholeScopeHint').hidden=$('practiceScope').value!=='whole';
     $('paragraphSelection').hidden=!isParagraph();$('paragraphScopeOption').disabled=cues.length<2;
@@ -829,7 +871,8 @@
   }
   async function keepBacking(value) {
     value={...value,model:EchoKaraoke.modelOf(value)};
-    savedBackings=[value,...savedBackings.filter(old=>old.key!==value.key)].slice(0,8);
+    let recent=0;
+    savedBackings=[value,...savedBackings.filter(old=>old.key!==value.key)].filter(old=>old.imported || recent++<8);
     try{await storage.saveBacking(value);return true;}
     catch{if(value.videoId===videoId)status('伴奏可以使用，但本地保存失败；刷新后可能需要从本机服务重新取回。');return false;}
   }
@@ -1457,16 +1500,27 @@
     });
     if (token === generation) { finish(); status('自动跟读完成。可以重练或下载这次录音。'); }
   });
-  $('close').onclick = () => { library.close(true);closeWord(); stop(); host.style.display = 'none'; };
+  $('close').onclick = () => { tools.close();library.close(true);closeWord(); stop(); host.style.display = 'none'; };
   root.addEventListener('keydown',event=>{
     if(event.key!=='Escape')return;
     event.preventDefault();event.stopPropagation();
+    if(tools.isOpen()){tools.close();return;}
     if(assembly.isOpen()){assembly.close();return;}
     if(models.isOpen()){models.close();return;}
     if(library.isOpen()){library.escape();return;}
     if(!$('wordcard').hidden)closeWord();
     else if(mode!=='idle')stop();
     else $('close').click();
+  });
+  // Modified shortcuts leave YouTube's unmodified playback keys untouched.
+  document.addEventListener('keydown',event=>{
+    if(host.style.display==='none' || assembly.isOpen() || models.isOpen() || library.isOpen() || tools.isOpen())return;
+    if(event.key==='Escape' && mode!=='idle'){event.preventDefault();event.stopPropagation();stop();return;}
+    const action=EchoPracticeTools.shortcut(event);if(!action)return;
+    if(action==='help'){if(mode!=='idle')return;event.preventDefault();event.stopPropagation();tools.open('help');return;}
+    const target=action==='record' && ['recording','lead-in'].includes(mode)?$('stop'):$(action);
+    if(!target || target.disabled || target.hidden)return;
+    event.preventDefault();event.stopPropagation();target.click();
   });
   $('hideText').onchange = () => { updateCaption(); $('list').style.display = $('hideText').checked ? 'none' : ''; saveProgress(); };
   $('prev').onclick = () => select(index - 1,true); $('next').onclick = () => select(index + 1,true);
@@ -1563,8 +1617,9 @@
     }finally{if(token===generation){mode='idle';controls();}}
   });
   $('search').onclick = () => { window.open(`https://www.youtube.com/results?search_query=${encodeURIComponent($('query').value || ({'zh':'中文 歌词','ja':'日本語 字幕 歌詞','ko':'한국어 자막 가사','en':'english conversation subtitles'}[contentLanguage()] || 'subtitles lyrics'))}`, '_blank', 'noopener'); };
-  chrome.runtime.onMessage.addListener(message => { if (message.type === 'echo-toggle') { const open = host.style.display === 'none'; host.style.display = open ? 'block' : 'none'; if (!open) {library.close(true);stop();} } });
+  chrome.runtime.onMessage.addListener(message => { if (message.type === 'echo-toggle') { const open = host.style.display === 'none'; host.style.display = open ? 'block' : 'none'; if (!open) {tools.close();library.close(true);stop();} } });
   function resetVideo(id) {
+    tools.close();favorite=false;favoriteRequest++;
     library.close(true);
     stop();
     recordingSession=null;
@@ -1589,7 +1644,7 @@
     $('useBacking').checked = false;
     $('karaokeInfo').textContent = '已切换视频，请为新片段生成伴奏。';
     restoring = true;
-    videoId = id;
+    videoId = id;void refreshFavorite();
     savedTitle = '';
     historyRequest++;
     videoHistory = [];
@@ -1609,7 +1664,7 @@
     if (id) void loadVideo(id);
     else restoring = false;
   });
-  window.addEventListener('pagehide',()=>{inputDeviceRequest++;globalThis.navigator?.mediaDevices?.removeEventListener?.('devicechange',onInputDevicesChanged);saveProgress();library.close(true);stop();detachCaptionVideo();});
+  window.addEventListener('pagehide',()=>{inputDeviceRequest++;globalThis.navigator?.mediaDevices?.removeEventListener?.('devicechange',onInputDevicesChanged);saveProgress();tools.close();library.close(true);stop();detachCaptionVideo();});
   // Restore once; changing activities must not reset the user's expanded sections.
   const foldPreferenceKey='echo-folds-v1';
   let foldPreferences={};
