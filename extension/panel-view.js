@@ -84,13 +84,13 @@
     .pages[data-spacious="true"] .caption{font-size:26px;line-height:1.7}
     .panel[data-mode="idle"] .pages[data-spacious="true"] .caption-context{display:-webkit-box}
     .pages[data-spacious="true"] .cue-card{padding:14px}
-    .caption-surrounding{color:#a5bdc8;font-size:13px;line-height:1.6;opacity:.6;flex-shrink:0}
-    .caption-surrounding-line{white-space:nowrap;overflow:hidden;text-overflow:ellipsis;padding:3px 0}
+    .caption-surrounding{color:#a5bdc8;font-size:16px;line-height:1.5;opacity:.7;flex-shrink:0}
+    .caption-surrounding-line{white-space:nowrap;overflow:hidden;text-overflow:ellipsis;padding:2px 0}
     #captionLater{margin-top:-8px;margin-bottom:10px}
     .pages:not([data-spacious="true"]) .caption-surrounding{display:none}
-    .pages[data-spacious="true"] .caption-context{-webkit-line-clamp:1;max-height:22px;min-height:0;margin:4px 0}.pages[data-spacious="true"] #captionNext{margin-bottom:8px}
+    .pages[data-spacious="true"] .caption-context{font-size:17px;line-height:1.5;-webkit-line-clamp:1;max-height:26px;min-height:0;margin:4px 0}.pages[data-spacious="true"] #captionNext{margin-bottom:8px}
     .panel:not([data-mode="idle"]) .pages:not([data-spacious="true"]) .caption{min-height:40px;padding:6px 0}
-    .panel:not([data-mode="idle"]) .pages:not([data-spacious="true"]) .caption-context{font-size:12px;margin:4px 0;min-height:0;max-height:21px;-webkit-line-clamp:1}
+    .panel:not([data-mode="idle"]) .pages:not([data-spacious="true"]) .caption-context{font-size:14px;margin:4px 0;min-height:0;max-height:22px;-webkit-line-clamp:1}
     .panel:not([data-mode="idle"]) .pages:not([data-spacious="true"]) #captionNext{margin-bottom:8px}
     .panel[data-mode="recording"] .live-meter canvas{height:48px}
     #singDetails:not([hidden]){flex-shrink:0;margin-top:10px}

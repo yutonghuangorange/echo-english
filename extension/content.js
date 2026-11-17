@@ -17,7 +17,7 @@
     const height=practiceAvailableHeight;
     $('pages').dataset.spacious=String(height>=340);
     const occupied=['scopeControls','clipBounds','singDetails'].reduce((sum,id)=>sum+($(id).hidden?0:($(id).getBoundingClientRect?.().height || 0)),0);
-    const count=height>=340?Math.max(1,Math.min(5,1+Math.floor((height-occupied-230)/52))):1;
+    const count=height>=340?Math.max(1,Math.min(5,1+Math.floor((height-occupied-240)/60))):1;
     if(count!==captionContextCount){captionContextCount=count;renderCaptionContext(displayedCaptionIndex);}
   }):null;
   for(const id of ['pages','scopeControls','clipBounds','singDetails'])practiceLayoutObserver?.observe($(id));
