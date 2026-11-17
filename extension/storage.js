@@ -3,9 +3,10 @@
   const {cueKey} = typeof module !== 'undefined' ? require('./selection.js') : root.EchoSelection;
   function createStorage(factory = root.indexedDB, name = 'echo-dubbing-v1') {
     const ready = new Promise((resolve,reject) => {
-      const request = factory.open(name,5);
+      const request = factory.open(name,6);
       request.onupgradeneeded = () => {
         const db = request.result, tx = request.transaction;
+        if (!db.objectStoreNames.contains('captionDrafts')) db.createObjectStore('captionDrafts',{keyPath:'videoId'});
         if (!db.objectStoreNames.contains('sessions')) db.createObjectStore('sessions',{keyPath:'videoId'});
         if (!db.objectStoreNames.contains('favorites')) db.createObjectStore('favorites',{keyPath:'videoId'});
         if (!db.objectStoreNames.contains('backings')) {
@@ -51,6 +52,8 @@
     }
     return {
       ready,
+      saveCaptionDraft(value) { return transaction(['captionDrafts'],'readwrite',tx=>tx.objectStore('captionDrafts').put(value)); },
+      getCaptionDraft(videoId) { return transaction(['captionDrafts'],'readonly',(tx,set)=>{tx.objectStore('captionDrafts').get(videoId).onsuccess=e=>set(e.target.result);}); },
       saveSession(value) { return transaction(['sessions'],'readwrite',tx=>tx.objectStore('sessions').put(value)); },
       getSession(videoId) { return transaction(['sessions'],'readonly',(tx,set)=>{tx.objectStore('sessions').get(videoId).onsuccess=e=>set(e.target.result);}); },
       listBackings(videoId) { return transaction(['backings'],'readonly',(tx,set)=>{tx.objectStore('backings').index('videoId').getAll(videoId).onsuccess=e=>set(e.target.result.sort((a,b)=>b.createdAt-a.createdAt));}); },

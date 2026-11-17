@@ -229,6 +229,36 @@
     if(section==='captions' && captionAvailability==='unknown' && mode==='idle')void $('refreshCaptionTracks').onclick();
   }});
   $('backingSettings').onclick=()=>{if(mode==='idle')settings.open('backing','backingSettings');};
+  // Lazy editor initialization keeps lists, media listeners and timers out of
+  // the practice/recording path. Drafts live separately from session progress.
+  let subtitleEditor=null,editorRequest=0,editorVideoId='';
+  function closeSubtitleEditor(){editorRequest++;subtitleEditor?.close();}
+  async function openSubtitleEditor(){
+    if(mode!=='idle')return;
+    const id=videoId,token=generation,request=++editorRequest;
+    try{
+      const v=video();if(!Number.isFinite(v.duration) || v.duration<=0)throw Error('请等待视频时长加载后再编辑字幕。');
+      const saved=await storage.getCaptionDraft(id);
+      if(id!==videoId || request!==editorRequest || token!==generation || mode!=='idle')return;
+      if(!subtitleEditor)subtitleEditor=EchoSubtitleEditorView.attach({view:root,doc:document,env:globalThis,
+        onDraft:(draftId,draft)=>storage.saveCaptionDraft({videoId:draftId,draft,updatedAt:Date.now()}),
+        onApply:async next=>{
+          if(editorVideoId!==videoId || mode!=='idle')throw Error('视频或练习状态已变化，请重新打开编辑器。');
+          const appliedVideoId=videoId;
+          loadedCaptionSource='手动编辑的字幕';renderCaptionSources();
+          if(next.length<2 && isParagraph()){$('practiceScope').value='clip';scopePreferences[activity]='clip';}
+          displayCues(next);showPage('transcript');
+          if(await saveProgress()===false)throw Error('字幕已应用，但主界面保存失败。请先导出字幕保留。');
+          if(appliedVideoId!==videoId)return;
+          status(`已载入 ${next.length} 句编辑后的字幕；已有录音与录制时间保留。`);
+        },
+        onExport:(text,format)=>downloadAudio(new Blob([text],{type:format==='vtt'?'text/vtt;charset=utf-8':'application/x-subrip;charset=utf-8'}),EchoAudioExport.filename({title:currentVideoTitle(),videoId,kind:'subtitles',extension:format})),
+        onClose:()=>{controls();updateCaption();$('openSubtitleEditor').focus();}
+      });
+      editorVideoId=id;subtitleEditor.open({videoId:id,video:v,cues,draft:saved?.draft});
+    }catch(error){status(error.message || '编辑器无法打开，请重试。');}
+  }
+  $('openSubtitleEditor').onclick=$('createLyrics').onclick=openSubtitleEditor;
   $('practiceTools').onclick=()=>{if(mode==='idle')settings.open('practice','practiceTools');};
   $('settingsStop').onclick=()=>stop();
   $('practiceSettings').onclick=()=>{if(mode==='idle')settings.open('microphone','practiceSettings');};
@@ -608,7 +638,7 @@
     $('karaokeSettings').hidden=recording;
     $('backingOption').hidden=recording;
     for(const id of ['practiceTools','backingSettings','practiceSettings','quickSpeed'])$(id).hidden=recording;
-    for(const id of ['practiceTools','backingSettings','practiceSettings','captionSettings','openBacking','adjustClipBounds'])$(id).disabled=busy;
+    for(const id of ['practiceTools','backingSettings','practiceSettings','captionSettings','openBacking','adjustClipBounds','openSubtitleEditor','createLyrics'])$(id).disabled=busy;
     $('captionSetup').hidden=recording || cues.length>0;
     $('clipBounds').hidden=recording || $('practiceScope').value!=='clip';
     syncClipSelection();
@@ -660,7 +690,7 @@
   }
   function finish() { cancelPlayback(); restoreVideo(); mode = 'idle'; controls(); }
   function stop() {
-    const previous=mode;assembly.close();
+    const previous=mode;closeSubtitleEditor();assembly.close();
     window.speechSynthesis?.cancel();
     if (mode === 'loading') restoring = false;
     if (mode === 'reading') status('已停止读取台词。');
@@ -778,8 +808,9 @@
     const title=currentVideoTitle();
     scopePreferences[activity]=$('practiceScope').value;
     const session = {clipRangeAdjusted,qualityPreferences:{...qualityPreferences},modelPreferences:{...modelPreferences},title:title || videoId,scopes:{...scopePreferences},assemblyChoices,loopCount:$('loopCount').value,prepSeconds:$('prepSeconds').value,autoNext:$('autoNext').checked,leadInMode:$('leadInMode').value,leadInSeconds:EchoPractice.leadInSeconds($('leadInSeconds').value),activity,paragraphFirst,paragraphLast,useBacking:$('useBacking').checked,backingPreferences:{...backingPreferences,[activity]:$('useBacking').checked},captionSource,captionSourceName,loadedCaptionSource,replayVocalVolume:replayMix().vocal,replayBackingVolume:replayMix().backing,replayWithBacking:$('replayWithBacking').checked,backingVolume:Number($('backingVolume').value),contentLanguage:$('contentLanguage').value,captionLayout:$('captionLayout').value,videoId,cues:cues.map(c=>({...c})),index,start,end,speed:$('speed').value,showChinese:$('showChinese').checked,hideText:$('hideText').checked,followCaptions:$('followCaptions').checked,selectedTakeId:take?.id,updatedAt:Date.now()};
-    void storage.saveSession(session).catch(()=>{
+    return storage.saveSession(session).catch(()=>{
       if (!progressWarning && session.videoId === videoId) { progressWarning=true; status('练习位置未能保存，请检查本地存储空间。录音仍可下载。'); }
+      return false;
     });
   }
   function recordingText(value) {
@@ -1485,7 +1516,7 @@
   }
   function onCaptionTime(event) {syncCaptions(event?.type==='seeking' || event?.type==='seeked');}
   function syncCaptions(force=false) {
-    if(!$('followCaptions').checked || !captionVideo || !cues.length)return;
+    if(subtitleEditor?.isOpen() || !$('followCaptions').checked || !captionVideo || !cues.length)return;
     if(!force && captionVideo.paused!==false && !['recording','replay','original','backing','practice','loop','compare'].includes(mode))return;
     const state=EchoPractice.captionFrame(cues,captionVideo.currentTime);
     const signature=`${state.index}:${state.phase}`;
@@ -1618,6 +1649,7 @@
   root.addEventListener('keydown',event=>{
     if(event.key!=='Escape')return;
     event.preventDefault();event.stopPropagation();
+    if(subtitleEditor?.isOpen()){subtitleEditor.close();return;}
     if(tools.isOpen()){tools.close();return;}
     if(assembly.isOpen()){assembly.close();return;}
     if(models.isOpen()){models.close();return;}
@@ -1630,7 +1662,7 @@
   });
   // Modified shortcuts leave YouTube's unmodified playback keys untouched.
   document.addEventListener('keydown',event=>{
-    if(host.style.display==='none' || assembly.isOpen() || models.isOpen() || library.isOpen() || tools.isOpen() || settings.isOpen() || clipDialog.open)return;
+    if(host.style.display==='none' || subtitleEditor?.isOpen() || assembly.isOpen() || models.isOpen() || library.isOpen() || tools.isOpen() || settings.isOpen() || clipDialog.open)return;
     if(event.key==='Escape' && mode!=='idle'){event.preventDefault();event.stopPropagation();stop();return;}
     const action=EchoPracticeTools.shortcut(event);if(!action)return;
     if(action==='help'){if(mode!=='idle')return;event.preventDefault();event.stopPropagation();tools.open('help');return;}
@@ -1673,6 +1705,7 @@
     $('captionSource').value=captionSource;
     const loaded=loadedCaptionSource?`已加载：${loadedCaptionSource}。现有字幕和录音仍保留。`:'';
     $('captionSourceInfo').textContent=captionAvailability==='unavailable'?`${noAutomaticCaptions}${loaded}`:loaded || '可刷新语言后选择字幕。内容语言只影响文本处理。';
+    $('createLyrics').hidden=captionAvailability!=='unavailable';
     $('practiceSetup').textContent=captionAvailability==='unavailable'?noAutomaticCaptions:'先读取或导入字幕，也可直接设置练习范围。';
     $('transcriptEmpty').textContent=captionAvailability==='unavailable'?noAutomaticCaptions:'还没有台词。点击上方按钮读取。';
     $('read').textContent=captionAvailability==='unavailable'?'重新检测字幕':'读取台词';

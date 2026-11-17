@@ -98,3 +98,8 @@ test('manual assembly uses the selected older version and keeps excluded time si
   assert.throws(()=>selectionPlan([old],5,[{start:0,end:5,takeId:'old'}]),/未覆盖/);
   assert.throws(()=>selectionPlan([old],4,[{start:0,end:1,takeId:'missing'}]),/不存在/);
 });
+
+test('subtitle export filenames use the shared safe video title with explicit SRT and VTT extensions',()=>{
+  const {filename}=require('../extension/audio-export.js');
+  for(const extension of ['srt','vtt'])assert.equal(filename({title:'My / Song',kind:'subtitles',extension}),`My Song_字幕.${extension}`);
+});

@@ -36,7 +36,7 @@ async function mount(storage, overrides = {}) {
   doc.title=overrides.title || '';
   const context={document:doc,location:{href:'https://www.youtube.com/watch?v=video',pathname:'/watch'},indexedDB:{},URL,Blob,console,setTimeout,clearTimeout,cancelAnimationFrame(){},requestAnimationFrame(){},crypto:globalThis.crypto,
     window:{addEventListener(){},speechSynthesis:{cancel(){}}},chrome:{runtime:{onMessage:{addListener(){}}}},
-    EchoSettingsDialog:require('../extension/settings-dialog.js'),EchoPracticeTools:require('../extension/practice-tools.js'),EchoCaptionTracks:require('../extension/caption-tracks.js'),EchoPanelView:require('../extension/panel-view.js'),EchoTransport:require('../extension/transport.js'),EchoPlayback:require('../extension/playback.js'),
+    EchoSubtitleEditor:require('../extension/subtitle-editor.js'),EchoSubtitleEditorView:require('../extension/subtitle-editor-view.js'),EchoSettingsDialog:require('../extension/settings-dialog.js'),EchoPracticeTools:require('../extension/practice-tools.js'),EchoCaptionTracks:require('../extension/caption-tracks.js'),EchoPanelView:require('../extension/panel-view.js'),EchoTransport:require('../extension/transport.js'),EchoPlayback:require('../extension/playback.js'),
     EchoAudioExport:require('../extension/audio-export.js'),EchoAssembly:require('../extension/assembly.js'),EchoPanelSize:require('../extension/panel-size.js'),EchoLanguages:require('../extension/languages.js'),EchoKaraoke:require('../extension/karaoke.js'),EchoStorage:{...require('../extension/storage.js'),createStorage:()=>storage},EchoSelection:require('../extension/selection.js'),EchoPractice:require('../extension/practice.js'),EchoDictionary:require('../extension/dictionary.js'),EchoSubtitles:require('../extension/subtitles.js'),EchoLibrary:require('../extension/library.js'),EchoModels:require('../extension/models.js'),EchoLiveMeter:require('../extension/live-meter.js'),EchoRecording:require('../extension/recording.js'),EchoMicrophone:require('../extension/microphone.js'),EchoAudioAnalysis:require('../extension/audio-analysis.js')};
   Object.assign(context,overrides.globals || {});
   // Existing UI fixtures provide a caption transport; integration fixtures can
@@ -1979,5 +1979,18 @@ test('an existing visible transcript is usable even when the caption API lists n
   const storage=createStorage(new IDBFactory());let polls=0;
   const {nodes}=await mount(storage,{globals:{EchoTranscript:{readRows:()=>[{start:0,end:2,text:'Visible words'}],async read(){polls++;return [{start:0,end:2,text:'Visible words'}];}},chrome:{runtime:{onMessage:{addListener(){}},async sendMessage(){return {tracks:[]};}}}}});
   await nodes.get('read').onclick();assert.equal(polls,1);assert.match(nodes.get('status').textContent,/已读取 1/);assert.doesNotMatch(nodes.get('captionSourceInfo').textContent || '',/自动载入字幕不可用/);
+  (await storage.ready).close();
+});
+
+test('subtitle editor is initialized on demand, loads drafts and applies stable caption keys without changing recordings',async()=>{
+  const storage=createStorage(new IDBFactory());let config,opened,closed=false,init=0;
+  await storage.saveSession({videoId:'video',start:0,end:3,cues:[{start:0,end:3,text:'Original',key:'stable-cue'}],index:0});
+  await storage.saveTake({id:'keep-recording',videoId:'video',start:0,end:3,speed:1,cueKey:'stable-cue',blob:new Blob(['voice'])});
+  await storage.saveCaptionDraft({videoId:'video',draft:{cues:[{start:0,end:4,text:'Draft',key:'stable-cue'}]}});
+  const {nodes,events}=await mount(storage,{video:{duration:60},globals:{EchoSubtitleEditorView:{attach(options){init++;config=options;return {open(value){opened=value;closed=false;},close(){closed=true;options.onClose();},isOpen(){return !!opened && !closed;}};}}}});
+  assert.equal(init,0);await nodes.get('openSubtitleEditor').onclick();assert.equal(init,1);assert.equal(opened.draft.cues[0].text,'Draft');
+  await config.onApply([{start:1,end:4,text:'Edited',key:'stable-cue'}]);
+  const session=await storage.getSession('video');assert.equal(session.cues[0].key,'stable-cue');assert.equal(session.cues[0].start,1);assert.equal((await storage.listTakes('video'))[0].start,0);
+  assert.match(nodes.get('status').textContent,/已载入 1/);nodes.get('close').onclick();assert.equal(closed,true);
   (await storage.ready).close();
 });

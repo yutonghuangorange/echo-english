@@ -101,3 +101,12 @@ test('clearing accompaniment never deletes recordings or progress; recordings ca
   await storage.clearMedia('backings');assert.equal((await storage.listBackings('two')).length,0);
   await assert.rejects(storage.clearMedia('sessions'),/无效/);(await storage.ready).close();
 });
+
+test('subtitle editor drafts persist independently from progress saves and never rewrite recording data',async()=>{
+  const factory=new IDBFactory(),storage=createStorage(factory);
+  await storage.saveTake(take('1'));await storage.saveSession({videoId:'video',start:1,end:3,cues:[{start:1,end:3,text:'Original'}]});
+  const draft={videoId:'video',draft:{cues:[{start:2,end:4,text:'Edited draft'}],original:[{start:1,end:3,text:'Original'}]}};
+  await storage.saveCaptionDraft(draft);await storage.saveSession({videoId:'video',start:2,end:4,cues:[]});
+  assert.deepEqual(await storage.getCaptionDraft('video'),draft);assert.equal((await storage.listTakes('video'))[0].start,1);assert.equal(await storage.getCaptionDraft('another'),undefined);
+  (await storage.ready).close();const restored=createStorage(factory);assert.deepEqual(await restored.getCaptionDraft('video'),draft);(await restored.ready).close();
+});
