@@ -45,4 +45,4 @@ jobs:
           npm test
           .venv/bin/python -m unittest discover -s karaoke -p 'test_*.py'
       - name: Separate synthetic audio with the production CPU worker
-        run: .venv/bin/python karaoke/smoke_test.py
+        run: .venv/bin/python karaoke/smoke_test.py --launcher
