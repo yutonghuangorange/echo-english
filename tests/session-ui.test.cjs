@@ -1262,17 +1262,17 @@ test('fold preferences survive mode changes and remount without breaking setting
   const localStorage={getItem:key=>preferences.get(key) || null,setItem:(key,value)=>preferences.set(key,value)};
   const globals={window:{localStorage,addEventListener(){},speechSynthesis:{cancel(){}}}};
   const {nodes}=await mount(storage,{globals});
-  nodes.get('clipSettings').open=true;nodes.get('clipSettings').dispatchEvent({type:'toggle'});
+  nodes.get('mixControls').open=true;nodes.get('mixControls').dispatchEvent({type:'toggle'});
   nodes.get('recordingDetails').open=false;nodes.get('recordingDetails').dispatchEvent({type:'toggle'});
   nodes.get('activityMode').value='sing';nodes.get('activityMode').onchange();
-  assert.equal(nodes.get('clipSettings').open,true);assert.equal(nodes.get('recordingDetails').open,false);
+  assert.equal(nodes.get('mixControls').open,true);assert.equal(nodes.get('recordingDetails').open,false);
   nodes.get('leadInMode').value='seconds';nodes.get('leadInMode').onchange();
   nodes.get('leadInSeconds').value=5;nodes.get('leadInSeconds').onchange();
   assert.match(nodes.get('practiceToolsState').textContent,/前置 5 秒.*循环 3 次/);
   nodes.get('manualGainDb').value=6;nodes.get('manualGainDb').oninput();
   assert.match(nodes.get('speedSummary').textContent,/增益 \+6 dB/);
   const restored=await mount(storage,{globals});
-  assert.equal(restored.nodes.get('clipSettings').open,true);
+  assert.equal(restored.nodes.get('mixControls').open,true);
   assert.equal(restored.nodes.get('recordingDetails').open,false);
   (await storage.ready).close();
 });
@@ -1739,13 +1739,32 @@ test('preparation and automatic-practice actions share a settings pane and retur
 test('fixed practice tools keep time adjustment and top-level preparation tools reachable without changing pages',async()=>{
   const storage=createStorage(new IDBFactory()),{nodes,root}=await mount(storage);
   assert.equal(nodes.get('practiceUtilities').hidden,false);assert.equal(nodes.get('quickSpeed').hidden,false);
-  nodes.get('adjustClipBounds').onclick();assert.equal(nodes.get('settingsDialog').open,true);assert.equal(nodes.get('settings-practice').hidden,false);assert.equal(nodes.get('clipSettings').open,true);
+  nodes.get('adjustClipBounds').onclick();assert.equal(nodes.get('clipDialog').open,true);assert.ok(!nodes.get('settingsDialog').open);
   nodes.get('start').value='1';nodes.get('end').value='4';nodes.get('end').onchange();
   let returned=0;nodes.get('openPreparation').focus=()=>returned++;
-  nodes.get('closeSettings').onclick();nodes.get('openPreparation').onclick();assert.equal(nodes.get('toolsDialog').open,true);
-  root.onkeydown({key:'Escape',preventDefault(){},stopPropagation(){}});assert.equal(nodes.get('toolsDialog').open,false);assert.equal(nodes.get('settingsDialog').open,false);assert.equal(returned,1);
+  nodes.get('doneClipDialog').onclick();assert.equal(nodes.get('clipDialog').open,false);nodes.get('openPreparation').onclick();assert.equal(nodes.get('toolsDialog').open,true);
+  root.onkeydown({key:'Escape',preventDefault(){},stopPropagation(){}});assert.equal(nodes.get('toolsDialog').open,false);assert.ok(!nodes.get('settingsDialog').open);assert.equal(returned,1);
   assert.equal(nodes.get('page-practice').hidden,false);assert.match(nodes.get('clipSummary').textContent,/1.0–4.0/);
   nodes.get('tab-recordings').onclick();assert.equal(nodes.get('practiceUtilities').hidden,true);
   nodes.get('tab-practice').onclick();assert.equal(nodes.get('practiceUtilities').hidden,false);
   await new Promise(r=>setTimeout(r,5));assert.equal((await storage.getSession('video')).end,4);(await storage.ready).close();
+});
+
+
+test('standalone clip editor restores focus, blocks practice shortcuts and closes with the panel',async()=>{
+  const storage=createStorage(new IDBFactory()),{nodes,root,events}=await mount(storage);
+  let returned=0,recorded=0;
+  nodes.get('adjustClipBounds').focus=()=>returned++;
+  nodes.get('record').onclick=()=>recorded++;
+  nodes.get('adjustClipBounds').onclick();
+  events.get('keydown')({key:'r',altKey:true,shiftKey:true,preventDefault(){},stopPropagation(){}});
+  assert.equal(recorded,0);
+  root.onkeydown({key:'Escape',preventDefault(){},stopPropagation(){}});
+  assert.equal(nodes.get('clipDialog').open,false);assert.equal(returned,1);
+  nodes.get('adjustClipBounds').onclick();
+  nodes.get('endLater').onclick();
+  assert.match(nodes.get('clipSummary').textContent,/5.2/);
+  nodes.get('close').onclick();assert.equal(nodes.get('clipDialog').open,false);
+  await new Promise(r=>setTimeout(r,5));assert.equal((await storage.getSession('video')).end,5.2);
+  (await storage.ready).close();
 });
