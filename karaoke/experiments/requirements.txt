@@ -1,20 +1,2 @@
-# Inference-only overlay tested with the existing Linux CPU karaoke environment.
-# Install with --target and --no-deps; see CINEMATIC_EVALUATION.md.
-pytorch-lightning==2.4.0
-torchmetrics==1.4.2
-lightning-utilities==0.11.9
-packaging==26.3
-librosa==0.10.2.post1
-scipy==1.13.1
-numba==0.60.0
-llvmlite==0.43.0
-scikit-learn==1.5.2
-joblib==1.6.0
-threadpoolctl==3.8.0
-soxr==1.1.0
-msgpack==1.2.4
-lazy_loader==0.6
-pooch==1.9.0
-platformdirs==4.14.5
-decorator==5.3.1
-audioread==3.1.0
+# Reuse the production inference-only overlay.
+-r ../bandit-requirements.txt

@@ -122,6 +122,8 @@ class ModelManager:
                 models.append(dict(id=model, name=name, purpose=purpose, ready=ready,
                     state=job["state"] if job else "ready" if ready else "missing",
                     error=self.errors.get(model), weightBytes=path.stat().st_size if path.is_file() else 0,
+                    partialBytes=path.with_suffix(path.suffix + ".part").stat().st_size
+                    if path.with_suffix(path.suffix + ".part").is_file() else 0,
                     downloadBytes=size, progress=job.get("progress") if job else None,
                     downloadedBytes=job.get("downloadedBytes", 0) if job else 0,
                     deviceNote="CUDA / CPU；Mac 暂用 CPU" if model == BANDIT_MODEL else "CUDA / Apple MPS / CPU",

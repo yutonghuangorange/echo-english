@@ -108,4 +108,4 @@ python3 -m unittest discover -s karaoke -p test_server.py
 
 `Jobs` 与 `ModelManager` 共用锁，只能有一个安装或分离任务；管理接口在锁内拒绝与音频任务冲突的操作。安装在后台线程运行，HTTP 立即返回，取消复用事件与工作子进程树清理。就绪状态来自权重 SHA-256、固定源码版本与成功导入后的依赖标记，不能由扩展写入。权重原子下载，`.part` 断点续传；额外依赖通过临时目录安装并检查后发布，基础环境保持独立。
 
-Demucs 缓存沿用旧 key，只有非默认模型增加 model 字段参与 key；服务元数据与浏览器音频均保存 model。录音的 backingModel 决定回听、导出所用背景音，不追随用户后来切换的模型。下载、转换、压缩、缓存、取消与 GPU 失败回退共用 Jobs 流程，BandIt 仅替换模型工作命令与输入采样率。
+Demucs 缓存沿用旧 key，只有非默认模型增加 model 字段参与 key；服务元数据与浏览器音频均保存 model；BandIt 使用 v2 元数据，使旧版服务跳过其结果，避免降级后误读为 Demucs。录音的 backingModel 决定回听、导出所用背景音，不追随用户后来切换的模型。下载、转换、压缩、缓存、取消与 GPU 失败回退共用 Jobs 流程，BandIt 仅替换模型工作命令与输入采样率。

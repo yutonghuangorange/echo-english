@@ -172,7 +172,7 @@ Apple 芯片固定使用 PyTorch / TorchAudio 2.6.0，以修复 [2.5.1 的 MPS �
 | Demucs htdemucs | 歌曲伴奏；通用背景音 | 80.2 MiB | 复用基础环境 | CPU / NVIDIA CUDA / Apple MPS |
 | BandIt v2 multi-language | 电影对白与音乐、音效分离 | 426 MiB | 约 363 MiB（文件系统占用约 381 MiB，因平台而异） | CPU / NVIDIA CUDA；Mac 暂用 CPU |
 
-BandIt 建议额外预留 2 GiB（含下载、安装临时文件和处理中间音频），整机建议 16 GiB RAM。不是歌曲分离质量升级的保证；电影结果也可能残留对白或损失音效。支持与 Demucs 相同的最长 10 分钟，采用 8 秒窗口 / 4 秒重叠、单窗口推理及流式拼接，避免整段预测留在显存。CPU 处理可能很慢；服务单阶段超时为一小时。显式 `--device mps` 不适用于 BandIt，请使用 `auto` 或 `cpu`；`auto` 下 Mac 的 BandIt 使用 CPU，Demucs 仍可使用 MPS。
+BandIt 建议额外预留 2 GiB（含下载、安装临时文件和处理中间音频），整机建议 16 GiB RAM。不是歌曲分离质量升级的保证；电影结果也可能残留对白或损失音效。支持与 Demucs 相同的最长 10 分钟，采用 8 秒窗口 / 4 秒重叠、单窗口推理及流式拼接，避免整段预测留在显存。CPU 处理可能很慢；Demucs 分离超时为一小时，BandIt 为两小时。显式 `--device mps` 不适用于 BandIt，请使用 `auto` 或 `cpu`；`auto` 下 Mac 的 BandIt 使用 CPU，Demucs 仍可使用 MPS。
 
 模型、依赖由 Python 服务执行固定来源安装，扩展不能指定下载地址、包名或文件路径：
 

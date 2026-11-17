@@ -1443,3 +1443,13 @@ test('install-and-extract sends the selected model and saves a matching backgrou
   assert.equal(nodes.get('previewBacking').disabled,false);
   (await storage.ready).close();
 });
+
+test('Mac service display reflects CPU for BandIt and MPS for Demucs',async()=>{
+  const storage=createStorage(new IDBFactory());
+  await storage.saveSession({videoId:'video',activity:'speech',start:0,end:5,useBacking:true,modelPreferences:{speech:'bandit-v2-multi'},cues:[],index:-1});
+  const {nodes}=await mount(storage,{health:()=>({service:'echo-karaoke',maxSeconds:600,device:'mps',deviceName:'Apple GPU'}),globals:{chrome:{runtime:{onMessage:{addListener(){}},async sendMessage(){return {};}}}}});
+  await nodes.get('checkKaraoke').onclick();assert.match(nodes.get('karaokeService').textContent,/CPU（BandIt）/);
+  nodes.get('backingModel').value='demucs-htdemucs';nodes.get('backingModel').onchange();
+  assert.match(nodes.get('karaokeService').textContent,/GPU 加速/);
+  (await storage.ready).close();
+});

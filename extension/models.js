@@ -10,7 +10,7 @@
     function render(){
       $('modelList').replaceChildren();
       $('modelConfirm').hidden=!pending;
-      if(pending)$('modelConfirmText').textContent=`删除 ${pending.name} 的模型权重（${bytes(pending.weightBytes)}）？已有背景音和录音保留，下次提取需重新下载。额外依赖保留。`;
+      if(pending)$('modelConfirmText').textContent=`删除 ${pending.name} 的模型权重及未完成下载（${bytes(pending.weightBytes+(pending.partialBytes || 0))}）？已有背景音和录音保留，下次提取需重新下载。额外依赖保留。`;
       $('modelConfirmYes').disabled=busy;$('modelConfirmNo').disabled=busy;
       for(const model of catalog?.models || []){
         const card=element('article','','library-card');
@@ -18,13 +18,14 @@
         const stages={installing:'正在安装额外依赖', 'model-downloading':'正在下载模型',verifying:'正在校验'};
         const active=!!stages[model.state];
         card.append(element('small',`${active?`${stages[model.state]}${Number.isFinite(model.progress)?` · ${model.progress}%`:''}`:model.ready?'已就绪':'尚未就绪'} · 权重 ${bytes(model.downloadBytes)}`));
+        if(model.partialBytes && !active)card.append(element('small',`未完成下载 ${bytes(model.partialBytes)} · 下次安装可续传`));
         if(model.id===BANDIT_MODEL)card.append(element('small','额外依赖约 380 MiB；合计约 0.8 GiB，建议预留 2 GiB。'));
         const details=element('details','');details.append(element('summary','设备与许可'),element('small',`${model.deviceNote} · ${model.license}`));card.append(details);
         if(model.error)card.append(element('small',model.error));
         const actions=element('div','','library-actions');
         if(active){const cancel=element('button','停止安装');cancel.disabled=busy;cancel.onclick=()=>act('model-cancel',model.id);actions.append(cancel);}
         else if(!model.ready){const install=element('button',model.error?'重试安装':'安装模型');install.disabled=busy || catalog.busy;install.onclick=()=>act('model-install',model.id);actions.append(install);}
-        if(model.weightBytes){const remove=element('button','删除权重');remove.disabled=busy || catalog.busy;remove.onclick=()=>{pending=model;render();$('modelConfirmYes').focus();};actions.append(remove);}
+        if(model.weightBytes || model.partialBytes){const remove=element('button',model.weightBytes?'删除权重':'清除未完成下载');remove.disabled=busy || catalog.busy;remove.onclick=()=>{pending=model;render();$('modelConfirmYes').focus();};actions.append(remove);}
         card.append(actions);$('modelList').append(card);
       }
       $('modelStartup').hidden=!!catalog;

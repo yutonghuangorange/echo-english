@@ -124,7 +124,7 @@ class Jobs:
                 continue
             try:
                 metadata = json.loads((directory / "metadata.json").read_text())
-                if not isinstance(metadata, dict) or metadata.get("version") != 1 or metadata.get("state") != "ready":
+                if not isinstance(metadata, dict) or metadata.get("version") not in (1, 2) or metadata.get("state") != "ready":
                     continue
                 clip = validate_clip(metadata)
                 audio = directory / "accompaniment.mp3"
@@ -152,7 +152,7 @@ class Jobs:
         metadata = {k: job[k] for k in ("videoId", "start", "end", "createdAt")}
         if "model" in job:
             metadata["model"] = job["model"]
-        metadata.update(version=1, state="ready", elapsedSeconds=job["finished"]-job["started"])
+        metadata.update(version=2 if job.get("model") == BANDIT_MODEL else 1, state="ready", elapsedSeconds=job["finished"]-job["started"])
         temporary = job["directory"] / "metadata.json.tmp"
         temporary.write_text(json.dumps(metadata))
         temporary.replace(job["directory"] / "metadata.json")
@@ -297,10 +297,11 @@ class Jobs:
                     "--checkpoint", str(self.models.weight(BANDIT_MODEL)), "-d", job["device"],
                     "--input", str(directory / "clip.wav"),
                     "--output", str(self.separation_output(job))]
+        timeout = 7200 if job.get("model") == BANDIT_MODEL else 3600
         log = directory / "worker.log"
         offset = log.stat().st_size if log.exists() else 0
         try:
-            self.command(job, args, 3600, "本机去原唱失败；首次运行需联网下载模型。")
+            self.command(job, args, timeout, "本机去原唱失败；首次运行需联网下载模型。")
         except RuntimeError:
             # Retry only GPU runtime failures, never downloads, cancellation or
             # arbitrary model errors. A new process releases all CUDA allocations.
@@ -322,7 +323,7 @@ class Jobs:
             with log.open("a") as output:
                 output.write("\nEcho: GPU failed; retrying on CPU.\n")
             args[args.index("-d") + 1] = "cpu"
-            self.command(job, args, 3600, "CPU 回退分离失败，详情见 worker.log。")
+            self.command(job, args, timeout, "CPU 回退分离失败，详情见 worker.log。")
 
     def separate(self, job):
         for package in ("yt_dlp", "demucs", "torch", "torchaudio"):

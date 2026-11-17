@@ -41,6 +41,8 @@ class ModelsTests(unittest.TestCase):
         new = jobs.start({**clip, "model": BANDIT_MODEL})
         jobs.worker.join()
         self.assertNotEqual(old["id"], new["id"])
+        metadata = json.loads((jobs.get(new["id"])["directory"] / "metadata.json").read_text())
+        self.assertEqual(metadata["version"], 2)
         restored = Jobs(self.root / "audio")
         self.assertEqual(restored.start({**clip, "model": BANDIT_MODEL})["id"], new["id"])
         self.assertEqual(restored.start(clip)["id"], old["id"])

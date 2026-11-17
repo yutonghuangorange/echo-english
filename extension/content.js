@@ -84,7 +84,7 @@
   $('mixControls').open=false;
   $('replayWithBacking').checked=true;
   $('replayWithBacking').onchange=()=>{replayMonitor?.setEnabled($('replayWithBacking').checked);renderMixControls();saveProgress();};
-  let serviceState='unknown',serviceCheck=null,serviceMaxSeconds=null,modelManagement=false;
+  let serviceState='unknown',serviceCheck=null,serviceMaxSeconds=null,modelManagement=false,serviceAccelerator={};
   let wordRequest = 0, selectedWord = null, analysisRequest = 0;
   let videoId = currentId();
   let savedTitle = '';
@@ -250,6 +250,11 @@
   function selectedRange() { return {...EchoSelection.resolve(selectionInput(video().duration)).range,model:modelPreferences[activity]}; }
   function updateBackingControls() {
     $('backingModel').disabled=mode!=='idle';
+    if(serviceState==='online' && serviceMaxSeconds>=600 && serviceAccelerator.device){
+      const banditCPU=modelPreferences[activity]===EchoModels.BANDIT_MODEL && serviceAccelerator.device==='mps';
+      $('karaokeService').textContent='伴奏服务 · 已连接'+(banditCPU?' · CPU（BandIt）':['cuda','mps'].includes(serviceAccelerator.device)?' · GPU 加速':' · CPU');
+      $('karaokeService').title=banditCPU?'BandIt 在 Mac 上暂用 CPU。':[serviceAccelerator.deviceName,serviceAccelerator.deviceNote].filter(Boolean).join(' · ');
+    }
     const selectedModel=models.model(modelPreferences[activity]);
     $('backingModelHint').textContent=modelPreferences[activity]===EchoModels.BANDIT_MODEL
       ?selectedModel?.ready?'BandIt 已就绪 · 适合电影背景音；Mac 暂用 CPU，耗时较长。':'首次安装约 0.8 GiB，建议预留 2 GiB。Mac 暂用 CPU；模型权重 CC BY-SA 4.0。'
@@ -718,7 +723,7 @@
       try{
         const result=await karaokeRequest('health');
         if(result.service!=='echo-karaoke')throw Error('服务不匹配');
-        serviceState='online';serviceMaxSeconds=Number.isFinite(result.maxSeconds)?result.maxSeconds:300;
+        serviceState='online';serviceAccelerator=result;serviceMaxSeconds=Number.isFinite(result.maxSeconds)?result.maxSeconds:300;
         $('karaokeService').textContent=serviceMaxSeconds<600?'伴奏服务 · 已连接旧版，请重启服务以支持 10 分钟':'伴奏服务 · 已连接';
         if(serviceMaxSeconds>=600 && result.device)$('karaokeService').textContent+=['cuda','mps'].includes(result.device)?' · GPU 加速':' · CPU';
         $('karaokeService').title=[result.deviceName,result.deviceNote].filter(Boolean).join(' · ');
