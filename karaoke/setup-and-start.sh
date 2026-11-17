@@ -11,7 +11,7 @@ case "$system/$(uname -m)" in
   *) echo '此脚本支持 Linux x86_64、macOS Intel / Apple 芯片；Windows 请使用 start-karaoke.ps1。' >&2; exit 1 ;;
 esac
 if [[ "${1:-}" == '--help' ]]; then
-  echo '用法：bash start-karaoke.sh [--device auto|cpu|cuda] [--cache PATH]'
+  echo '用法：bash start-karaoke.sh [--device auto|cpu|cuda|mps] [--cache PATH]'
   echo '首次安装依赖并启动；以后复用环境直接启动。系统依赖安装可能要求 sudo 密码。'
   exit 0
 fi

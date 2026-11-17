@@ -4,11 +4,11 @@
 
 ## 所需配置
 
-**不需要独立显卡。** 插件的字幕、配音、录音、回听和导出在 Chrome 中运行；本机伴奏／背景音分离支持 CPU，以及安装 CUDA 版 PyTorch 后的 NVIDIA GPU 加速。Apple GPU 暂未启用。
+**不需要独立显卡。** 插件的字幕、配音、录音、回听和导出在 Chrome 中运行；本机伴奏／背景音分离支持 CPU，以及安装 CUDA 版 PyTorch 后的 NVIDIA GPU 加速。Apple 芯片 Mac 支持 MPS 加速，自动检测可用性，失败可回退 CPU；实际加速幅度仍需在可用 GPU 上实测。
 
 | 项目 | 仅使用插件：字幕、配音、录音、回听 | 额外提取伴奏／电影背景音 |
 | --- | --- | --- |
-| 电脑 | 能流畅播放 YouTube 的电脑，无需独立显卡 | 多核 CPU，使用两个 CPU 线程；NVIDIA CUDA 加速可选，本机已验证 RTX 3060 Laptop 6 GB |
+| 电脑 | 能流畅播放 YouTube 的电脑，无需独立显卡 | 多核 CPU，使用两个 CPU 线程；NVIDIA CUDA / Apple MPS 加速可选；本机已验证 RTX 3060 Laptop 6 GB |
 | 内存 | 建议整机 8 GB 或以上 | 建议整机 8 GB 起步，16 GB 更宽裕，尤其同时打开多个浏览器标签页时 |
 | 磁盘 | 按录音数量预留空间；无损录音和合成文件更大 | 建议至少预留 5 GB，供 Python 环境、工具、模型、处理中间文件与伴奏缓存使用；长期录音需另留空间 |
 | 系统 | Windows / macOS / Linux 上的新版桌面 Chrome | Linux x86_64、macOS Intel / Apple 芯片、Windows x64；macOS 15 双架构自动验证通过；Windows 待实机验证 |

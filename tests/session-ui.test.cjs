@@ -222,6 +222,16 @@ test('singing detects offline service and retry collapses setup help after conne
   online=false;await nodes.get('checkKaraoke').onclick();assert.equal(nodes.get('karaokeService').title,'');
   (await storage.ready).close();
 });
+test('Apple MPS uses the existing GPU service indicator',async()=>{
+  const storage=createStorage(new IDBFactory());
+  const {nodes}=await mount(storage,{health:()=>({service:'echo-karaoke',maxSeconds:600,device:'mps',deviceName:'Apple GPU（MPS）'}),globals:{chrome:{runtime:{onMessage:{addListener(){}},async sendMessage(){return {};}}}}});
+  nodes.get('activityMode').value='sing';nodes.get('activityMode').onchange();
+  await nodes.get('checkKaraoke').onclick();
+  assert.match(nodes.get('karaokeService').textContent,/GPU 加速/);
+  assert.equal(nodes.get('karaokeService').title,'Apple GPU（MPS）');
+  assert.equal(nodes.get('karaokeHelp').open,false);
+  (await storage.ready).close();
+});
 test('offline generation shows setup next to the button even while cache lookup is pending',async()=>{
   const storage=createStorage(new IDBFactory());let starts=0;
   const {nodes}=await mount(storage,{health:()=>({error:'offline'}),cachedBackings:new Promise(()=>{}),globals:{chrome:{runtime:{onMessage:{addListener(){}},async sendMessage(){starts++;return {};}}}}});

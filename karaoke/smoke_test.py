@@ -19,7 +19,7 @@ import urllib.error
 import urllib.request
 import wave
 
-from server import Jobs, stop_process
+from server import Jobs, stop_process, probe_device
 
 
 def check_launcher():
@@ -42,7 +42,7 @@ def check_launcher():
                                 health = json.load(response)
                             assert health["service"] == "echo-karaoke"
                             if sys.platform == "darwin":
-                                assert health["device"] == "cpu" and "NVIDIA" not in health.get("deviceNote", "")
+                                assert health["device"] in ("cpu", "mps") and "NVIDIA" not in health.get("deviceNote", "")
                             return health
                         except urllib.error.URLError:
                             pass
@@ -63,7 +63,11 @@ def check_launcher():
 def main():
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--launcher", action="store_true", help="Also test the POSIX root launcher; port 8765 must be free")
+    parser.add_argument("--device", choices=("cpu", "cuda", "mps", "auto"), default="cpu")
+    parser.add_argument("--seconds", type=float, default=2)
     args = parser.parse_args()
+    if not 0 < args.seconds <= 30:
+        parser.error("Use 0-30 seconds of synthetic audio")
     import numpy as np
     import soundfile
     import torch
@@ -72,21 +76,23 @@ def main():
     started = time.monotonic()
     with tempfile.TemporaryDirectory(prefix="echo smoke 中文 ") as temporary:
         directory = Path(temporary)
-        # Synthetic stereo PCM, two seconds; no copyrighted or private input.
+        # Synthetic stereo PCM; no copyrighted or private input.
+        frames = round(44100 * args.seconds)
         samples = array.array("h", (int(8000 * math.sin(2 * math.pi * frequency * n / 44100))
-                                   for n in range(88200) for frequency in (220, 330)))
+                                   for n in range(frames) for frequency in (220, 330)))
         if sys.byteorder != "little":
             samples.byteswap()
         with wave.open(str(directory / "clip.wav"), "wb") as audio:
             audio.setparams((2, 2, 44100, 0, "NONE", "not compressed"))
             audio.writeframes(samples.tobytes())
-        jobs = Jobs(directory)
+        accelerator = probe_device(args.device)
+        jobs = Jobs(directory, accelerator=accelerator, allow_cpu_fallback=args.device == "auto")
         job = {"directory": directory, "cancel": threading.Event()}
         try:
             jobs.separate_audio(job)
             output = directory / "stems/htdemucs/clip/no_vocals.wav"
             data, rate = soundfile.read(output)
-            assert data.shape == (88200, 2) and rate == 44100
+            assert data.shape == (frames, 2) and rate == 44100
             assert np.isfinite(data).all()
             subprocess.run(["ffmpeg", "-nostdin", "-v", "error", "-y", "-i", str(output),
                             "-codec:a", "libmp3lame", "-b:a", "192k", str(directory / "backing.mp3")],
@@ -95,7 +101,7 @@ def main():
                 ["ffprobe", "-v", "error", "-show_format", "-show_streams", "-of", "json",
                  str(directory / "backing.mp3")], text=True, timeout=30))
             assert info["streams"][0]["channels"] == 2
-            assert abs(float(info["format"]["duration"]) - 2) < 0.1
+            assert abs(float(info["format"]["duration"]) - args.seconds) < 0.1
         except Exception:
             log = directory / "worker.log"
             if log.is_file():
@@ -107,7 +113,9 @@ def main():
         check_launcher()
     print(json.dumps({"platform": platform.platform(), "architecture": platform.machine(),
                       "torch": torch.__version__, "torchaudio": torchaudio.__version__,
-                      "device": job["device"], "elapsedSeconds": round(time.monotonic() - started, 2)},
+                      "requestedDevice": args.device, "device": job["device"],
+                      "durationSeconds": frames / 44100,
+                      "elapsedSeconds": round(time.monotonic() - started, 2)},
                      indent=2))
 
 

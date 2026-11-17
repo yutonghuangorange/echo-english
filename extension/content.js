@@ -704,7 +704,7 @@
         if(result.service!=='echo-karaoke')throw Error('服务不匹配');
         serviceState='online';serviceMaxSeconds=Number.isFinite(result.maxSeconds)?result.maxSeconds:300;
         $('karaokeService').textContent=serviceMaxSeconds<600?'伴奏服务 · 已连接旧版，请重启服务以支持 10 分钟':'伴奏服务 · 已连接';
-        if(serviceMaxSeconds>=600 && result.device)$('karaokeService').textContent+=result.device==='cuda'?' · GPU 加速':' · CPU';
+        if(serviceMaxSeconds>=600 && result.device)$('karaokeService').textContent+=['cuda','mps'].includes(result.device)?' · GPU 加速':' · CPU';
         $('karaokeService').title=[result.deviceName,result.deviceNote].filter(Boolean).join(' · ');
         $('karaokeHelp').open=serviceMaxSeconds<600;
       }catch{

@@ -124,6 +124,7 @@ test('progress labels separate stage progress from total time and avoid invented
   assert.match(progressText({state:'separating',progress:null}),/加载模型/);
   assert.match(progressText({state:'encoding',elapsedSeconds:80}),/压缩并保存/);
   assert.match(progressText({state:'separating',device:'cuda'}),/GPU 加速/);
+  assert.match(progressText({state:'separating',device:'mps'},'speech'),/去除原对白.*GPU 加速/);
   assert.match(progressText({state:'separating',device:'cpu',deviceNote:'GPU 处理失败，已自动改用 CPU。'}),/自动改用 CPU/);
 });
 

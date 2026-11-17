@@ -2,6 +2,13 @@
 
 最新更新列在前面，迁移自原 README 的历史记录保留原有顺序。历史版本的界面和限制可能与当前版本不同；当前安装与使用方法见 [项目首页](README.md)。
 
+## 0.21.3 Apple GPU / MPS 加速
+
+- Apple 芯片 Mac 的自动模式检测 MPS 并实际运行一个小运算；可显式指定 `--device mps`，Intel / Rosetta 环境保留 CPU，无需安装 CUDA 或更换现有 PyTorch 版本。
+- MPS 与 CUDA 共用正式 Demucs 分离、缓存和 CPU 回退流程；自动模式遇到 GPU 内存不足或不支持的算子，仅重试一次 CPU，取消和普通下载错误不重试。显式指定 GPU 时不会静默回退。
+- 服务状态与生成进度复用现有 GPU 标识；MPS 探测在短命子进程中完成，服务不持有 GPU 上下文。
+- Mac CI 明确报告 MPS 是否可用；仅在可用时严格执行 CPU / MPS 同输入短音频比较，不将 CPU 回退或设备不可用算作 GPU 验证。BandIt 不在此次接入范围。
+
 ## 0.21.2 macOS 兼容性
 
 - macOS 自动模式直接使用 CPU，不提示安装 NVIDIA 驱动；显式指定 CUDA 时给出 Mac 对应的说明。

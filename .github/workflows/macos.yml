@@ -46,3 +46,15 @@ jobs:
           .venv/bin/python -m unittest discover -s karaoke -p 'test_*.py'
       - name: Separate synthetic audio with the production CPU worker
         run: .venv/bin/python karaoke/smoke_test.py --launcher
+      - name: Test MPS on actual available hardware (never disguise CPU as GPU)
+        run: |
+          .venv/bin/python - <<'PY'
+          import json, platform, subprocess, sys, torch
+          available = platform.machine() == 'arm64' and torch.backends.mps.is_available()
+          print(json.dumps({'architecture': platform.machine(), 'mpsAvailable': available}), flush=True)
+          if available:
+              for device in ('cpu', 'mps'):
+                  subprocess.run([sys.executable, 'karaoke/smoke_test.py', '--device', device, '--seconds', '20'], check=True)
+          else:
+              print('MPS unavailable on this runner: GPU inference and speed are NOT validated.', flush=True)
+          PY

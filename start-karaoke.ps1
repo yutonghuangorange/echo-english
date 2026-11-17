@@ -33,7 +33,7 @@ function Test-CudaTorch([string]$Program) {
 try {
     if ($env:OS -ne 'Windows_NT') { throw 'Use bash start-karaoke.sh on macOS / Linux.' }
     if ($ServerArguments -contains '--help') {
-        Write-Host 'Usage: powershell -NoProfile -ExecutionPolicy Bypass -File .\start-karaoke.ps1 [--device auto|cpu|cuda] [--cache PATH]'
+        Write-Host 'Usage: powershell -NoProfile -ExecutionPolicy Bypass -File .\start-karaoke.ps1 [--device auto|cpu|cuda|mps] [--cache PATH]'
         Write-Host 'Requires x64 Python 3.10-3.12, FFmpeg (with ffprobe), and Node.js 22+ or Deno on PATH.'
         exit 0
     }

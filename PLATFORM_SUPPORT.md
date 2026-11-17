@@ -7,7 +7,7 @@
 | 平台 | 安装入口 | 分离依赖 | 验证状态 |
 | --- | --- | --- | --- |
 | Linux x86_64 | `bash start-karaoke.sh` | torch / torchaudio 2.5.1，默认 CPU，可选 CUDA 12.1 | 本机自动化、CPU / RTX 3060 Laptop 短片段分离已验证 |
-| macOS Apple 芯片 | `bash start-karaoke.sh` | torch / torchaudio 2.5.1，CPU | macOS 15 原生 CI：安装、测试、CPU 分离通过；Chrome 录音待人工验证 |
+| macOS Apple 芯片 | `bash start-karaoke.sh` | torch / torchaudio 2.5.1，CPU / 可选 MPS | macOS 15 原生 CI：安装、测试、CPU 分离通过；Chrome 录音待人工验证 |
 | macOS Intel | `bash start-karaoke.sh` | torch / torchaudio 2.2.2，CPU | macOS 15 原生 CI 通过，固定 2.2.2；Chrome 录音待人工验证 |
 | Windows x64 | `start-karaoke.ps1` | torch / torchaudio 2.5.1，默认 CPU，可选 CUDA 12.1 | 已补安装入口和进程清理；CPU / GPU 均等待实机验证 |
 
@@ -19,7 +19,7 @@ Intel Mac 的固定版本依据：[PyTorch 官方宣布从 2.3 起停止 macOS x
 
 [macOS compatibility 工作流](https://github.com/zexiangliu/echo-english/actions/workflows/macos.yml) 在 `macos-15`（arm64）和 `macos-15-intel` 上分别运行 Python 3.12。每次推送 / PR 会实际安装对应依赖，使用系统 `/bin/bash` 验证安装脚本、执行 npm / Python 测试，并通过正式 Demucs CPU worker 分离两秒合成音频、检查输出与 MP3 编码，再从根目录入口启动服务、核验健康状态并停止。双架构原生验证已通过（[含根目录启动检查的验证记录](https://github.com/zexiangliu/echo-english/actions/runs/44035319570)）：两者均通过 185 个前端测试（1 个 Windows 专用检查跳过）、20 个 Python 测试，以及 CPU 短音频分离、MP3 编码和根目录入口启动 / 停止。后续运行结果以工作流页面为准；自动化不包含真实麦克风、蓝牙耳机或实际 YouTube 字幕验收。
 
-Mac 的 `auto` 使用 CPU，不探测 CUDA，也不尝试未经验证的 MPS。`--device cuda` 会明确说明 macOS 不支持，并给出 `auto` / `cpu` 参数。手动短音频验收可运行 `.venv/bin/python karaoke/smoke_test.py`；首次会下载约 80 MB 模型，不使用私人媒体或 YouTube。
+Apple 芯片原生 arm64 环境的 `auto` 会在独立子进程探测 MPS，实际运行 GPU 小运算后才选择 Apple GPU；不可用时使用 CPU。Intel / Rosetta 环境保留 CPU。可指定 `--device mps` 严格要求 GPU，或 `--device cpu` 禁用加速；自动模式遇到 GPU 算子不支持或内存不足，仅重试一次 CPU。Mac 不使用 CUDA，也不需要额外安装 NVIDIA 依赖。手动短音频验收可运行 `.venv/bin/python karaoke/smoke_test.py`；首次会下载约 80 MB 模型，不使用私人媒体或 YouTube。
 
 ## 给当地 agent 的执行步骤
 
@@ -70,3 +70,16 @@ Python 测试不需要下载模型；包含真实子进程取消和退出清理�
 - **界面与存储**：125% / 150% 系统缩放下移动、缩放面板，打开折叠设置和缓存管理弹窗；刷新恢复录音、最近练习和伴奏。YouTube 字幕获取另测目标语言，字幕失效不应归因于操作系统。
 
 完成后记录 OS / 架构、Chrome / Python 版本、音频设备、测试命令和结果。必要的修正优先放在启动脚本、依赖声明或统一资源管理模块；避免在练习业务代码中按操作系统复制逻辑。
+
+### MPS 验证范围
+
+CI 会打印 `mpsAvailable`，仅在设备可用时，用同一段 20 秒合成音频分别严格运行 CPU 和 MPS，检查输出时长、声道、有限采样和 MP3 编码并报告耗时。若 runner 没有可用 MPS，会明确跳过 GPU 推理；CPU / Mock 测试通过不能视为 MPS 性能或音质验证。暂不承诺加速比例，也未验证长片段或 BandIt 的 MPS 支持。
+
+当地 agent 可运行（首次需下载约 80 MB 模型）：
+
+```bash
+.venv/bin/python karaoke/smoke_test.py --device cpu --seconds 20
+.venv/bin/python karaoke/smoke_test.py --device mps --seconds 20
+```
+
+第二条显式要求 MPS，不会退回 CPU。耗时包含模型载入和音频写出；合成信号用于运行正确性检查，音质仍需真实内容人工试听。

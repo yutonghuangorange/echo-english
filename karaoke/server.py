@@ -25,17 +25,20 @@ ACTIVE_STATES = ("queued", "downloading", "converting", "separating", "encoding"
 def probe_device(requested):
     if requested == "cpu":
         return {"device": "cpu", "deviceName": "CPU"}
-    if sys.platform == "darwin":
-        from accelerator import select_device
-        return select_device(requested)
     try:
         output = subprocess.check_output(
             [sys.executable, str(Path(__file__).with_name("accelerator.py")), "--device", requested],
             stderr=subprocess.PIPE, timeout=45, text=True)
         return json.loads(output)
     except (OSError, subprocess.SubprocessError, ValueError) as error:
-        if requested == "cuda":
-            raise RuntimeError("无法启用 CUDA。请检查驱动与 CUDA 版 PyTorch，或使用 --device cpu。") from error
+        if requested in ("cuda", "mps"):
+            detail = f"无法启用 {requested.upper()}，请检查对应硬件与 PyTorch 环境。"
+            if isinstance(error, subprocess.CalledProcessError):
+                try:
+                    detail = json.loads(error.output)["error"]
+                except (TypeError, ValueError, KeyError):
+                    pass
+            raise RuntimeError(detail + " 可使用 --device cpu。") from error
         return {"device": "cpu", "deviceName": "CPU", "deviceNote": "GPU 检测失败，使用 CPU。"}
 
 
@@ -190,7 +193,7 @@ class Jobs:
                     log.seek(0, 2)
                     log.seek(max(0, log.tell() - 8192))
                     output = log.read().decode(errors="replace")
-                    output = output.rsplit("Echo: CUDA failed; retrying on CPU.", 1)[-1]
+                    output = re.split(r"Echo: (?:CUDA|GPU) failed; retrying on CPU\.", output)[-1]
                     percent, eta = separation_progress(output)
                     if percent is None and re.search(r'Downloading:.*https?://', output):
                         result["modelDownloading"] = True
@@ -272,14 +275,16 @@ class Jobs:
                 tail = source.read().decode(errors="replace")
             gpu_failure = re.search(r"CUDA out of memory|CUDA error:|CUDA-capable device|"
                                     r"CUDA driver|CUDNN_STATUS|CUBLAS_STATUS|Torch not compiled with CUDA", tail, re.I)
-            if job["device"] != "cuda" or not self.allow_cpu_fallback or not gpu_failure:
+            if job["device"] == "mps":
+                gpu_failure = re.search(r"(?:RuntimeError|NotImplementedError|TypeError):[^\n]*(?:MPS|Metal)", tail, re.I)
+            if job["device"] not in ("cuda", "mps") or not self.allow_cpu_fallback or not gpu_failure:
                 raise
             if job["cancel"].is_set():
                 raise Cancelled()
             job.update(device="cpu", deviceNote="GPU 处理失败，已自动改用 CPU。")
             shutil.rmtree(directory / "stems", ignore_errors=True)
             with log.open("a") as output:
-                output.write("\nEcho: CUDA failed; retrying on CPU.\n")
+                output.write("\nEcho: GPU failed; retrying on CPU.\n")
             args[args.index("-d") + 1] = "cpu"
             self.command(job, args, 3600, "CPU 回退分离失败，详情见 worker.log。")
 
@@ -394,8 +399,8 @@ def handler(jobs):
 def main():
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--cache", type=Path, default=Path(__file__).resolve().parent.parent / ".cache" / "karaoke")
-    parser.add_argument("--device", choices=("auto", "cpu", "cuda"), default="auto",
-                        help="auto: use CUDA when available, otherwise CPU; cuda: require GPU")
+    parser.add_argument("--device", choices=("auto", "cpu", "cuda", "mps"), default="auto",
+                        help="auto: use CUDA / Apple MPS when available, otherwise CPU; explicit GPU: no fallback")
     args = parser.parse_args()
     args.cache.mkdir(parents=True, exist_ok=True)
     try:

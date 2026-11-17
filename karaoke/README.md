@@ -70,9 +70,24 @@ powershell -NoProfile -ExecutionPolicy Bypass -File .\start-karaoke.ps1
 
 CUDA 环境明显大于 CPU 版，建议至少预留 10 GB 磁盘空间。后续普通启动与依赖更新会保留兼容的 CUDA 安装，不改回 CPU。服务默认 `--device auto`：实际运行一个 CUDA 小运算确认可用后选择 GPU；不支持时使用 CPU。自动模式分离过程中遇到显存不足等 CUDA 运行错误，会释放子进程后仅重试一次 CPU，界面显示回退原因。模型、4 秒分段和缓存身份均保持一致，歌曲与电影背景音共用加速。
 
-终端显示设备名称；扩展的现有服务状态显示「GPU 加速」或「CPU」，生成进度显示实际使用的设备。需要排查时可指定 `bash start-karaoke.sh --device cpu`；`--device cuda` 则要求 GPU 可用，失败时报错，不静默回退。Windows 在上述启动命令末尾加同样参数。macOS 自动模式直接使用 CPU，不检查 NVIDIA 驱动；暂不启用 MPS。安装脚本支持系统 Bash 3.2，并检查 Python / venv 与当前终端架构一致，架构不一致时会提示重建环境。
+终端显示设备名称；扩展的现有服务状态显示「GPU 加速」或「CPU」，生成进度显示实际使用的设备。需要排查时可指定 `bash start-karaoke.sh --device cpu`；`--device cuda` 则要求 GPU 可用，失败时报错，不静默回退。Windows 在上述启动命令末尾加同样参数。Apple 芯片 Mac 自动检测 MPS，详见下方 Apple GPU 说明；Intel Mac 保留 CPU。安装脚本支持系统 Bash 3.2，并检查 Python / venv 与当前终端架构一致，架构不一致时会提示重建环境。
 
 Linux / RTX 3060 Laptop 6 GB 实测同一段约 20 秒电影素材：Demucs CPU 30.89 秒，GPU 5.06 秒，约快 6.1 倍；不包含提取 YouTube 音频或下载模型，不能按此保证整曲耗时。BandIt 独立实验结果见 [性能对比](../CINEMATIC_EVALUATION.md#gpu-补测)，尚未接入正式服务。
+
+### Apple 芯片 Mac：MPS 加速
+
+使用现有安装即可，无需额外 CUDA 包或升级 PyTorch。默认 `bash start-karaoke.sh` 在原生 arm64 环境探测 MPS，并实际运行一个 GPU 小运算；可用时服务状态显示「GPU 加速」，悬停显示 Apple GPU（MPS）。Intel / Rosetta 环境继续使用 CPU。
+
+```bash
+# 自动选择；GPU 算子不支持或内存不足时仅重试一次 CPU
+bash start-karaoke.sh
+# 严格使用 MPS；不可用或处理失败会报错，不静默回退
+bash start-karaoke.sh --device mps
+# 兼容性排查，或比较速度
+bash start-karaoke.sh --device cpu
+```
+
+歌曲伴奏和电影背景音共用这一条 Demucs 路径。Demucs 4.0.1 自带 MPS 处理：部分复数 / 频谱操作仍在 CPU 上执行，因此不能直接套用 NVIDIA 的加速倍数。参见 [官方发布说明](https://github.com/facebookresearch/demucs/blob/main/docs/release.md)。MPS 可用性依赖 Mac、系统及原生 PyTorch 环境；CI 只在实际有可用 MPS 时验证 GPU 推理。CPU / Mac CI 通过不等于已完成所有 Apple GPU 性能和音质验收，长片段与 BandIt 尚未验证，复现命令见 [跨平台验证](../PLATFORM_SUPPORT.md#mps-验证范围)。
 
 ## 每次使用
 
@@ -113,7 +128,7 @@ Demucs 原为音乐分离模型，可能残留对白或误删环境音；此功�
 ## 资源与数据
 
 - 不需要独立显卡，也不需要安装 CUDA。建议整机内存 8 GB 起步、16 GB 更宽裕，磁盘至少预留 5 GB；这是配置建议，未做最低配置测试，长录音与缓存还需另留空间。插件本身不需要 Python 或分离模型，详见项目首页的 [所需配置](../README.md#所需配置)。
-- 默认安装 CPU 依赖；服务自动检测可用 CUDA，也可强制 CPU。两个 CPU 线程、4 秒模型分段、单任务；`--shifts 0` 减少重复推理。
+- 默认安装 CPU 依赖；服务自动检测可用 CUDA / Apple MPS，也可强制 CPU。两个 CPU 线程、4 秒模型分段、单任务；`--shifts 0` 减少重复推理。
 - 本机 i7-1165G7 / 16 GB RAM 测试：15 秒音乐片段约 35 秒，分离进程内存峰值约 1.5 GiB（包含首次模型下载与载入）。这不是对其他机器或长片段的保证；更短的片段也有模型载入开销。
 - 本次 Linux CPU 环境约 953 MB，模型约 80 MB，此外会占用片段缓存空间。生成伴奏时会联网访问 YouTube 和模型下载地址；麦克风录音留在浏览器 IndexedDB，不会发给本机分离服务或第三方。
 - 伴奏、恢复信息与日志放在仓库 `.cache/karaoke/`；模型在 `.cache/torch/`。失败详情查看对应任务目录的 `worker.log`。这些目录和 `.venv/` 均被 Git 忽略。
