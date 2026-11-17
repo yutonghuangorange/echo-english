@@ -49,3 +49,40 @@ test('recording diagnostics use actual track settings without leaking device ide
   assert.match(api.describeRecording({mimeType:'audio/webm;codecs=opus',audioBitsPerSecond:256000}),/256 kbps/);
   assert.match(api.describeRecording(),/旧录音/);assert.deepEqual(api.captureSettings({}),{});
 });
+
+test('input enumeration excludes outputs and duplicate/default identifiers; selected-device failure never falls back',async()=>{
+  const api=require('../extension/microphone.js');
+  const inputs=await api.listInputs({enumerateDevices:async()=>[
+    {kind:'audioinput',deviceId:'default',label:'Default'},
+    {kind:'audioinput',deviceId:'usb',label:'USB Mic'},
+    {kind:'audioinput',deviceId:'usb',label:'Duplicate'},
+    {kind:'audiooutput',deviceId:'speaker',label:'Speaker'},
+    {kind:'audioinput',deviceId:'hidden',label:''}]});
+  assert.deepEqual(inputs.map(d=>d.id),['usb','hidden']);assert.equal(inputs[1].named,false);
+  let requests=0;
+  await assert.rejects(api.requestStream({async getUserMedia(){requests++;throw Object.assign(Error('gone'),{name:'OverconstrainedError'});}},{deviceId:{exact:'usb'}}),/所选麦克风不可用/);
+  assert.equal(requests,1);
+});
+for(const db of [0,6])test(`sidetone at gain ${db} uses one interactive graph and cannot enter the encoded branch`,async()=>{
+  const edges=[],gains=[];let contextOptions,closed=0,destinations=0;
+  const speakers={},mic={};const source={connect:target=>edges.push(['source',target]),disconnect(){}};
+  const encoded={stream:{getTracks:()=>[{stop(){}}]}};
+  class AudioContext{
+    constructor(options){contextOptions=options;this.destination=speakers;this.state='running';}
+    createMediaStreamSource(){return source;}
+    createGain(){const node={gain:{value:1},connect:target=>edges.push([node,target]),disconnect(){}};gains.push(node);return node;}
+    createMediaStreamDestination(){destinations++;return encoded;}
+    async resume(){}async close(){closed++;}
+  }
+  const input=await createInput(mic,db,{AudioContext},{sidetone:true,sidetoneVolume:0.35});
+  assert.equal(contextOptions.latencyHint,'interactive');assert.equal(destinations,db?1:0);
+  assert.equal(input.stream,db?encoded.stream:mic);
+  const monitor=gains.at(-1);assert.equal(monitor.gain.value,0);
+  assert(edges.some(([from,to])=>from===monitor && to===speakers));
+  assert(!edges.some(([from,to])=>from===monitor && to===encoded));
+  input.setMonitoring(true);assert.equal(monitor.gain.value,0.35);
+  input.setMonitorVolume(0.8);assert.equal(monitor.gain.value,0.8);
+  if(db)assert(Math.abs(gains[0].gain.value-10**(db/20))<1e-6);
+  input.setMonitoring(false);assert.equal(monitor.gain.value,0);
+  input.dispose();input.dispose();assert.equal(closed,1);
+});

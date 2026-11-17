@@ -56,3 +56,24 @@ test('an old delayed stop only releases its own resources while the next capture
   assert.equal(second.state,'recording');assert.equal(next.count.mic,0);assert.equal(next.count.meter,0);
   second.stop();await second.completed;assert.equal(next.count.meter,1);
 });
+
+test('sidetone stays silent during preparation and mutes immediately on pause, stop and feedback teardown',async()=>{
+  const f=fixture({delayedStop:true}),states=[];let setup;
+  f.options.sidetone=true;f.options.sidetoneVolume=0.4;
+  f.options.microphone.createInput=async(mic,db,env,options)=>{setup=options;return f.input;};
+  f.input.setMonitoring=value=>states.push(value);
+  const session=create(f.options);await session.prepare();assert.deepEqual(states,[]);
+  assert.deepEqual(setup,{sidetone:true,sidetoneVolume:0.4});
+  session.start();session.pause();session.resume();session.pauseFeedback();session.stop();
+  assert.deepEqual(states,[true,false,true,false,false]);
+  assert.equal(f.count.input,0); // Encoder is still flushing; headphones are already muted.
+  f.recorder.onstop();await session.completed;assert.equal(f.count.input,1);
+});
+
+test('disconnecting the selected microphone stops capture and preserves captured audio',async()=>{
+  let ended,removed=0;const f=fixture();
+  const track={addEventListener(type,fn){if(type==='ended')ended=fn;},removeEventListener(type,fn){assert.equal(fn,ended);removed++;},stop(){f.count.mic++;}};
+  f.options.env.navigator.mediaDevices.getUserMedia=async()=>({getTracks:()=>[track]});
+  const session=create(f.options);await session.prepare();session.start();ended();
+  await session.completed;assert.equal(f.errors.length,1);assert.match(f.errors[0].message,/麦克风已断开/);assert.equal(f.results.length,1);assert.equal(removed,1);
+});

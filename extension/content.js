@@ -22,13 +22,17 @@
   let qualityPreferences={speech:'standard',sing:'standard'};
   let modelPreferences={speech:EchoKaraoke.DEFAULT_MODEL,sing:EchoKaraoke.DEFAULT_MODEL};
   let paragraphFirst=0,paragraphLast=1,assemblyChoices=[],assemblyContext=null;
-  let recordingQuality='high';
+  let recordingQuality='high',inputDeviceId='',sidetoneEnabled=false,sidetoneVolume=0.35;
+  let inputDeviceRequest=0,inputDeviceList=[];
   const microphonePreferenceKey='echo-microphone-v1';
   const echoPreferences={speech:true,sing:false};
   const gainPreferences={speech:true,sing:false};
   const manualGainPreferences={speech:0,sing:0};
   try {
     const saved=JSON.parse(window.localStorage.getItem(microphonePreferenceKey));
+    sidetoneEnabled=saved?.sidetoneEnabled===true;
+    sidetoneVolume=EchoMicrophone.clampMonitorVolume(saved?.sidetoneVolume);
+    if(typeof saved?.inputDeviceId==='string')inputDeviceId=saved.inputDeviceId;
     if(saved?.recordingQuality==='lossless')recordingQuality='lossless';
     for(const key of ['speech','sing']){
       if(typeof saved?.[key]==='boolean')echoPreferences[key]=saved[key];
@@ -41,14 +45,19 @@
     const echoCancellation=echoPreferences[key],autoGainControl=gainPreferences[key];
     // Singing keeps noise suppression off; echo cancellation and automatic
     // gain are independent user preferences shared by all recording paths.
-    return song?{echoCancellation,noiseSuppression:false,autoGainControl}:{echoCancellation,autoGainControl};
+    return {...(song?{echoCancellation,noiseSuppression:false,autoGainControl}:{echoCancellation,autoGainControl}),...(inputDeviceId?{deviceId:{exact:inputDeviceId}}:{}),...(sidetoneEnabled?{latency:{ideal:0}}:{})};
   }
   function saveMicrophonePreferences(){
-    try {window.localStorage.setItem(microphonePreferenceKey,JSON.stringify({...echoPreferences,autoGainControl:gainPreferences,manualGainDb:manualGainPreferences,recordingQuality}));}
+    try {window.localStorage.setItem(microphonePreferenceKey,JSON.stringify({...echoPreferences,autoGainControl:gainPreferences,manualGainDb:manualGainPreferences,recordingQuality,inputDeviceId,sidetoneEnabled,sidetoneVolume}));}
     catch {status('录音设置已调整，但无法保存；刷新后将恢复原来的设置。');}
   }
   function renderMicrophoneSettings(){
     const losslessSupported=EchoMicrophone.supportsLossless(globalThis.MediaRecorder);
+    $('sidetoneEnabled').checked=sidetoneEnabled;
+    $('sidetoneVolume').value=sidetoneVolume;
+    $('sidetoneLiveVolume').value=sidetoneVolume;
+    $('sidetoneVolumeValue').textContent=$('sidetoneLiveValue').textContent=`${Math.round(sidetoneVolume*100)}%`;
+    $('sidetoneVolumeRow').hidden=!sidetoneEnabled;
     $('recordingQuality').value=recordingQuality;
     // Keep a saved selection visible even on a browser without support; never
     // silently save a compressed take that the user believes is lossless.
@@ -61,6 +70,46 @@
     $('manualGainValue').textContent=`+${manualGainPreferences[activity]} dB`;
     updateSettingsSummaries();
   }
+  function renderInputDevices(){
+    const options=[['','系统默认麦克风'],...inputDeviceList.map(device=>[device.id,device.label])];
+    const missing=inputDeviceId && !inputDeviceList.some(device=>device.id===inputDeviceId);
+    if(missing)options.push([inputDeviceId,'已选麦克风（未连接或尚未授权）']);
+    $('inputDevice').replaceChildren(...options.map(([value,label])=>{const option=document.createElement('option');option.value=value;option.textContent=label;return option;}));
+    $('inputDevice').value=inputDeviceId;
+    $('inputDeviceHint').textContent=missing?'所选设备尚未检测到。请连接设备并授权检测，或改用系统默认；不会自动换用其他麦克风。':inputDeviceList.some(device=>device.named)?'选择后下次录音生效；配音与唱歌共用此输入设备。':'首次点击「授权并检测」可显示设备名称。检测后立即释放麦克风。';
+  }
+  async function refreshInputDevices(){
+    const devices=globalThis.navigator?.mediaDevices;
+    if(!devices?.enumerateDevices)return;
+    const request=++inputDeviceRequest;
+    try{const list=await EchoMicrophone.listInputs(devices);if(request===inputDeviceRequest){inputDeviceList=list;renderInputDevices();}}
+    catch{if(request===inputDeviceRequest)$('inputDeviceHint').textContent='无法读取设备列表，请检查浏览器麦克风权限后重新检测。';}
+  }
+  $('inputDevice').onchange=()=>{
+    if(mode==='idle'){inputDeviceId=$('inputDevice').value;saveMicrophonePreferences();}
+    renderInputDevices();
+  };
+  $('detectInputs').onclick=guarded(async()=>{
+    if(mode!=='idle')return;
+    const token=++generation;mode='permission';controls();status('正在请求麦克风权限以检测输入设备…');
+    const mic=await EchoMicrophone.requestStream(navigator.mediaDevices,{echoCancellation:true});
+    mic.getTracks().forEach(track=>track.stop());
+    if(token!==generation)return;
+    await refreshInputDevices();
+    if(token===generation){mode='idle';controls();status('设备列表已更新，检测用麦克风已释放。');}
+  });
+  const onInputDevicesChanged=()=>{void refreshInputDevices();};
+  globalThis.navigator?.mediaDevices?.addEventListener?.('devicechange',onInputDevicesChanged);
+  renderInputDevices();
+  $('sidetoneEnabled').onchange=()=>{
+    if(mode==='idle'){sidetoneEnabled=$('sidetoneEnabled').checked;saveMicrophonePreferences();}
+    renderMicrophoneSettings();
+  };
+  for(const id of ['sidetoneVolume','sidetoneLiveVolume'])$(id).oninput=()=>{
+    sidetoneVolume=EchoMicrophone.clampMonitorVolume(Number($(id).value));
+    recordingSession?.setSidetoneVolume(sidetoneVolume);renderMicrophoneSettings();
+  };
+  for(const id of ['sidetoneVolume','sidetoneLiveVolume'])$(id).onchange=saveMicrophonePreferences;
   $('recordingQuality').onchange=()=>{if(mode==='idle'){recordingQuality=$('recordingQuality').value==='lossless'?'lossless':'high';saveMicrophonePreferences();}renderMicrophoneSettings();};
   for(const [id,preferences] of [['echoCancellation',echoPreferences],['autoGainControl',gainPreferences]]){
     $(id).onchange=()=>{
@@ -144,7 +193,7 @@
   $('reviewReplay').onclick = () => playRecording(take);
   $('openCaptionSetup').onclick=()=>showPage('transcript',true);
   function updateSettingsSummaries(){
-    $('speedSummary').textContent=`${$('speed').value}× · ${gainPreferences[activity]?'自动增益':`增益 +${manualGainPreferences[activity]} dB`} · ${recordingQuality==='lossless'?'无损':'高品质'}`;
+    $('speedSummary').textContent=`${$('speed').value}× · ${gainPreferences[activity]?'自动增益':`增益 +${manualGainPreferences[activity]} dB`} · ${recordingQuality==='lossless'?'无损':'高品质'}${sidetoneEnabled?' · 耳返':''}`;
     const lead=$('leadInMode').value;
     $('practiceToolsState').textContent=`${lead==='seconds'?`前置 ${$('leadInSeconds').value} 秒`:lead==='previous'?'前置上一句':'前置关闭'} · ${$('loopCount').value==='0'?'持续循环':`循环 ${$('loopCount').value} 次`}`;
   }
@@ -385,6 +434,7 @@
     for(const id of ['openSongRecording','takeMixDownload','assembleSong'])$(id).disabled=busy;
     const recording=mode==='recording' || mode==='lead-in';
     $('panel').setAttribute('aria-busy',String(['loading','reading','importing','exporting','saving','permission'].includes(mode)));
+    $('sidetoneLiveControls').hidden=!recording || !sidetoneEnabled;
     $('practiceDock').hidden=currentPage!=='practice' || mode!=='idle';
     $('historyBrowser').hidden=!videoHistory.length;
     $('playAll').hidden=!videoHistory.length;
@@ -413,7 +463,7 @@
     syncClipSelection();
     $('songReadinessRow').hidden=!hasBackingTools() || recording;
     $('songResult').hidden=!isSinging() || !songTake;
-    for (const id of ['paragraphFirst','paragraphLast','recordingQuality','echoCancellation','autoGainControl','manualGainDb','captionSource','refreshCaptionTracks','contentLanguage','captionLayout','activityMode','read','import','openCaptionSetup','openLanguageSettings','prepareBacking','practiceScope','useBacking','backingVolume','prev','next','markStart','markEnd','original','speed','start','end','leadInMode','leadInSeconds','record','startEarlier','startLater','endEarlier','endLater','loop','loopCount','autoPractice','prepSeconds','autoNext']) $(id).disabled = busy;
+    for (const id of ['sidetoneEnabled','sidetoneVolume','inputDevice','detectInputs','paragraphFirst','paragraphLast','recordingQuality','echoCancellation','autoGainControl','manualGainDb','captionSource','refreshCaptionTracks','contentLanguage','captionLayout','activityMode','read','import','openCaptionSetup','openLanguageSettings','prepareBacking','practiceScope','useBacking','backingVolume','prev','next','markStart','markEnd','original','speed','start','end','leadInMode','leadInSeconds','record','startEarlier','startLater','endEarlier','endLater','loop','loopCount','autoPractice','prepSeconds','autoNext']) $(id).disabled = busy;
     if(isParagraph())for(const id of ['start','end','markStart','markEnd','startEarlier','startLater','endEarlier','endLater'])$(id).disabled=true;
     $('autoNext').disabled=busy || $('practiceScope').value!=='clip';
     $('useBacking').disabled=busy;
@@ -1001,7 +1051,7 @@
       void Promise.resolve(session.monitor?.sync()).then(()=>{if(active())session.resume();})
         .catch(()=>{if(active()){stop();status('伴奏播放失败，录音已停止，请重新生成伴奏。');}});
     };
-    const session=EchoRecording.create({constraints,quality:recordingQuality,gainDb:gainPreferences[gainKey]?0:manualGainPreferences[gainKey],active,
+    const session=EchoRecording.create({constraints,quality:recordingQuality,sidetone:sidetoneEnabled,sidetoneVolume,gainDb:gainPreferences[gainKey]?0:manualGainPreferences[gainKey],active,
       microphone:EchoMicrophone,env:globalThis,
       createMonitor:ready?()=>EchoKaraoke.createMonitor({blob:ready.blob,video:v,start:ready.start,speed:r.speed,volume:Number($('backingVolume').value)}):null,
       createMeter:input=>EchoLiveMeter.start({stream:input,container:$('liveMeter'),canvas:$('liveMeterCanvas'),value:$('liveMeterValue'),bar:$('liveMeterBar')}),
@@ -1364,7 +1414,7 @@
     closeWord(); mode = 'practice'; controls(); status('首次练习：正在检查麦克风权限…');
     // Obtain permission before the listening/preparation stages so its dialog
     // cannot consume the learner's preparation time. Release immediately.
-    const mic = await navigator.mediaDevices.getUserMedia({audio:microphoneConstraints(),video:false});
+    const mic = await EchoMicrophone.requestStream(navigator.mediaDevices,microphoneConstraints());
     mic.getTracks().forEach(track=>track.stop());
     if (token !== generation) return;
     await EchoPractice.runPractice({active:()=>token === generation,
@@ -1528,7 +1578,7 @@
     if (id) void loadVideo(id);
     else restoring = false;
   });
-  window.addEventListener('pagehide',()=>{saveProgress();library.close(true);stop();detachCaptionVideo();});
+  window.addEventListener('pagehide',()=>{inputDeviceRequest++;globalThis.navigator?.mediaDevices?.removeEventListener?.('devicechange',onInputDevicesChanged);saveProgress();library.close(true);stop();detachCaptionVideo();});
   // Restore once; changing activities must not reset the user's expanded sections.
   const foldPreferenceKey='echo-folds-v1';
   let foldPreferences={};
@@ -1537,9 +1587,11 @@
     const fold=$(id);
     fold.open=typeof foldPreferences[id]==='boolean'?foldPreferences[id]:id==='karaokeSettings';
     fold.addEventListener('toggle',()=>{
+      if(id==='practiceSettings' && fold.open)void refreshInputDevices();
       foldPreferences[id]=fold.open;
       try{window.localStorage.setItem(foldPreferenceKey,JSON.stringify(foldPreferences));}catch{}
     });
   }
+  void refreshInputDevices();
   renderClipOptions();attachCaptionVideo(document.querySelector('video.html5-main-video'));renderActivity();controls(); if(videoId) void loadVideo(videoId); else restoring=false;
 })();

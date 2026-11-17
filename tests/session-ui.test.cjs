@@ -1482,3 +1482,34 @@ test('old service cannot silently return MP3 when lossless was selected',async()
   await nodes.get('prepareBacking').onclick();assert.equal(starts,0);assert.match(nodes.get('karaokeNotice').textContent,/无损音质需要新版服务/);
   (await storage.ready).close();
 });
+
+test('input selection persists, applies to recording and auto-practice, and survives device removal without fallback',async()=>{
+  const storage=createStorage(new IDBFactory()),preferences=new Map(),requests=[];let changed,stops=0;
+  let devices=[{kind:'audioinput',deviceId:'usb',label:'USB microphone'}];
+  const mediaDevices={enumerateDevices:async()=>devices,addEventListener(type,fn){if(type==='devicechange')changed=fn;},async getUserMedia(options){requests.push(options);if(options.audio.deviceId)throw Object.assign(Error('gone'),{name:'OverconstrainedError'});return {getTracks:()=>[{stop(){stops++;}}]};}};
+  const globals={navigator:{mediaDevices},MediaRecorder:class{static isTypeSupported(){return true;}},window:{localStorage:{getItem:key=>preferences.get(key)||null,setItem:(key,value)=>preferences.set(key,value)},addEventListener(){},speechSynthesis:{cancel(){}}}};
+  const {nodes}=await mount(storage,{globals});
+  await waitUntil(()=>nodes.get('inputDevice').children.some(n=>n.value==='usb'));
+  nodes.get('inputDevice').value='usb';nodes.get('inputDevice').onchange();
+  await nodes.get('record').onclick();assert.equal(requests.at(-1).audio.deviceId.exact,'usb');assert.match(nodes.get('status').textContent,/所选麦克风不可用/);
+  await nodes.get('autoPractice').onclick();assert.equal(requests.at(-1).audio.deviceId.exact,'usb');
+  devices=[];changed();await waitUntil(()=>nodes.get('inputDevice').children.at(-1).textContent.includes('未连接'));
+  assert.equal(nodes.get('inputDevice').value,'usb');
+  await nodes.get('detectInputs').onclick();assert.equal(stops,1);assert.equal(requests.at(-1).audio.deviceId,undefined);
+  const refreshed=await mount(storage,{globals});assert.equal(refreshed.nodes.get('inputDevice').value,'usb');
+  nodes.get('inputDevice').value='';nodes.get('inputDevice').onchange();
+  assert.equal(JSON.parse(preferences.get('echo-microphone-v1')).inputDeviceId,'');
+  (await storage.ready).close();
+});
+
+test('sidetone is opt-in, persists volume and requests low latency only when enabled',async()=>{
+  const storage=createStorage(new IDBFactory()),preferences=new Map(),requests=[];
+  const globals={MediaRecorder:class{static isTypeSupported(){return true;}},navigator:{mediaDevices:{async getUserMedia(options){requests.push(options);throw Error('Fixture mic');}}},window:{localStorage:{getItem:key=>preferences.get(key)||null,setItem:(key,value)=>preferences.set(key,value)},addEventListener(){},speechSynthesis:{cancel(){}}}};
+  const {nodes}=await mount(storage,{globals});assert.equal(nodes.get('sidetoneEnabled').checked,false);
+  await nodes.get('record').onclick();assert.equal(requests.at(-1).audio.latency,undefined);
+  nodes.get('sidetoneEnabled').checked=true;nodes.get('sidetoneEnabled').onchange();
+  nodes.get('sidetoneVolume').value='0.6';nodes.get('sidetoneVolume').oninput();nodes.get('sidetoneVolume').onchange();
+  await nodes.get('record').onclick();assert.equal(requests.at(-1).audio.latency.ideal,0);
+  const refreshed=await mount(storage,{globals});assert.equal(refreshed.nodes.get('sidetoneEnabled').checked,true);assert.equal(refreshed.nodes.get('sidetoneVolume').value,0.6);
+  (await storage.ready).close();
+});

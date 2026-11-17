@@ -1,28 +1,54 @@
-// Fixed input gain only. No automatic compression and no microphone monitoring.
+// Microphone processing and optional low-latency headphone monitoring.
 (function(root){
   function clampDb(value){return Number.isFinite(value)?Math.max(0,Math.min(24,value)):0;}
-  async function createInput(microphone,db=0,env=root){
+  function clampMonitorVolume(value){return Number.isFinite(value)?Math.max(0,Math.min(1,value)):0.35;}
+  async function createInput(microphone,db=0,env=root,{sidetone=false,sidetoneVolume=0.35}={}){
     db=clampDb(db);
-    if(db===0)return {stream:microphone,db,dispose(){}};
-    let context,source,gain,destination,disposed=false;
+    if(db===0 && !sidetone)return {stream:microphone,db,dispose(){}};
+    let context,source,gain,destination,monitorGain,disposed=false,monitoring=false;
+    let volume=clampMonitorVolume(sidetoneVolume);
+    function updateMonitor(){if(monitorGain && !disposed)monitorGain.gain.value=monitoring?volume:0;}
     function dispose(){
       if(disposed)return;disposed=true;
-      try{source?.disconnect();gain?.disconnect();}catch{}
+      try{source?.disconnect();gain?.disconnect();monitorGain?.disconnect();}catch{}
       destination?.stream.getTracks().forEach(track=>track.stop());
       if(context)void context.close().catch(()=>{});
     }
     try{
-      context=new env.AudioContext();
+      context=new env.AudioContext({latencyHint:'interactive'});
       source=context.createMediaStreamSource(microphone);
-      gain=context.createGain();gain.gain.value=10**(db/20);
-      destination=context.createMediaStreamDestination();
-      source.connect(gain);gain.connect(destination);
+      if(db>0){
+        gain=context.createGain();gain.gain.value=10**(db/20);
+        destination=context.createMediaStreamDestination();
+        source.connect(gain);gain.connect(destination);
+      }
+      if(sidetone){
+        monitorGain=context.createGain();monitorGain.gain.value=0;
+        (gain || source).connect(monitorGain);monitorGain.connect(context.destination);
+      }
       await context.resume();
       if(context.state==='suspended')throw Error('Audio context suspended');
-      return {stream:destination.stream,db,dispose};
+      return {stream:destination?.stream || microphone,db,dispose,
+        setMonitoring(enabled){monitoring=!!enabled;updateMonitor();},
+        setMonitorVolume(value){volume=clampMonitorVolume(value);updateMonitor();}};
     }catch(error){
-      dispose();throw Error('无法启用手动录音增益，请将增益设为 0 dB 后重试。',{cause:error});
+      dispose();throw Error(sidetone?'无法启用耳返，请关闭耳返后重试。':'无法启用手动录音增益，请将增益设为 0 dB 后重试。',{cause:error});
     }
+  }
+  async function requestStream(mediaDevices,constraints){
+    try{return await mediaDevices.getUserMedia({audio:constraints,video:false});}
+    catch(error){
+      if(constraints.deviceId && ['NotFoundError','OverconstrainedError'].includes(error.name))throw Error('所选麦克风不可用，请在「速度与麦克风」中重新检测并选择输入设备。',{cause:error});
+      throw error;
+    }
+  }
+  async function listInputs(mediaDevices){
+    const devices=await mediaDevices.enumerateDevices();
+    const seen=new Set(['default']);
+    return devices.filter(device=>{
+      if(device.kind!=='audioinput' || !device.deviceId || seen.has(device.deviceId))return false;
+      seen.add(device.deviceId);return true;
+    }).map((device,index)=>({id:device.deviceId,label:device.label || `麦克风 ${index+1}（授权后显示名称）`,named:!!device.label}));
   }
   function isLossless(mimeType) { return /codecs\s*=\s*["']?pcm\b/i.test(mimeType || ''); }
   function supportsLossless(Recorder=root.MediaRecorder){
@@ -62,6 +88,6 @@
     parts.push(processing.join(' · '));
     return parts.join('\n');
   }
-  const api={clampDb,createInput,isLossless,supportsLossless,recordingOptions,captureSettings,describeRecording};
+  const api={clampMonitorVolume,requestStream,listInputs,clampDb,createInput,isLossless,supportsLossless,recordingOptions,captureSettings,describeRecording};
   if(typeof module!=='undefined')module.exports=api;else root.EchoMicrophone=api;
 })(globalThis);
