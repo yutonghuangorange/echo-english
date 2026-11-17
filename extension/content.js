@@ -209,14 +209,17 @@
   });
   const settings=EchoSettingsDialog.attach({view:root,onOpen:section=>{
     if(section==='microphone')void refreshInputDevices();
+    if(section==='backing')$('settingsStatus').textContent=karaokeIssue || '';
     if(section==='captions' && !captionTracks.length && mode==='idle')void $('refreshCaptionTracks').onclick();
   }});
+  $('practiceTools').onclick=()=>{if(mode==='idle')settings.open('practice','practiceTools');};
+  $('settingsStop').onclick=()=>stop();
   $('practiceSettings').onclick=()=>{if(mode==='idle')settings.open('microphone','practiceSettings');};
   $('captionSettings').onclick=()=>{if(mode==='idle')settings.open('captions','captionSettings');};
-  $('openSeparationSettings').onclick=()=>{if(mode==='idle')settings.open('backing','openSeparationSettings');};
+  $('adjustClipBounds').onclick=()=>{if(mode!=='idle')return;settings.open('practice','adjustClipBounds');$('clipSettings').open=true;$('clipSettings').scrollIntoView?.({block:'start'});};
   let favorite=false,favoriteRequest=0,favoriteSaving=false;
   function renderFavorite(){
-    $('favoriteVideo').textContent=favorite?'★ 已收藏':'☆ 收藏';$('favoriteVideo').setAttribute('aria-pressed',String(favorite));
+    $('favoriteVideo').textContent=favorite?'★':'☆';$('favoriteVideo').setAttribute('aria-label',favorite?'取消收藏当前视频':'收藏当前视频');$('favoriteVideo').title=favorite?'取消收藏当前视频':'收藏当前视频';$('favoriteVideo').setAttribute('aria-pressed',String(favorite));
     $('favoriteVideo').disabled=mode!=='idle' || !videoId || favoriteSaving;
   }
   async function refreshFavorite(){
@@ -238,7 +241,7 @@
     getSettings:()=>({constraints:microphoneConstraints(),gainDb:gainPreferences[activity]?0:manualGainPreferences[activity],quality:recordingQuality,sidetone:sidetoneEnabled,sidetoneVolume,sidetoneMode,
       description:`${$('inputDevice').selectedOptions?.[0]?.textContent || (inputDeviceId?'所选麦克风':'系统默认麦克风')} · ${isSinging()?'唱歌':'配音'} · ${gainPreferences[activity]?'自动增益':`增益 +${manualGainPreferences[activity]} dB`} · 回声消除${echoPreferences[activity]?'开':'关'} · 耳返${sidetoneEnabled?'开':'关'}`}),
     onBeforeTest:()=>document.querySelector('video.html5-main-video')?.pause(),
-    onConfigure:()=>{settings.open('microphone','openMicTest');$('inputDevice').focus();},
+    onConfigure:()=>{settings.open('microphone','practiceSettings');$('inputDevice').focus();},
     onPreset:p=>{
       if(mode!=='idle')return;
       scopePreferences[activity]=$('practiceScope').value;backingPreferences[activity]=$('useBacking').checked;
@@ -260,8 +263,10 @@
   $('openCaptionSetup').onclick=()=>showPage('transcript',true);
   function updateSettingsSummaries(){
     $('speedSummary').textContent=`${gainPreferences[activity]?'自动增益':`增益 +${manualGainPreferences[activity]} dB`} · ${recordingQuality==='lossless'?'无损':'高品质'}${sidetoneEnabled?' · 耳返':''}`;
+    $('practiceSettings').title=$('speedSummary').textContent;
     const lead=$('leadInMode').value;
     $('practiceToolsState').textContent=`${lead==='seconds'?`前置 ${$('leadInSeconds').value} 秒`:lead==='previous'?'前置上一句':'前置关闭'} · ${$('loopCount').value==='0'?'持续循环':`循环 ${$('loopCount').value} 次`}`;
+    $('practiceTools').title=$('practiceToolsState').textContent;
   }
   function updateSummaries() {
     updateSettingsSummaries();
@@ -296,7 +301,6 @@
     $('backingLiveVolume').setAttribute('aria-label',singing?'录音中伴奏监听音量':'录音中背景音监听音量');
     $('backingVolume').setAttribute('aria-label',singing?'录唱监听音量':'背景监听音量');
     $('practiceToolsSummary').hidden=false;
-    $('practiceTools').className='fold';
     $('transcriptTitle').textContent=singing?'选择想练的一句歌词':'找到想练的那一句';
     $('transcriptSubtitle').textContent=singing?'点选歌词，主录唱区会切到对应片段。':'点选一句，回到练习。可搜索台词或导入字幕。';
     $('cueHeading').textContent=singing?'当前歌词':'当前台词';
@@ -396,8 +400,8 @@
 
     $('previewBacking').disabled=busy || !ready;
     $('songReadiness').textContent=!usesBacking()?'清唱 · 不播放伴奏':ready?`${name}已就绪`:mode==='separating'?`正在准备${name}…`:restoringBacking?`正在查找已有${name}…`:`尚未准备${name}`;
-    $('openBacking').textContent=ready?`调整${name}`:`准备${name} →`;
-    $('backingSummary').textContent=!usesBacking()?'清唱':`${qualityPreferences[activity]==='lossless'?'FLAC 无损':'MP3'} · ${ready?'已就绪':mode==='separating'?'生成中…':'未生成'}`;
+    $('openBacking').title=ready?`调整${name}`:`准备${name} →`;
+    $('backingSummary').textContent=!usesBacking()?'清唱':ready?'就绪':mode==='separating'?'生成中':'未就绪';
     $('prepareBacking').disabled=busy || !!ready;
     $('karaokeNotice').hidden=!karaokeIssue;
     $('karaokeNotice').textContent=karaokeIssue;
@@ -495,7 +499,7 @@
     $('autoPractice').textContent=paragraph?'▶ 自动练当前段落':whole?(singing?'▶ 自动练整首':'▶ 自动练整段'):singing?'▶ 自动练当前片段':'▶ 自动跟读';
   }
   function controls() {
-    renderPracticeActions();
+    $('panel').dataset.mode=mode;renderPracticeActions();
     const busy = mode !== 'idle';
     $('openLibrary').disabled=busy;
     updateLeadInSettings();
@@ -508,7 +512,7 @@
     $('sidetoneLiveControls').hidden=!recording || !sidetoneEnabled;
     $('sidetoneLatency').hidden=!recording || !sidetoneEnabled;
     $('sidetoneLatency').textContent=EchoMicrophone.describeMonitoring(recordingSession?.sidetoneInfo);
-    $('practiceDock').hidden=currentPage!=='practice' || mode!=='idle';
+    $('practiceDock').hidden=currentPage!=='practice' || mode!=='idle';$('practiceUtilities').hidden=currentPage!=='practice' || mode!=='idle';
     $('historyBrowser').hidden=!videoHistory.length;
     $('playAll').hidden=!videoHistory.length;
     $('recordingDetails').hidden=!take;
@@ -531,7 +535,7 @@
     $('karaokeSettings').hidden=!hasBackingTools() || recording;
     $('backingOption').hidden=recording;
     for(const id of ['practiceTools','practiceSettings','quickSpeed'])$(id).hidden=recording;
-    for(const id of ['practiceSettings','captionSettings','openSeparationSettings'])$(id).disabled=busy;
+    for(const id of ['practiceTools','practiceSettings','captionSettings','openBacking','adjustClipBounds'])$(id).disabled=busy;
     $('captionSetup').hidden=recording || cues.length>0;
     $('clipSettings').hidden=recording;
     $('clipBounds').hidden=recording || $('practiceScope').value!=='clip';
@@ -548,6 +552,7 @@
     $('next').disabled=busy || index<0 || index>=cues.length-1;
     updateBackingControls();
     $('stop').disabled = !busy || mode==='saving'; $('stop').hidden = !busy;
+    $('settingsStop').hidden=!busy;$('settingsStop').disabled=mode==='saving';
     $('stop').textContent=mode==='lead-in'?'■ 取消准备':mode==='recording'?'■ 结束录音':mode==='saving'?'保存中…':'■ 停止';
     $('reviewReplay').disabled = busy || !take;
     $('playAll').disabled = busy || !videoHistory.length;
@@ -563,10 +568,10 @@
     root.querySelectorAll('.cue').forEach(b => b.disabled = busy);
     renderMixControls();
     if(busy && focused?.disabled && !$('stop').disabled){
-      returnFocus ||= focused;$('stop').focus();
+      returnFocus ||= focused;(settings.isOpen()?$('settingsStop'):$('stop')).focus();
     } else if(!busy && returnFocus){
       const target=returnFocus;returnFocus=null;
-      if(currentPage==='practice' && (!focused || focused.id==='stop') && !target.disabled)target.focus();
+      if(currentPage==='practice' && (!focused || ['stop','settingsStop'].includes(focused.id)) && !target.disabled)target.focus();
     }
   }
   function saveVideo(v) { savedVideo = { v, muted: v.muted, rate: v.playbackRate }; }
@@ -926,12 +931,11 @@
     backingPreferences[activity]=$('useBacking').checked;
     backingRestoreRequest++;restoringBacking=false;karaokeIssue='';
     renderActivity();controls();saveProgress();
-    if(usesBacking()){$('karaokeSettings').open=true;void checkKaraokeService();void restoreServerBacking();}
+    if(usesBacking()){void checkKaraokeService();void restoreServerBacking();}
   };
   $('practiceScope').onchange=()=>{scopePreferences[activity]=$('practiceScope').value;karaokeIssue='';if(isParagraph()){renderParagraphOptions();syncParagraphBounds();index=paragraphFirst;updateCaption();}chooseCurrentTake();updateSummaries();controls();saveProgress();if(hasBackingTools() && !restoringBacking)void restoreServerBacking();};
   $('openBacking').onclick=()=>{
-    $('karaokeSettings').open=true;
-    $('karaokeSettings').scrollIntoView?.({block:'nearest'});
+    if(mode==='idle')settings.open('backing','openBacking');
   };
   $('reuseSongRange').onclick=()=>{
     if(mode!=='idle' || !take)return;
@@ -1002,8 +1006,8 @@
       if(r.model!==EchoKaraoke.DEFAULT_MODEL && !modelManagement){karaokeIssue='BandIt 需要新版本机服务，请在终端停止旧服务，再运行根目录启动脚本并重新检测。';controls();status(karaokeIssue);return;}
     }
     const id=videoId, token=++generation;
-    video().pause();mode='separating';controls();
-    $('karaokeSettings').open=false;$('singDetails').scrollIntoView?.({block:'nearest'});
+    settings.close();video().pause();mode='separating';controls();
+    $('singDetails').scrollIntoView?.({block:'nearest'});
     $('karaokeProgress').hidden=false;$('karaokeProgress').removeAttribute('value');
     status(`正在准备${name}，请稍候…`);$('karaokeInfo').textContent='正在连接本机伴奏服务…';
     $('karaokeNotice').textContent='正在连接本机伴奏服务，请稍候…';$('karaokeNotice').hidden=false;
@@ -1491,14 +1495,14 @@
   }
   $('loop').onclick = guarded(async () => {
     const r = selectedRange(), token = ++generation, count = Number($('loopCount').value);
-    closeWord(); mode = 'loop'; controls();
+    settings.close();closeWord(); mode = 'loop'; controls();
     await EchoPractice.runLoop({count, active:()=>token === generation,
       listen: async round => { status(`单句循环 · 第 ${round} 次${count ? ' / '+count : ''}`); await original(r,token); },
       gap:()=>pauseBetween(600,token)});
     if (token === generation) { finish(); status('循环播放完成。'); }
   });
   $('autoPractice').onclick = guarded(async () => {
-    selectedRange(); const token = ++generation, autoNext = $('practiceScope').value==='clip' && $('autoNext').checked, seconds = Number($('prepSeconds').value);
+    selectedRange();settings.close(); const token = ++generation, autoNext = $('practiceScope').value==='clip' && $('autoNext').checked, seconds = Number($('prepSeconds').value);
     closeWord(); mode = 'practice'; controls(); status('首次练习：正在检查麦克风权限…');
     // Obtain permission before the listening/preparation stages so its dialog
     // cannot consume the learner's preparation time. Release immediately.
@@ -1545,7 +1549,7 @@
   $('record').onclick = guarded(() => {
     if(mode!=='idle')return;
     if(!hasBackingTools())return record();
-    let r;try{r=selectedRange();}catch(error){karaokeIssue=error.message;controls();$('clipSettings').open=true;status('请先调整练习范围。');return;}
+    let r;try{r=selectedRange();}catch(error){karaokeIssue=error.message;controls();$('adjustClipBounds').click();status('请先调整练习范围。');return;}
     if(usesBacking() && !backingFor(r)){$('openBacking').click();status(`请先为当前练习范围准备${backingName()}，再开始${isSinging()?'录唱':'配音'}。`);return;}
     return record();
   }); $('stop').onclick = stop;
@@ -1683,9 +1687,9 @@
   const foldPreferenceKey='echo-folds-v1';
   let foldPreferences={};
   try{const saved=JSON.parse(window.localStorage.getItem(foldPreferenceKey));if(saved && typeof saved==='object')foldPreferences=saved;}catch{}
-  for(const id of ['clipSettings','practiceTools','karaokeSettings','recordingDetails','mixControls']){
+  for(const id of ['clipSettings','recordingDetails','mixControls']){
     const fold=$(id);
-    fold.open=typeof foldPreferences[id]==='boolean'?foldPreferences[id]:id==='karaokeSettings';
+    fold.open=typeof foldPreferences[id]==='boolean'?foldPreferences[id]:false;
     fold.addEventListener('toggle',()=>{
       foldPreferences[id]=fold.open;
       try{window.localStorage.setItem(foldPreferenceKey,JSON.stringify(foldPreferences));}catch{}

@@ -78,7 +78,7 @@ test('movie background is opt-in, keeps separate activity preferences and restor
   assert.equal(nodes.get('karaokeSettings').hidden,true);
   assert.match(nodes.get('useBackingLabel').textContent,/保留背景音/);
   nodes.get('useBacking').checked=true;nodes.get('useBacking').onchange();
-  assert.equal(nodes.get('karaokeSettings').hidden,false);assert.equal(nodes.get('karaokeSettings').open,true);
+  assert.equal(nodes.get('karaokeSettings').hidden,false);assert.equal(nodes.get('karaokeSettings').hidden,false);
   assert.equal(nodes.get('backingSettingsTitle').textContent,'背景音设置');
   assert.equal(nodes.get('prepareBacking').textContent,'提取片段背景音');
   nodes.get('activityMode').value='sing';nodes.get('activityMode').onchange();
@@ -156,7 +156,7 @@ test('empty pages hide irrelevant recording controls and keep the practice dock 
   assert.equal(nodes.get('practiceDock').hidden,false);
   assert.equal(nodes.get('captionSetup').hidden,false);
   assert.equal(nodes.get('captionOptions').hidden,true);assert.equal(nodes.get('clipCue').disabled,true);
-  assert.equal(nodes.get('practiceTools').open,false);
+  assert.notEqual(nodes.get('settingsDialog').open,true);
   nodes.get('tab-recordings').onclick();
   assert.equal(nodes.get('practiceDock').hidden,true);
   assert.equal(nodes.get('recordingEmpty').hidden,false);
@@ -343,9 +343,9 @@ test('song mode exposes main recording and guides missing accompaniment without 
   assert.equal(nodes.get('scopeControls').hidden,false);assert.equal(nodes.get('practiceDock').hidden,false);
   nodes.get('activityMode').value='sing';nodes.get('activityMode').onchange();
   assert.equal(nodes.get('scopeControls').hidden,false);assert.equal(nodes.get('practiceDock').hidden,false);
-  assert.equal(nodes.get('practiceTools').open,false);assert.equal(nodes.get('practiceToolsSummary').hidden,false);
-  assert.equal(nodes.get('karaokeSettings').open,true);assert.equal(nodes.get('record').disabled,false);
-  await nodes.get('record').onclick();assert.equal(micRequests,0);assert.equal(nodes.get('karaokeSettings').open,true);
+  assert.notEqual(nodes.get('settingsDialog').open,true);assert.equal(nodes.get('practiceToolsSummary').hidden,false);
+  assert.equal(nodes.get('karaokeSettings').hidden,false);assert.equal(nodes.get('record').disabled,false);
+  await nodes.get('record').onclick();assert.equal(micRequests,0);assert.equal(nodes.get('settingsDialog').open,true);assert.equal(nodes.get('settings-backing').hidden,false);
   nodes.get('activityMode').value='speech';nodes.get('activityMode').onchange();
   assert.equal(nodes.get('scopeControls').hidden,false);assert.equal(nodes.get('karaokeSettings').hidden,true);
   assert.equal(nodes.get('practiceDock').hidden,false);assert.equal(nodes.get('practiceToolsSummary').hidden,false);
@@ -359,6 +359,7 @@ test('volume remains adjustable during accompaniment preview and saves the chose
   class Audio{constructor(){sound=this;}pause(){}async play(){}}
   const {nodes}=await mount(storage,{video,globals:{Audio,EchoKaraoke:{...require('../extension/karaoke.js'),async createBackingOutput(){return {setVolume(value){gain=value;},dispose(){}};}}}});
   nodes.get('activityMode').value='sing';nodes.get('activityMode').onchange();
+  nodes.get('openBacking').onclick();assert.equal(nodes.get('settingsDialog').open,true);
   const playing=nodes.get('previewBacking').onclick();
   for(let i=0;i<30 && !nodes.get('transportProgress').oninput;i++)await new Promise(r=>setTimeout(r,1));
   assert.equal(nodes.get('backingVolume').disabled,false);
@@ -367,7 +368,7 @@ test('volume remains adjustable during accompaniment preview and saves the chose
   for(let i=0;i<20 && !nodes.get('transportProgress').oninput;i++)await Promise.resolve();
   nodes.get('transportProgress').value='0.5';await nodes.get('transportProgress').oninput();
   assert.equal(video.currentTime,30);assert.equal(sound.currentTime,30);
-  nodes.get('backingVolume').onchange();nodes.get('stop').onclick();await playing;
+  nodes.get('backingVolume').onchange();assert.equal(nodes.get('settingsStop').hidden,false);nodes.get('settingsStop').onclick();await playing;assert.equal(nodes.get('settingsDialog').open,true);
   const session=await storage.getSession('video');assert.equal(session.backingVolume,1.5);
   (await storage.ready).close();
 });
@@ -517,7 +518,7 @@ test('selecting a lyric uses the main clip recording controls without a duplicat
   assert.equal(nodes.get('start').value,'2.00');
   assert.equal(nodes.get('position').textContent,'2 / 2');
   assert.equal(nodes.get('practiceDock').hidden,false);assert.equal(nodes.get('practiceScope').value,'clip');
-  assert.equal(nodes.get('scopeControls').hidden,false);assert.equal(nodes.get('practiceTools').open,false);
+  assert.equal(nodes.get('scopeControls').hidden,false);assert.notEqual(nodes.get('settingsDialog').open,true);
   assert.match(nodes.get('clipSummary').textContent,/2.0–4.0/);
   assert.match(nodes.get('record').textContent,/开始片段录唱/);
   assert.equal(nodes.get('clipCue').value,'1');
@@ -1261,18 +1262,18 @@ test('fold preferences survive mode changes and remount without breaking setting
   const localStorage={getItem:key=>preferences.get(key) || null,setItem:(key,value)=>preferences.set(key,value)};
   const globals={window:{localStorage,addEventListener(){},speechSynthesis:{cancel(){}}}};
   const {nodes}=await mount(storage,{globals});
-  nodes.get('practiceTools').open=true;nodes.get('practiceTools').dispatchEvent({type:'toggle'});
-  nodes.get('karaokeSettings').open=false;nodes.get('karaokeSettings').dispatchEvent({type:'toggle'});
+  nodes.get('clipSettings').open=true;nodes.get('clipSettings').dispatchEvent({type:'toggle'});
+  nodes.get('recordingDetails').open=false;nodes.get('recordingDetails').dispatchEvent({type:'toggle'});
   nodes.get('activityMode').value='sing';nodes.get('activityMode').onchange();
-  assert.equal(nodes.get('practiceTools').open,true);assert.equal(nodes.get('karaokeSettings').open,false);
+  assert.equal(nodes.get('clipSettings').open,true);assert.equal(nodes.get('recordingDetails').open,false);
   nodes.get('leadInMode').value='seconds';nodes.get('leadInMode').onchange();
   nodes.get('leadInSeconds').value=5;nodes.get('leadInSeconds').onchange();
   assert.match(nodes.get('practiceToolsState').textContent,/前置 5 秒.*循环 3 次/);
   nodes.get('manualGainDb').value=6;nodes.get('manualGainDb').oninput();
   assert.match(nodes.get('speedSummary').textContent,/增益 \+6 dB/);
   const restored=await mount(storage,{globals});
-  assert.equal(restored.nodes.get('practiceTools').open,true);
-  assert.equal(restored.nodes.get('karaokeSettings').open,false);
+  assert.equal(restored.nodes.get('clipSettings').open,true);
+  assert.equal(restored.nodes.get('recordingDetails').open,false);
   (await storage.ready).close();
 });
 
@@ -1715,8 +1716,35 @@ test('infrequent settings open in one modal, preserve the practice page and supp
   nodes.get('openLanguageSettings').onclick();assert.equal(nodes.get('settings-captions').hidden,false);assert.equal(nodes.get('page-practice').hidden,false);
   await waitUntil(()=>nodes.get('read').disabled===false);nodes.get('closeSettings').onclick();
   nodes.get('openMicTest').onclick();nodes.get('micTestConfigure').onclick();assert.equal(nodes.get('toolsDialog').open,false);assert.equal(nodes.get('settingsDialog').open,true);assert.equal(nodes.get('settings-microphone').hidden,false);
-  nodes.get('closeSettings').onclick();nodes.get('useBacking').checked=true;nodes.get('useBacking').onchange();nodes.get('openSeparationSettings').onclick();assert.equal(nodes.get('settings-backing').hidden,false);
+  nodes.get('closeSettings').onclick();nodes.get('useBacking').checked=true;nodes.get('useBacking').onchange();nodes.get('openBacking').onclick();assert.equal(nodes.get('settings-backing').hidden,false);
   nodes.get('close').onclick();assert.equal(nodes.get('settingsDialog').open,false);
   const restored=await mount(storage,{globals});assert.equal(restored.nodes.get('manualGainDb').value,6);assert.equal(restored.nodes.get('settingsDialog').open,undefined);
   (await storage.ready).close();
+});
+
+test('preparation and automatic-practice actions share a settings pane and return to the main controls on start',async()=>{
+  const storage=createStorage(new IDBFactory()),video=leadInVideo({hold:true});let released=0;
+  const {nodes}=await mount(storage,{video,globals:{navigator:{mediaDevices:{async getUserMedia(){return {getTracks:()=>[{stop(){released++;}}]};}}},requestAnimationFrame:fn=>setTimeout(fn,1),cancelAnimationFrame:clearTimeout}});
+  for(const action of ['loop','autoPractice']){
+    nodes.get('practiceTools').onclick();assert.equal(nodes.get('settingsDialog').open,true);assert.equal(nodes.get('settings-practice').hidden,false);
+    nodes.get('leadInMode').value='none';nodes.get('leadInMode').onchange();nodes.get('loopCount').value='5';nodes.get('loopCount').onchange();
+    const running=nodes.get(action).onclick();assert.equal(nodes.get('settingsDialog').open,false);
+    await waitUntil(()=>!!nodes.get('transportProgress').oninput);assert.equal(nodes.get('stop').hidden,false);
+    nodes.get('stop').onclick();await running;assert.equal(nodes.get('record').disabled,false);
+  }
+  assert.equal(released,1);assert.equal((await storage.getSession('video')).loopCount,'5');
+  nodes.get('practiceTools').onclick();assert.equal(nodes.get('loopCount').value,'5');nodes.get('closeSettings').onclick();(await storage.ready).close();
+});
+
+test('fixed practice tools keep time adjustment and nested preparation tools reachable without changing pages',async()=>{
+  const storage=createStorage(new IDBFactory()),{nodes,root}=await mount(storage);
+  assert.equal(nodes.get('practiceUtilities').hidden,false);assert.equal(nodes.get('quickSpeed').hidden,false);
+  nodes.get('adjustClipBounds').onclick();assert.equal(nodes.get('settingsDialog').open,true);assert.equal(nodes.get('settings-practice').hidden,false);assert.equal(nodes.get('clipSettings').open,true);
+  nodes.get('start').value='1';nodes.get('end').value='4';nodes.get('end').onchange();
+  nodes.get('openMicTest').onclick();assert.equal(nodes.get('toolsDialog').open,true);
+  root.onkeydown({key:'Escape',preventDefault(){},stopPropagation(){}});assert.equal(nodes.get('toolsDialog').open,false);assert.equal(nodes.get('settingsDialog').open,true);
+  nodes.get('closeSettings').onclick();assert.equal(nodes.get('page-practice').hidden,false);assert.match(nodes.get('clipSummary').textContent,/1.0–4.0/);
+  nodes.get('tab-recordings').onclick();assert.equal(nodes.get('practiceUtilities').hidden,true);
+  nodes.get('tab-practice').onclick();assert.equal(nodes.get('practiceUtilities').hidden,false);
+  await new Promise(r=>setTimeout(r,5));assert.equal((await storage.getSession('video')).end,4);(await storage.ready).close();
 });

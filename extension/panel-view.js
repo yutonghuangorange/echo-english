@@ -63,30 +63,33 @@
     .prep-row{display:flex;gap:6px;margin:8px 0 14px;flex-wrap:wrap}.prep-row button{font-size:11px;padding:6px 9px}.prep-row #favoriteVideo{margin-left:auto}.prep-row [aria-pressed="true"]{color:#f5cf80;border-color:#b49458}
     .tools-body{padding:0 20px 18px;overflow:auto}.tools-body h3{font-size:14px;margin:18px 0 8px}.preset-grid{display:grid;grid-template-columns:1fr 1fr;gap:8px}.preset-grid button{text-align:left;padding:12px;white-space:normal}.preset-grid small{display:block;line-height:1.6;margin-top:5px}.tools-body audio{width:100%;height:36px;margin-top:8px}.tools-body .live-meter{border-radius:8px;padding:10px;margin:10px 0}.shortcut-list{line-height:2;font-size:12px}.shortcut-list kbd{color:#d0e9fa}.library-tabs{flex-wrap:wrap}.package-tools{padding:8px 0 12px}.package-tools .row{flex-wrap:wrap}.package-section{display:grid;gap:16px}.package-section h3{font-size:14px;margin:0;color:#edf2f7}.package-section p{margin:0;line-height:1.7}.package-field{display:grid;gap:8px}.package-addon{padding:12px;border:1px solid #30414e;border-radius:8px;background:#192734;gap:9px;line-height:1.6}.package-section>button{width:100%;min-height:42px}.package-restore{margin-top:24px;padding-top:22px;border-top:1px solid #30414e}.package-preview{border:1px solid #587b74;border-radius:8px;padding:12px;margin-top:12px}
     .settings-entry{display:flex;align-items:center;gap:10px;width:100%;margin:12px 0;padding:13px 12px;text-align:left;background:#1b2937;border:1px solid #405467;border-radius:10px;font-size:13px}.settings-entry small{margin-left:auto;font-size:10px;color:#90a4b6;max-width:58%;text-align:right}.settings-entry>span:last-child{margin-left:auto;color:#b3eedb}.settings-body{overflow:auto;min-height:0;scrollbar-width:thin;scrollbar-color:#405467 transparent;padding:6px 20px 16px}.settings-body>.fold-content{padding:0;background:transparent}.settings-body .field-heading{margin-top:18px}.settings-body select{margin-top:6px}.settings-body .hint{line-height:1.7}.settings-body>.fold-content>label:has(input[type="checkbox"]){margin-top:16px}
+    .practice-setting-group{margin:14px 0}.settings-footer-row{display:flex;align-items:center;justify-content:space-between;gap:12px}.settings-footer-row button{font-size:12px;padding:6px 12px}.settings-body .secondary-actions{padding:0;margin:18px 0}
+    .scope-label{position:absolute;width:1px;height:1px;overflow:hidden;clip-path:inset(50%)}
+    .scope-row{gap:8px;margin:0 0 10px}.scope-row>select{flex:1;min-width:0}.header-actions #favoriteVideo{font-size:18px;padding:4px 6px}
+    .practice-utilities{display:grid;grid-auto-flow:column;grid-auto-columns:minmax(0,1fr);gap:6px;padding:6px 20px;border-top:1px solid #30414e;background:#16222e;flex-shrink:0}.practice-utilities #karaokeSettings{display:contents}
+    .utility-setting{display:flex;align-items:center;justify-content:center;gap:5px;min-width:0;padding:8px 6px;text-align:left;font-size:11px;background:#1c2b3a;border-color:#3a4d60}.utility-setting small,.utility-setting>span:last-child[aria-hidden]{display:none}.utility-setting #backingSummary{display:block;font-size:9px;white-space:nowrap;color:#90a4b6}
+    .dock-heading-row{display:flex;align-items:center;justify-content:space-between;gap:10px;margin-bottom:8px}.dock-heading-row .dock-heading{margin:0}.dock-heading-row #quickSpeed .row{margin:0;gap:6px}.dock-heading-row #quickSpeed label{flex:0 0 auto;font-size:10px}.dock-heading-row #speed{width:110px;padding:5px 8px;font-size:11px}
+    .pages:has(#page-practice:not([hidden])){--page-padding:12px;padding:12px 20px}.clip-selector-row{display:flex;gap:6px;align-items:center;margin:0 0 12px}.clip-selector-row select{min-width:0;flex:1}.clip-selector-row button{font-size:10px;padding:9px 7px;flex:0 0 auto}#clipBounds{margin-bottom:0}
+    .cue-card{padding:12px}.panel[data-mode="idle"] .caption-context{display:none}.panel[data-mode="idle"] .caption{min-height:44px;padding:8px 0 10px}.panel[data-mode="idle"] .cue-card{margin-bottom:0}
+    .paragraphSelection{display:grid;grid-template-columns:1fr 1fr;gap:8px}#paragraphSelection .row{margin:0 0 8px;gap:4px}#paragraphSelection .row label{flex:0 0 28px;font-size:11px}#paragraphSelection>p{display:none}
   </style><div class="panel" id="panel">
-    <header><div id="movePanel" role="button" tabindex="0" aria-label="移动面板" title="拖动标题移动；方向键微调，Home 或双击归位。"><h1>Echo<small>配音与唱歌练习</small></h1></div><div class="header-actions"><button id="openLibrary" class="text-button" aria-haspopup="dialog">练习库</button><button class="close" id="close" aria-label="关闭">×</button></div></header>
+    <header><div id="movePanel" role="button" tabindex="0" aria-label="移动面板" title="拖动标题移动；方向键微调，Home 或双击归位。"><h1>Echo<small>配音与唱歌练习</small></h1></div><div class="header-actions"><button id="favoriteVideo" aria-pressed="false" title="在练习库收藏当前视频">☆ 收藏</button><button id="openLibrary" class="text-button" aria-haspopup="dialog">练习库</button><button class="close" id="close" aria-label="关闭">×</button></div></header>
     <nav class="tabs" role="tablist" aria-label="练习面板"><button id="tab-practice" role="tab" aria-selected="true" aria-controls="page-practice" tabindex="0">练习</button><button id="tab-transcript" role="tab" aria-selected="false" aria-controls="page-transcript" tabindex="-1">台词</button><button id="tab-recordings" role="tab" aria-selected="false" aria-controls="page-recordings" tabindex="-1">录音</button></nav>
     <div class="pages">
       <section id="page-practice" role="tabpanel" aria-labelledby="tab-practice">
-        <select id="activityMode" aria-label="练习模式"><option value="speech" selected>说对白 · 配音跟读</option><option value="sing">唱歌曲 · 伴奏监听</option></select>
-        <div class="prep-row" id="prepActions"><button id="openPresets" aria-haspopup="dialog">场景预设</button><button id="openMicTest" aria-haspopup="dialog">麦克风试音</button><button id="favoriteVideo" aria-pressed="false" title="在练习库收藏当前视频">☆ 收藏</button></div>
+
+
         <div id="scopeControls">
-          <div class="row"><label class="hint" id="practiceScopeLabel" for="practiceScope">配音范围</label><select id="practiceScope" aria-label="练习范围"><option id="wholeScopeOption" value="whole">整段视频</option><option value="clip" selected>当前片段</option><option id="paragraphScopeOption" value="paragraph">段落（多句）</option></select></div>
+          <div class="row scope-row">        <select id="activityMode" aria-label="练习模式"><option value="speech" selected>对白 · 配音跟读</option><option value="sing">歌曲 · 伴奏录唱</option></select><label class="scope-label" id="practiceScopeLabel" for="practiceScope">配音范围</label><select id="practiceScope" aria-label="练习范围"><option id="wholeScopeOption" value="whole">整段视频</option><option value="clip" selected>当前片段</option><option id="paragraphScopeOption" value="paragraph">段落（多句）</option></select></div>
           <p class="hint" id="wholeScopeHint" hidden>从视频开头连续录制，最长 10 分钟。</p>
-          <div id="paragraphSelection" hidden><div class="row"><label class="hint" for="paragraphFirst">起句</label><select id="paragraphFirst" aria-label="段落起句"></select></div><div class="row"><label class="hint" for="paragraphLast">止句</label><select id="paragraphLast" aria-label="段落止句"></select></div><p class="hint">连续录下所选多句及句间间隔，最长 10 分钟。段落边界由起止句决定，微调时间可切换「当前片段」。</p></div>
+          <div id="paragraphSelection" class="paragraphSelection" hidden><div class="row"><label class="hint" for="paragraphFirst">起句</label><select id="paragraphFirst" aria-label="段落起句"></select></div><div class="row"><label class="hint" for="paragraphLast">止句</label><select id="paragraphLast" aria-label="段落止句"></select></div><p class="hint">连续录下所选多句及句间间隔，最长 10 分钟。段落边界由起止句决定，微调时间可切换「当前片段」。</p></div>
 
         </div>
 
           <div id="clipBounds">
-          <div class="row"><label class="hint" for="clipCue">选择句子</label><select id="clipCue" aria-label="当前片段的句子"></select></div>
-        <details class="fold" id="clipSettings"><summary>时间微调<span id="clipSummary">0.0–5.0 秒</span></summary><div class="fold-content">
-          <div class="row"><label><small>起点</small><input id="start" aria-label="片段起点（秒）" type="number" min="0" step="0.1" value="0"></label><label><small>终点</small><input id="end" aria-label="片段终点（秒）" type="number" min="0" step="0.1" value="5"></label></div>
-          <div class="row micro"><button id="startEarlier">起点 −0.2s</button><button id="startLater">起点 +0.2s</button><button id="endEarlier">终点 −0.2s</button><button id="endLater">终点 +0.2s</button></div>
-          <div class="row"><button id="markStart">此刻设为起点</button><button id="markEnd">此刻设为终点</button></div><p class="hint">配音时原声静音；每段最长 10 分钟。</p>
-        </div></details>
+          <div class="clip-selector-row"><label class="scope-label" for="clipCue">选择句子</label><select id="clipCue" aria-label="当前片段的句子"></select><button id="adjustClipBounds" aria-haspopup="dialog" title="微调当前片段时间"><span id="clipSummary">0.0–5.0 秒</span> ✎</button></div>
+
           </div>
-          <label class="check" id="backingOption"><input id="useBacking" type="checkbox"><span id="useBackingLabel">保留背景音（电影配音，可选）</span></label>
-          <div class="row readiness-row" id="songReadinessRow" hidden><span class="hint" id="songReadiness">先准备伴奏，再开始录唱</span><button id="openBacking" class="text-button">准备伴奏 →</button></div>
         <div class="cue-card"><div class="cue-nav"><span class="eyebrow" id="cueHeading">当前台词</span><button id="openLanguageSettings" class="text-button">调整语言</button><span><button id="prev" aria-label="上一句">‹</button><span aria-label="当前练习句">练习 <span id="position">手动片段</span></span><button id="next" aria-label="下一句">›</button></span></div>
           <div id="captionPrevious" class="caption-context" aria-label="上一句" hidden></div><div id="captionPhase" class="caption-phase"></div>
           <div class="caption-stage"><div class="caption" id="caption">从一句台词开始，听见自己的进步。</div></div><div id="translation" hidden></div>
@@ -102,31 +105,6 @@
         </div>
         <div id="captionSetup" class="setup"><span id="practiceSetup">先读取或导入字幕，也可直接设置练习范围。</span><button id="openCaptionSetup">准备字幕 →</button></div>
         <div id="wordcard" class="wordcard" hidden><div class="row"><strong id="wordTitle"></strong><button id="speakWord">▶ 朗读</button><button id="closeWord" aria-label="关闭词卡">×</button></div><small id="phonetic"></small><div id="definitions" role="status"></div><small>释义：Free Dictionary API · 查询时仅发送所选单词</small></div>
-        <details class="fold" id="practiceTools"><summary id="practiceToolsSummary">准备与自动练习<span id="practiceToolsState"></span></summary>
-          <div class="fold-content">          <div class="row"><label class="hint" for="leadInMode">前置播放</label><select id="leadInMode" aria-describedby="leadInHint"><option value="none">关闭</option><option value="seconds">前 N 秒</option><option id="previousLeadIn" value="previous">上一句</option></select></div>
-          <div id="leadInSecondsRow" class="row" hidden><label class="hint" for="leadInSeconds">前置时长（秒）</label><input id="leadInSeconds" type="number" min="0" max="30" step="1" value="3" aria-describedby="leadInHint"></div><p class="hint" id="leadInHint">先播放片段前的原声作准备，不录入准备段。</p>
-</div>
-          <div class="secondary-actions"><button id="loop">↻ 单句循环</button><button id="autoPractice">▶ 自动跟读</button></div>
-          <div class="fold-content">          <div class="row"><label class="hint" for="loopCount">循环次数</label><select id="loopCount" aria-label="循环次数"><option value="3">3 次</option><option value="5">5 次</option><option value="0">持续循环</option></select></div>
-          <div class="row"><label class="hint" for="prepSeconds">自动练习停顿</label><select id="prepSeconds" aria-label="自动练习停顿"><option value="0">不停顿</option><option value="2">2 秒</option><option value="3" selected>3 秒</option><option value="5">5 秒</option></select></div>
-          <label class="check"><input type="checkbox" id="autoNext">回放结束后自动练下一句</label><p class="hint" id="practiceFlowHint">自动跟读：原声 → 准备 → 配音 → 回放。</p>
-</div>
-        </details>
-        <details class="fold" id="karaokeSettings" hidden><summary><span id="backingSettingsTitle">伴奏设置</span><span id="backingSummary"></span></summary><div class="fold-content">
-          <p class="hint" id="backingSettingsHint">按上方录唱范围生成，最长 10 分钟。准备好后回到主区录唱。</p>
-          <button id="openSeparationSettings" class="text-button" aria-haspopup="dialog">分离模型与保存音质 ›</button>
-          <div class="backing-actions"><button id="prepareBacking">生成整首伴奏</button><button id="previewBacking" disabled>▷ 试听伴奏</button></div>
-          <div class="monitor-control"><div class="field-heading"><label id="backingVolumeLabel" for="backingVolume">录唱监听音量</label><output id="backingVolumeValue" for="backingVolume">100%</output></div><input id="backingVolume" type="range" min="0" max="2" step="0.05" value="1" aria-label="录唱监听音量"><p class="hint">试听与录音时生效；回听音量在底部调整。</p></div>
-          <div class="service-tools"><div class="utility-row"><span class="hint" id="karaokeService" role="status">伴奏服务 · 尚未检测</span><button id="checkKaraoke" class="text-button">重新检测</button></div>
-          <details class="fold" id="karaokeHelp"><summary id="backingHelpTitle">首次使用：如何启用伴奏？</summary><div class="fold-content hint">
-            <p>只需安装一个 Echo 扩展。提取伴奏和电影背景音共用这台电脑上的 Python、FFmpeg 和分离模型；普通配音、录音与回放无需这些组件。</p>
-            <p>① macOS / Linux：在项目目录运行 <code>bash start-karaoke.sh</code>。Windows：按下方说明准备组件，再运行 <code>powershell -NoProfile -ExecutionPolicy Bypass -File .\\start-karaoke.ps1</code>。以后使用同一命令启动。<br>② 保持终端开启，回到这里点击“重新检测”，再生成伴奏。首次下载模型及分离歌曲可能需要几分钟。</p>
-            <p>Linux 与 macOS 已验证；Windows 已提供适配，尚待实机验证。macOS 缺少组件时需已有 Homebrew；Windows 需先准备 Python 3.10–3.12、FFmpeg 和 Node.js 22+ 或 Deno。</p>
-            <a href="https://github.com/zexiangliu/echo-english/blob/master/karaoke/README.md" target="_blank" rel="noopener noreferrer">查看伴奏服务安装说明 ↗</a>
-            <p>建议戴耳机录音。分离结果可能残留原唱或对白，也可能损失部分环境音。</p>
-          </div></details>
-        </div></div></details>
-        <div id="quickSpeed">          <div class="row"><label class="hint" for="speed">播放速度</label><select id="speed" aria-label="练习速度"><option value="0.75">0.75× 慢速</option><option value="1" selected>1× 原速</option><option value="1.25">1.25×</option></select></div></div><button id="practiceSettings" class="settings-entry" aria-haspopup="dialog"><span>麦克风与录音设置</span><small id="speedSummary"></small><span aria-hidden="true">›</span></button>
       </section>
       <section id="page-transcript" role="tabpanel" aria-labelledby="tab-transcript" hidden>
         <h2 class="page-title" id="transcriptTitle">找到想练的那一句</h2><div class="page-subtitle" id="transcriptSubtitle">点选一句，回到练习。可搜索台词或导入字幕。</div>
@@ -160,8 +138,11 @@
         <div class="history-actions"><button id="undoDelete" hidden>撤销删除</button></div>
       </section>
     </div>
-    <div id="practiceDock" class="practice-dock">
-      <div class="dock-heading">播放与录音</div><div class="main-actions"><button id="original">▶ 听原声</button><button id="replay" disabled>▷ 回听录音</button><button class="primary" id="record">● 开始配音</button></div>
+    <div id="practiceUtilities" class="practice-utilities">        <button id="practiceTools" class="utility-setting" aria-haspopup="dialog"><span id="practiceToolsSummary">练习设置</span><small id="practiceToolsState"></small><span aria-hidden="true">›</span></button>
+        <div id="karaokeSettings" hidden><button id="openBacking" class="utility-setting" aria-haspopup="dialog"><span id="backingSettingsTitle">伴奏设置</span><small id="backingSummary"></small><span aria-hidden="true">›</span></button></div>
+<button id="practiceSettings" class="utility-setting" aria-haspopup="dialog"><span>录音设置</span><small id="speedSummary"></small><span aria-hidden="true">›</span></button>
+</div><div id="practiceDock" class="practice-dock">
+      <div class="dock-heading-row"><div class="dock-heading">播放与录音</div>        <div id="quickSpeed">          <div class="row"><label class="hint" for="speed">播放速度</label><select id="speed" aria-label="练习速度"><option value="0.75">0.75× 慢速</option><option value="1" selected>1× 原速</option><option value="1.25">1.25×</option></select></div></div></div><div class="main-actions"><button id="original">▶ 听原声</button><button id="replay" disabled>▷ 回听录音</button><button class="primary" id="record">● 开始配音</button></div>
     </div>
     <div id="liveMeter" class="live-meter" hidden><div class="meter-heading"><span>麦克风 · 实时音量</span><output id="liveMeterValue">正在检测…</output></div><canvas id="liveMeterCanvas" width="640" height="64" aria-hidden="true"></canvas><div class="meter-track" role="meter" aria-label="麦克风实时音量，单位 dBFS" aria-valuemin="-60" aria-valuemax="0" aria-valuenow="-60"><div id="liveMeterBar" class="meter-fill"></div></div><label id="backingLiveControls" class="mix-row" hidden><span id="backingLiveLabel">伴奏</span><input id="backingLiveVolume" type="range" min="0" max="2" step="0.05" value="1" aria-label="录音中伴奏监听音量"><output id="backingLiveValue" for="backingLiveVolume">100%</output></label><label id="sidetoneLiveControls" class="mix-row" hidden><span>耳返</span><input id="sidetoneLiveVolume" type="range" min="0" max="1" step="0.05" value="0.35" aria-label="录音中耳返音量"><output id="sidetoneLiveValue">35%</output></label><p id="sidetoneLatency" class="hint" style="font-size:10px;margin:4px 0;line-height:1.5" hidden></p></div>
     <div id="transport" class="transport" hidden>
@@ -209,8 +190,20 @@
     </div><div class="library-foot"><p id="libraryNote" hidden>这里只管理浏览器中的音频。字幕与练习进度保留；本机服务的 .cache/karaoke 文件和已下载文件不受影响。</p><p id="libraryMessage" role="status"></p></div>
   </dialog>
   <dialog id="settingsDialog" class="library-dialog" aria-labelledby="settingsTitle"><header><h2 id="settingsTitle">设置</h2><button id="closeSettings" class="close" aria-label="关闭设置">×</button></header>
-    <nav class="library-tabs" role="tablist" aria-label="设置分类"><button id="settingsMicTab" role="tab" aria-controls="settings-microphone" aria-selected="true">麦克风与录音</button><button id="settingsCaptionsTab" role="tab" aria-controls="settings-captions" aria-selected="false" tabindex="-1">语言与字幕</button><button id="settingsBackingTab" role="tab" aria-controls="settings-backing" aria-selected="false" tabindex="-1">分离设置</button></nav>
-    <div class="settings-body" id="settingsBody"><section id="settings-microphone" role="tabpanel" aria-labelledby="settingsMicTab" class="fold-content">
+    <nav class="library-tabs" role="tablist" aria-label="设置分类"><button id="settingsPracticeTab" role="tab" aria-controls="settings-practice" aria-selected="false" tabindex="-1">准备与自动练习</button><button id="settingsMicTab" role="tab" aria-controls="settings-microphone" aria-selected="true">麦克风与录音</button><button id="settingsCaptionsTab" role="tab" aria-controls="settings-captions" aria-selected="false" tabindex="-1">语言与字幕</button><button id="settingsBackingTab" role="tab" aria-controls="settings-backing" aria-selected="false" tabindex="-1">伴奏与背景音</button></nav>
+    <div class="settings-body" id="settingsBody"><section id="settings-practice" role="tabpanel" aria-labelledby="settingsPracticeTab" class="fold-content" hidden>        <details class="fold" id="clipSettings"><summary>片段起止时间</summary><div class="fold-content">
+          <div class="row"><label><small>起点</small><input id="start" aria-label="片段起点（秒）" type="number" min="0" step="0.1" value="0"></label><label><small>终点</small><input id="end" aria-label="片段终点（秒）" type="number" min="0" step="0.1" value="5"></label></div>
+          <div class="row micro"><button id="startEarlier">起点 −0.2s</button><button id="startLater">起点 +0.2s</button><button id="endEarlier">终点 −0.2s</button><button id="endLater">终点 +0.2s</button></div>
+          <div class="row"><button id="markStart">此刻设为起点</button><button id="markEnd">此刻设为终点</button></div><p class="hint">配音时原声静音；每段最长 10 分钟。</p>
+        </div></details>        <div class="prep-row" id="prepActions"><button id="openPresets" aria-haspopup="dialog">场景预设</button><button id="openMicTest" aria-haspopup="dialog">麦克风试音</button></div>
+          <div class="practice-setting-group">          <div class="row"><label class="hint" for="leadInMode">前置播放</label><select id="leadInMode" aria-describedby="leadInHint"><option value="none">关闭</option><option value="seconds">前 N 秒</option><option id="previousLeadIn" value="previous">上一句</option></select></div>
+          <div id="leadInSecondsRow" class="row" hidden><label class="hint" for="leadInSeconds">前置时长（秒）</label><input id="leadInSeconds" type="number" min="0" max="30" step="1" value="3" aria-describedby="leadInHint"></div><p class="hint" id="leadInHint">先播放片段前的原声作准备，不录入准备段。</p>
+</div>
+          <div class="practice-setting-group">          <div class="row"><label class="hint" for="loopCount">循环次数</label><select id="loopCount" aria-label="循环次数"><option value="3">3 次</option><option value="5">5 次</option><option value="0">持续循环</option></select></div>
+          <div class="row"><label class="hint" for="prepSeconds">自动练习停顿</label><select id="prepSeconds" aria-label="自动练习停顿"><option value="0">不停顿</option><option value="2">2 秒</option><option value="3" selected>3 秒</option><option value="5">5 秒</option></select></div>
+          <label class="check"><input type="checkbox" id="autoNext">回放结束后自动练下一句</label><p class="hint" id="practiceFlowHint">自动跟读：原声 → 准备 → 配音 → 回放。</p>
+</div>
+        <div class="secondary-actions"><button id="loop">↻ 单句循环</button><button id="autoPractice">▶ 自动跟读</button></div></section><section id="settings-microphone" role="tabpanel" aria-labelledby="settingsMicTab" class="fold-content">
           <div class="field-heading"><label for="inputDevice">麦克风输入</label><button id="detectInputs" class="text-button">授权并检测</button></div><select id="inputDevice" aria-describedby="inputDeviceHint"><option value="">系统默认麦克风</option></select><p id="inputDeviceHint" class="hint">可选择内置、USB 或耳机麦克风。首次检测需要麦克风权限。</p>
           <label class="check"><input id="sidetoneEnabled" type="checkbox" aria-describedby="sidetoneHint sidetoneProcessingWarning">录音时听到自己（耳返）</label><div id="sidetoneProcessingNotice" class="setting-warning" hidden><p id="sidetoneProcessingWarning" role="status" hidden></p><button id="useHeadphoneSettings" class="text-button">使用耳机推荐设置</button></div><p id="sidetoneHint" class="hint">请戴耳机使用。采用低延迟模式，实际延迟取决于设备；有线耳机更适合。暂停和结束时关闭，不改变录音音量。更低延迟模式若爆音或断续，请切回标准。</p><div id="sidetoneModeRow" class="row" hidden><label class="hint" for="sidetoneMode">耳返延迟</label><select id="sidetoneMode"><option value="minimum" selected>更低延迟（推荐）</option><option value="standard">标准（兼容）</option></select></div><label id="sidetoneVolumeRow" class="mix-row" hidden><span>耳返</span><input id="sidetoneVolume" type="range" min="0" max="1" step="0.05" value="0.35" aria-label="耳返音量"><output id="sidetoneVolumeValue">35%</output></label>
 
@@ -226,8 +219,21 @@
           <div class="hint" id="languageInfo">内容语言用于文本处理；字幕语言请在上方选择。</div>
           <div class="row"><label class="hint" for="captionLayout">台词格式</label><select id="captionLayout" aria-label="台词格式"><option value="original" selected>完整原文（默认）</option><option value="en-zh">英中混排分开显示</option></select></div>
           <div class="hint">英中拆分仅用于英语内容。中文歌词、日语及韩语均保留原文。读音提示与自动翻译暂未提供。</div>
-        </section><section id="settings-backing" role="tabpanel" aria-labelledby="settingsBackingTab" class="fold-content" hidden><p class="hint">设置当前配音／唱歌模式下新提取音频的模型与音质。生成、试听与监听音量仍在练习页调整。</p>          <div class="field-heading"><label for="backingModel">分离模型</label><button id="manageModels" class="text-button" aria-haspopup="dialog">管理模型 →</button></div><select id="backingModel"><option value="demucs-htdemucs">通用 · Demucs</option><option id="banditModelOption" value="bandit-v2-multi">电影背景音 · BandIt</option></select><p class="hint field-note" id="backingModelHint"></p><div class="field-heading"><label for="backingQuality">伴奏／背景音音质</label></div><select id="backingQuality" aria-describedby="backingQualityHint"><option value="standard">标准 · MP3</option><option value="lossless">无损 · FLAC</option></select><p class="hint field-note" id="backingQualityHint"></p>
-</section></div><div class="library-foot"><p class="hint">设置自动保存。</p><p id="settingsStatus" role="status"></p></div>
+        </section><section id="settings-backing" role="tabpanel" aria-labelledby="settingsBackingTab" class="fold-content" hidden>          <label class="check" id="backingOption"><input id="useBacking" type="checkbox"><span id="useBackingLabel">保留背景音（电影配音，可选）</span></label>
+          <div class="row readiness-row" id="songReadinessRow" hidden><span class="hint" id="songReadiness"></span></div>          <div class="field-heading"><label for="backingModel">分离模型</label><button id="manageModels" class="text-button" aria-haspopup="dialog">管理模型 →</button></div><select id="backingModel"><option value="demucs-htdemucs">通用 · Demucs</option><option id="banditModelOption" value="bandit-v2-multi">电影背景音 · BandIt</option></select><p class="hint field-note" id="backingModelHint"></p><div class="field-heading"><label for="backingQuality">伴奏／背景音音质</label></div><select id="backingQuality" aria-describedby="backingQualityHint"><option value="standard">标准 · MP3</option><option value="lossless">无损 · FLAC</option></select><p class="hint field-note" id="backingQualityHint"></p>
+
+          <p class="hint" id="backingSettingsHint">按上方录唱范围生成，最长 10 分钟。准备好后回到主区录唱。</p>
+          <div class="backing-actions"><button id="prepareBacking">生成整首伴奏</button><button id="previewBacking" disabled>▷ 试听伴奏</button></div>
+          <div class="monitor-control"><div class="field-heading"><label id="backingVolumeLabel" for="backingVolume">录唱监听音量</label><output id="backingVolumeValue" for="backingVolume">100%</output></div><input id="backingVolume" type="range" min="0" max="2" step="0.05" value="1" aria-label="录唱监听音量"><p class="hint">试听与录音时生效；回听音量在底部调整。</p></div>
+          <div class="service-tools"><div class="utility-row"><span class="hint" id="karaokeService" role="status">伴奏服务 · 尚未检测</span><button id="checkKaraoke" class="text-button">重新检测</button></div>
+          <details class="fold" id="karaokeHelp"><summary id="backingHelpTitle">首次使用：如何启用伴奏？</summary><div class="fold-content hint">
+            <p>只需安装一个 Echo 扩展。提取伴奏和电影背景音共用这台电脑上的 Python、FFmpeg 和分离模型；普通配音、录音与回放无需这些组件。</p>
+            <p>① macOS / Linux：在项目目录运行 <code>bash start-karaoke.sh</code>。Windows：按下方说明准备组件，再运行 <code>powershell -NoProfile -ExecutionPolicy Bypass -File .\\start-karaoke.ps1</code>。以后使用同一命令启动。<br>② 保持终端开启，回到这里点击“重新检测”，再生成伴奏。首次下载模型及分离歌曲可能需要几分钟。</p>
+            <p>Linux 与 macOS 已验证；Windows 已提供适配，尚待实机验证。macOS 缺少组件时需已有 Homebrew；Windows 需先准备 Python 3.10–3.12、FFmpeg 和 Node.js 22+ 或 Deno。</p>
+            <a href="https://github.com/zexiangliu/echo-english/blob/master/karaoke/README.md" target="_blank" rel="noopener noreferrer">查看伴奏服务安装说明 ↗</a>
+            <p>建议戴耳机录音。分离结果可能残留原唱或对白，也可能损失部分环境音。</p>
+          </div></details>
+        </div></section></div><div class="library-foot"><div class="settings-footer-row"><p class="hint">设置自动保存。</p><button id="settingsStop" hidden>■ 停止</button></div><p id="settingsStatus" role="status"></p></div>
   </dialog>
   <dialog id="toolsDialog" class="library-dialog" aria-labelledby="toolsTitle"><header><h2 id="toolsTitle">练习准备</h2><button id="closeTools" class="close" aria-label="关闭练习准备">×</button></header><div class="tools-body">
     <section id="presetSection"><h3>场景预设</h3><p class="hint">点击应用配音／唱歌模式、范围、前置播放和录音处理。输入设备、手动增益数值、音质和台词保留；不会自动录音或生成背景音。</p><div class="preset-grid"><button id="presetHeadphones">应用：耳机跟读<small>当前片段 · 前播 3 秒 · 关闭回声消除与自动增益</small></button><button id="presetMovie">应用：电影配音<small>当前片段 · 前播 3 秒 · 保留背景音，需先准备</small></button><button id="presetSong">应用：歌曲演唱<small>整首 · 使用伴奏 · 关闭回声消除与自动增益</small></button><button id="presetSpeaker">应用：外放跟读<small>当前片段 · 前播 3 秒 · 开启回声消除与自动增益，关闭耳返</small></button></div><p class="hint">耳机预设保持你已有的耳返开关；可在「速度与麦克风」中调整。</p></section>
