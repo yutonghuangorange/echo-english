@@ -36,7 +36,7 @@ async function mount(storage, overrides = {}) {
   doc.title=overrides.title || '';
   const context={document:doc,location:{href:'https://www.youtube.com/watch?v=video',pathname:'/watch'},indexedDB:{},URL,Blob,console,setTimeout,clearTimeout,cancelAnimationFrame(){},requestAnimationFrame(){},crypto:globalThis.crypto,
     window:{addEventListener(){},speechSynthesis:{cancel(){}}},chrome:{runtime:{onMessage:{addListener(){}}}},
-    EchoPracticeTools:require('../extension/practice-tools.js'),EchoCaptionTracks:require('../extension/caption-tracks.js'),EchoPanelView:require('../extension/panel-view.js'),EchoTransport:require('../extension/transport.js'),EchoPlayback:require('../extension/playback.js'),
+    EchoSettingsDialog:require('../extension/settings-dialog.js'),EchoPracticeTools:require('../extension/practice-tools.js'),EchoCaptionTracks:require('../extension/caption-tracks.js'),EchoPanelView:require('../extension/panel-view.js'),EchoTransport:require('../extension/transport.js'),EchoPlayback:require('../extension/playback.js'),
     EchoAudioExport:require('../extension/audio-export.js'),EchoAssembly:require('../extension/assembly.js'),EchoPanelSize:require('../extension/panel-size.js'),EchoLanguages:require('../extension/languages.js'),EchoKaraoke:require('../extension/karaoke.js'),EchoStorage:{...require('../extension/storage.js'),createStorage:()=>storage},EchoSelection:require('../extension/selection.js'),EchoPractice:require('../extension/practice.js'),EchoDictionary:require('../extension/dictionary.js'),EchoSubtitles:require('../extension/subtitles.js'),EchoLibrary:require('../extension/library.js'),EchoModels:require('../extension/models.js'),EchoLiveMeter:require('../extension/live-meter.js'),EchoRecording:require('../extension/recording.js'),EchoMicrophone:require('../extension/microphone.js'),EchoAudioAnalysis:require('../extension/audio-analysis.js')};
   Object.assign(context,overrides.globals || {});
   // Existing UI fixtures provide a caption transport; integration fixtures can
@@ -164,7 +164,7 @@ test('empty pages hide irrelevant recording controls and keep the practice dock 
   assert.equal(nodes.get('recordingDetails').hidden,true);
   assert.equal(nodes.get('playAll').hidden,true);
   nodes.get('backToPractice').onclick();assert.equal(nodes.get('practiceDock').hidden,false);
-  nodes.get('openLanguageSettings').onclick();assert.equal(nodes.get('practiceDock').hidden,true);assert.equal(nodes.get('captionSettings').open,true);
+  nodes.get('openLanguageSettings').onclick();assert.equal(nodes.get('page-practice').hidden,false);assert.equal(nodes.get('settingsDialog').open,true);assert.equal(nodes.get('settings-captions').hidden,false);
   (await storage.ready).close();
 });
 
@@ -1698,5 +1698,25 @@ test('record shortcut starts and ends one capture, and recordings-page replay us
   nodes.get('replay').onclick=()=>practiceReplays++;nodes.get('reviewReplay').onclick=()=>selectedReplays++;
   press('KeyP');assert.equal(practiceReplays,1);
   nodes.get('tab-recordings').onclick();press('KeyP');assert.equal(selectedReplays,1);assert.equal(practiceReplays,1);
+  (await storage.ready).close();
+});
+
+test('infrequent settings open in one modal, preserve the practice page and suppress practice shortcuts',async()=>{
+  const storage=createStorage(new IDBFactory()),preferences=new Map();let recordings=0,focusReturns=0;
+  const globals={window:{localStorage:{getItem:key=>preferences.get(key) || null,setItem:(key,value)=>preferences.set(key,value)},addEventListener(){},speechSynthesis:{cancel(){}}},chrome:{runtime:{onMessage:{addListener(){}},async sendMessage(){return {tracks:[]};}}}};
+  const {nodes,root,document,events}=await mount(storage,{globals});document.documentElement.children[0].style.display='block';
+  nodes.get('practiceSettings').focus=()=>focusReturns++;nodes.get('practiceSettings').onclick();
+  assert.equal(nodes.get('settingsDialog').open,true);assert.equal(nodes.get('settings-microphone').hidden,false);assert.equal(nodes.get('page-practice').hidden,false);
+  nodes.get('record').onclick=()=>recordings++;
+  events.get('keydown')({altKey:true,shiftKey:true,code:'KeyR',preventDefault(){},stopPropagation(){}});assert.equal(recordings,0);
+  nodes.get('autoGainControl').checked=false;nodes.get('autoGainControl').onchange();nodes.get('manualGainDb').value=6;nodes.get('manualGainDb').oninput();nodes.get('manualGainDb').onchange();
+  nodes.get('settingsBackingTab').onclick();assert.equal(nodes.get('settings-backing').hidden,false);assert.equal(nodes.get('settings-microphone').hidden,true);
+  root.onkeydown({key:'Escape',preventDefault(){},stopPropagation(){}});assert.equal(nodes.get('settingsDialog').open,false);assert.equal(focusReturns,1);
+  nodes.get('openLanguageSettings').onclick();assert.equal(nodes.get('settings-captions').hidden,false);assert.equal(nodes.get('page-practice').hidden,false);
+  await waitUntil(()=>nodes.get('read').disabled===false);nodes.get('closeSettings').onclick();
+  nodes.get('openMicTest').onclick();nodes.get('micTestConfigure').onclick();assert.equal(nodes.get('toolsDialog').open,false);assert.equal(nodes.get('settingsDialog').open,true);assert.equal(nodes.get('settings-microphone').hidden,false);
+  nodes.get('closeSettings').onclick();nodes.get('useBacking').checked=true;nodes.get('useBacking').onchange();nodes.get('openSeparationSettings').onclick();assert.equal(nodes.get('settings-backing').hidden,false);
+  nodes.get('close').onclick();assert.equal(nodes.get('settingsDialog').open,false);
+  const restored=await mount(storage,{globals});assert.equal(restored.nodes.get('manualGainDb').value,6);assert.equal(restored.nodes.get('settingsDialog').open,undefined);
   (await storage.ready).close();
 });

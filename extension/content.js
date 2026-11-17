@@ -207,6 +207,13 @@
       if (next !== undefined) { event.preventDefault(); showPage(pageNames[next],true); }
     };
   });
+  const settings=EchoSettingsDialog.attach({view:root,onOpen:section=>{
+    if(section==='microphone')void refreshInputDevices();
+    if(section==='captions' && !captionTracks.length && mode==='idle')void $('refreshCaptionTracks').onclick();
+  }});
+  $('practiceSettings').onclick=()=>{if(mode==='idle')settings.open('microphone','practiceSettings');};
+  $('captionSettings').onclick=()=>{if(mode==='idle')settings.open('captions','captionSettings');};
+  $('openSeparationSettings').onclick=()=>{if(mode==='idle')settings.open('backing','openSeparationSettings');};
   let favorite=false,favoriteRequest=0,favoriteSaving=false;
   function renderFavorite(){
     $('favoriteVideo').textContent=favorite?'★ 已收藏':'☆ 收藏';$('favoriteVideo').setAttribute('aria-pressed',String(favorite));
@@ -231,7 +238,7 @@
     getSettings:()=>({constraints:microphoneConstraints(),gainDb:gainPreferences[activity]?0:manualGainPreferences[activity],quality:recordingQuality,sidetone:sidetoneEnabled,sidetoneVolume,sidetoneMode,
       description:`${$('inputDevice').selectedOptions?.[0]?.textContent || (inputDeviceId?'所选麦克风':'系统默认麦克风')} · ${isSinging()?'唱歌':'配音'} · ${gainPreferences[activity]?'自动增益':`增益 +${manualGainPreferences[activity]} dB`} · 回声消除${echoPreferences[activity]?'开':'关'} · 耳返${sidetoneEnabled?'开':'关'}`}),
     onBeforeTest:()=>document.querySelector('video.html5-main-video')?.pause(),
-    onConfigure:()=>{showPage('practice');$('practiceSettings').open=true;$('practiceSettings').scrollIntoView?.({block:'start'});$('inputDevice').focus();},
+    onConfigure:()=>{settings.open('microphone','openMicTest');$('inputDevice').focus();},
     onPreset:p=>{
       if(mode!=='idle')return;
       scopePreferences[activity]=$('practiceScope').value;backingPreferences[activity]=$('useBacking').checked;
@@ -247,12 +254,12 @@
   $('openPresets').onclick=()=>{if(mode==='idle')tools.open('preset');};
   $('openMicTest').onclick=()=>{if(mode==='idle')tools.open('mic');};
   void refreshFavorite();
-  $('openLanguageSettings').onclick=()=>{showPage('transcript',true);$('captionSettings').open=true;$('captionSettings').scrollIntoView?.({block:'start'});};
+  $('openLanguageSettings').onclick=()=>{if(mode==='idle')settings.open('captions','openLanguageSettings');};
   $('backToPractice').onclick = () => showPage('practice',true);
   $('reviewReplay').onclick = () => playRecording(take);
   $('openCaptionSetup').onclick=()=>showPage('transcript',true);
   function updateSettingsSummaries(){
-    $('speedSummary').textContent=`${$('speed').value}× · ${gainPreferences[activity]?'自动增益':`增益 +${manualGainPreferences[activity]} dB`} · ${recordingQuality==='lossless'?'无损':'高品质'}${sidetoneEnabled?' · 耳返':''}`;
+    $('speedSummary').textContent=`${gainPreferences[activity]?'自动增益':`增益 +${manualGainPreferences[activity]} dB`} · ${recordingQuality==='lossless'?'无损':'高品质'}${sidetoneEnabled?' · 耳返':''}`;
     const lead=$('leadInMode').value;
     $('practiceToolsState').textContent=`${lead==='seconds'?`前置 ${$('leadInSeconds').value} 秒`:lead==='previous'?'前置上一句':'前置关闭'} · ${$('loopCount').value==='0'?'持续循环':`循环 ${$('loopCount').value} 次`}`;
   }
@@ -474,7 +481,7 @@
     attachCaptionVideo(v);
     return v;
   }
-  function status(text) { $('status').textContent = text; }
+  function status(text) { $('status').textContent = text;$('settingsStatus').textContent=text; }
   function renderPracticeActions() {
     const singing=isSinging(),scope=$('practiceScope').value,whole=scope==='whole',paragraph=scope==='paragraph';
     const range=selectionState().value?.range;
@@ -523,7 +530,8 @@
     $('singDetails').hidden=!hasBackingTools() || recording;
     $('karaokeSettings').hidden=!hasBackingTools() || recording;
     $('backingOption').hidden=recording;
-    for(const id of ['practiceTools','practiceSettings'])$(id).hidden=recording;
+    for(const id of ['practiceTools','practiceSettings','quickSpeed'])$(id).hidden=recording;
+    for(const id of ['practiceSettings','captionSettings','openSeparationSettings'])$(id).disabled=busy;
     $('captionSetup').hidden=recording || cues.length>0;
     $('clipSettings').hidden=recording;
     $('clipBounds').hidden=recording || $('practiceScope').value!=='clip';
@@ -1506,13 +1514,14 @@
     });
     if (token === generation) { finish(); status('自动跟读完成。可以重练或下载这次录音。'); }
   });
-  $('close').onclick = () => { tools.close();library.close(true);closeWord(); stop(); host.style.display = 'none'; };
+  $('close').onclick = () => { settings.close();tools.close();library.close(true);closeWord(); stop(); host.style.display = 'none'; };
   root.addEventListener('keydown',event=>{
     if(event.key!=='Escape')return;
     event.preventDefault();event.stopPropagation();
     if(tools.isOpen()){tools.close();return;}
     if(assembly.isOpen()){assembly.close();return;}
     if(models.isOpen()){models.close();return;}
+    if(settings.isOpen()){settings.close();return;}
     if(library.isOpen()){library.escape();return;}
     if(!$('wordcard').hidden)closeWord();
     else if(mode!=='idle')stop();
@@ -1520,7 +1529,7 @@
   });
   // Modified shortcuts leave YouTube's unmodified playback keys untouched.
   document.addEventListener('keydown',event=>{
-    if(host.style.display==='none' || assembly.isOpen() || models.isOpen() || library.isOpen() || tools.isOpen())return;
+    if(host.style.display==='none' || assembly.isOpen() || models.isOpen() || library.isOpen() || tools.isOpen() || settings.isOpen())return;
     if(event.key==='Escape' && mode!=='idle'){event.preventDefault();event.stopPropagation();stop();return;}
     const action=EchoPracticeTools.shortcut(event);if(!action)return;
     if(action==='help'){if(mode!=='idle')return;event.preventDefault();event.stopPropagation();tools.open('help');return;}
@@ -1581,12 +1590,11 @@
     try{const tracks=await refreshCaptionTracks(true);if(token===generation && tracks)status(tracks.length?`找到 ${tracks.length} 个字幕轨道，请在“字幕来源”中选择。`:'此视频未返回可用字幕轨道，可尝试读取当前文字记录或导入字幕。');}
     finally{if(token===generation){mode='idle';controls();}}
   });
-  $('captionSettings').ontoggle=()=>{if($('captionSettings').open && !captionTracks.length && mode==='idle')void $('refreshCaptionTracks').onclick();};
   $('captionSource').onchange=()=>{
     if(mode!=='idle')return;
     captionSource=$('captionSource').value;
     const selected=captionTracks.find(t=>t.id===captionSource);captionSourceName=selected?captionTrackLabel(selected):'';
-    saveProgress();void $('read').onclick();
+    saveProgress();settings.close();void $('read').onclick();
   };
   $('read').onclick = guarded(async () => {
     if(mode!=='idle')return;
@@ -1623,9 +1631,9 @@
     }finally{if(token===generation){mode='idle';controls();}}
   });
   $('search').onclick = () => { window.open(`https://www.youtube.com/results?search_query=${encodeURIComponent($('query').value || ({'zh':'中文 歌词','ja':'日本語 字幕 歌詞','ko':'한국어 자막 가사','en':'english conversation subtitles'}[contentLanguage()] || 'subtitles lyrics'))}`, '_blank', 'noopener'); };
-  chrome.runtime.onMessage.addListener(message => { if (message.type === 'echo-toggle') { const open = host.style.display === 'none'; host.style.display = open ? 'block' : 'none'; if (!open) {tools.close();library.close(true);stop();} } });
+  chrome.runtime.onMessage.addListener(message => { if (message.type === 'echo-toggle') { const open = host.style.display === 'none'; host.style.display = open ? 'block' : 'none'; if (!open) {settings.close();tools.close();library.close(true);stop();} } });
   function resetVideo(id) {
-    tools.close();favorite=false;favoriteRequest++;clipRangeAdjusted=false;
+    settings.close();tools.close();favorite=false;favoriteRequest++;clipRangeAdjusted=false;
     library.close(true);
     stop();
     recordingSession=null;
@@ -1670,16 +1678,15 @@
     if (id) void loadVideo(id);
     else restoring = false;
   });
-  window.addEventListener('pagehide',()=>{inputDeviceRequest++;globalThis.navigator?.mediaDevices?.removeEventListener?.('devicechange',onInputDevicesChanged);saveProgress();tools.close();library.close(true);stop();detachCaptionVideo();});
+  window.addEventListener('pagehide',()=>{inputDeviceRequest++;globalThis.navigator?.mediaDevices?.removeEventListener?.('devicechange',onInputDevicesChanged);saveProgress();settings.close();tools.close();library.close(true);stop();detachCaptionVideo();});
   // Restore once; changing activities must not reset the user's expanded sections.
   const foldPreferenceKey='echo-folds-v1';
   let foldPreferences={};
   try{const saved=JSON.parse(window.localStorage.getItem(foldPreferenceKey));if(saved && typeof saved==='object')foldPreferences=saved;}catch{}
-  for(const id of ['clipSettings','practiceTools','practiceSettings','karaokeSettings','captionSettings','recordingDetails','mixControls']){
+  for(const id of ['clipSettings','practiceTools','karaokeSettings','recordingDetails','mixControls']){
     const fold=$(id);
     fold.open=typeof foldPreferences[id]==='boolean'?foldPreferences[id]:id==='karaokeSettings';
     fold.addEventListener('toggle',()=>{
-      if(id==='practiceSettings' && fold.open)void refreshInputDevices();
       foldPreferences[id]=fold.open;
       try{window.localStorage.setItem(foldPreferenceKey,JSON.stringify(foldPreferences));}catch{}
     });
