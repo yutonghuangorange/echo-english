@@ -7,7 +7,7 @@
 | 平台 | 安装入口 | 分离依赖 | 验证状态 |
 | --- | --- | --- | --- |
 | Linux x86_64 | `bash start-karaoke.sh` | torch / torchaudio 2.5.1，默认 CPU，可选 CUDA 12.1 | 本机自动化、CPU / RTX 3060 Laptop 短片段分离已验证 |
-| macOS Apple 芯片 | `bash start-karaoke.sh` | torch / torchaudio 2.6.0，CPU / 可选 MPS | macOS 15 原生 CI：安装、测试、CPU 分离通过；Chrome 录音待人工验证 |
+| macOS Apple 芯片 | `bash start-karaoke.sh` | torch / torchaudio 2.6.0，CPU / 可选 MPS | macOS 15 原生 CI：安装、测试、CPU / MPS 分离通过；Chrome 录音待人工验证 |
 | macOS Intel | `bash start-karaoke.sh` | torch / torchaudio 2.2.2，CPU | macOS 15 原生 CI 通过，固定 2.2.2；Chrome 录音待人工验证 |
 | Windows x64 | `start-karaoke.ps1` | torch / torchaudio 2.5.1，默认 CPU，可选 CUDA 12.1 | 已补安装入口和进程清理；CPU / GPU 均等待实机验证 |
 
@@ -72,6 +72,10 @@ Python 测试不需要下载模型；包含真实子进程取消和退出清理�
 完成后记录 OS / 架构、Chrome / Python 版本、音频设备、测试命令和结果。必要的修正优先放在启动脚本、依赖声明或统一资源管理模块；避免在练习业务代码中按操作系统复制逻辑。
 
 ### MPS 验证范围
+
+[实际通过记录](https://github.com/zexiangliu/echo-english/actions/runs/44042222930)：Apple 芯片 arm64 runner、macOS 15.8.2、Python 3.12.10、PyTorch / TorchAudio 2.6.0，`mpsAvailable: true`。同一段 20 秒双声道合成音频，正式 worker 的 CPU 总耗时 79.00 秒、显式 MPS 35.21 秒，约 2.24×。MPS 没有发生整项 CPU 重试，输出时长、声道、有限采样和 MP3 编码均通过检查。耗时包含设备探测、模型加载和音频写出，不含模型下载；这是共享 CI runner 的单次结果，不能保证其他机型或真实歌曲的比例。
+
+同一轮两种 Mac 均通过 186 个前端测试（1 个 Windows 检查跳过）、22 个 Python 测试，以及根目录服务启动 / 停止验证。Intel Mac 继续使用 2.2.2 / CPU。真实歌曲、电影内容的音质和长片段仍需人工验收；BandIt 的 MPS 尚未接入。
 
 CI 会打印 `mpsAvailable`，仅在设备可用时，用同一段 20 秒合成音频分别严格运行 CPU 和 MPS，检查输出时长、声道、有限采样和 MP3 编码并报告耗时。若 runner 没有可用 MPS，会明确跳过 GPU 推理；CPU / Mock 测试通过不能视为 MPS 性能或音质验证。暂不承诺加速比例，也未验证长片段或 BandIt 的 MPS 支持。
 

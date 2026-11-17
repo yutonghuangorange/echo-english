@@ -87,7 +87,7 @@ bash start-karaoke.sh --device mps
 bash start-karaoke.sh --device cpu
 ```
 
-歌曲伴奏和电影背景音共用这一条 Demucs 路径。Demucs 4.0.1 自带 MPS 处理：部分复数 / 频谱操作仍在 CPU 上执行，因此不能直接套用 NVIDIA 的加速倍数。参见 [官方发布说明](https://github.com/facebookresearch/demucs/blob/main/docs/release.md)。MPS 可用性依赖 Mac、系统及原生 PyTorch 环境；CI 只在实际有可用 MPS 时验证 GPU 推理。CPU / Mac CI 通过不等于已完成所有 Apple GPU 性能和音质验收，长片段与 BandIt 尚未验证，复现命令见 [跨平台验证](../PLATFORM_SUPPORT.md#mps-验证范围)。
+歌曲伴奏和电影背景音共用这一条 Demucs 路径。Demucs 4.0.1 自带 MPS 处理：部分复数 / 频谱操作仍在 CPU 上执行，因此不能直接套用 NVIDIA 的加速倍数。参见 [官方发布说明](https://github.com/facebookresearch/demucs/blob/main/docs/release.md)。MPS 可用性依赖 Mac、系统及原生 PyTorch 环境；CI 只在实际有可用 MPS 时验证 GPU 推理。原生 Mac CI 已完成显式 MPS 的 20 秒合成音频分离：CPU 79.00 秒、MPS 35.21 秒（约 2.24×，含载入和写出，未发生整项 CPU 回退）。共享 CI 的单次结果不代表所有 Mac / 素材的速度或音质，长片段与 BandIt 尚未验证，复现命令见 [跨平台验证](../PLATFORM_SUPPORT.md#mps-验证范围)。
 
 ## 每次使用
 
