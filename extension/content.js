@@ -1524,7 +1524,7 @@
     if(event.key==='Escape' && mode!=='idle'){event.preventDefault();event.stopPropagation();stop();return;}
     const action=EchoPracticeTools.shortcut(event);if(!action)return;
     if(action==='help'){if(mode!=='idle')return;event.preventDefault();event.stopPropagation();tools.open('help');return;}
-    const target=action==='record' && ['recording','lead-in'].includes(mode)?$('stop'):$(action);
+    const target=action==='record' && ['recording','lead-in'].includes(mode)?$('stop'):action==='replay' && currentPage==='recordings'?$('reviewReplay'):$(action);
     if(!target || target.disabled || target.hidden)return;
     event.preventDefault();event.stopPropagation();target.click();
   });

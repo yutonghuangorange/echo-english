@@ -5,8 +5,8 @@ const microphone=require('../extension/microphone.js');
 const recording=require('../extension/recording.js');
 test('shortcuts ignore typing, composition, repeated keys and conflicting modifiers, and use physical keys on Mac',()=>{
   const event={altKey:true,shiftKey:true,code:'KeyR'};
-  assert.equal(tools.shortcut(event),'record');assert.equal(tools.shortcut({...event,key:'‰'}),'record');
-  for(const change of [{altKey:false},{ctrlKey:true},{metaKey:true},{repeat:true},{isComposing:true},{target:{tagName:'INPUT'}},{target:{tagName:'SELECT'}},{target:{isContentEditable:true}},{code:'Space'}])assert.equal(tools.shortcut({...event,...change}),null);
+  assert.equal(tools.shortcut({...event,code:'KeyC'}),'compare');assert.equal(tools.shortcut(event),'record');assert.equal(tools.shortcut({...event,key:'‰'}),'record');
+  for(const change of [{altKey:false},{ctrlKey:true},{metaKey:true},{repeat:true},{isComposing:true},{target:{tagName:'INPUT'}},{target:{tagName:'SELECT'}},{target:{isContentEditable:true}},{code:'Space'},{code:'KeyF'}])assert.equal(tools.shortcut({...event,...change}),null);
   assert.equal(tools.shortcut({...event,composedPath:()=>[{tagName:'TEXTAREA'}]}),null);
 });
 function fixture({pending=false}={}){

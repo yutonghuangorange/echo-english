@@ -9,7 +9,7 @@
     if(!event.altKey || !event.shiftKey || event.ctrlKey || event.metaKey || event.repeat || event.isComposing)return null;
     const target=event.composedPath?.()[0] || event.target;
     if(target?.isContentEditable || ['INPUT','TEXTAREA','SELECT'].includes(target?.tagName) || target?.closest?.('[contenteditable="true"],[role="textbox"]'))return null;
-    return {KeyR:'record',KeyO:'original',KeyP:'replay',ArrowLeft:'prev',ArrowRight:'next',KeyF:'favoriteVideo',Slash:'help'}[event.code] || null;
+    return {KeyR:'record',KeyO:'original',KeyP:'replay',ArrowLeft:'prev',ArrowRight:'next',KeyC:'compare',Slash:'help'}[event.code] || null;
   }
   function attach({view,doc=root.document,env=root,getSettings,onPreset,onConfigure,onBeforeTest=()=>{},onClose=()=>{},recording=root.EchoRecording,meter=root.EchoLiveMeter}){
     const $=id=>view.getElementById(id),dialog=$('toolsDialog'),audio=$('micTestAudio');

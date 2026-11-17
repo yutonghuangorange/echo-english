@@ -1156,10 +1156,12 @@ test('listening includes the configured context while recorded comparison keeps 
   class Audio{constructor(){this.currentTime=0;this.duration=1;}pause(){}async play(){this.currentTime=1;queueMicrotask(()=>this.onended?.());}}
   // End the source preview immediately; playback still uses its real end watcher.
   video.play=async function(){this.plays.push({at:this.currentTime,muted:this.muted});this.currentTime=11;};
-  const {nodes}=await mount(storage,{video,globals:{Audio,requestAnimationFrame:fn=>setTimeout(fn,1),cancelAnimationFrame:clearTimeout}});
+  const {nodes,document,events}=await mount(storage,{video,globals:{Audio,requestAnimationFrame:fn=>setTimeout(fn,1),cancelAnimationFrame:clearTimeout}});
   await nodes.get('original').onclick();assert.equal(video.plays[0].at,7);
   assert.equal(nodes.get('start').value,10);assert.equal(nodes.get('end').value,11);
-  await nodes.get('compare').onclick();assert.equal(video.plays[1].at,10);
+  document.documentElement.children[0].style.display='block';
+  events.get('keydown')({altKey:true,shiftKey:true,code:'KeyC',preventDefault(){},stopPropagation(){}});
+  await waitUntil(()=>nodes.get('compare').disabled===false);assert.equal(video.plays[1].at,10);
   (await storage.ready).close();
 });
 
@@ -1642,13 +1644,16 @@ test('practice library previews a pack, waits for explicit import, merges data a
 
 test('document shortcuts only act when the panel is visible and no input or dialog owns focus',async()=>{
   const storage=createStorage(new IDBFactory()),{nodes,document,events}=await mount(storage);
-  const host=document.documentElement.children[0],handler=events.get('keydown');let prevented=0;
-  const key=extra=>({altKey:true,shiftKey:true,code:'KeyF',preventDefault(){prevented++;},stopPropagation(){},...extra});
-  host.style.display='none';handler(key());await new Promise(r=>setTimeout(r,5));assert.equal(await storage.getFavorite('video'),undefined);
+  const host=document.documentElement.children[0],handler=events.get('keydown');let prevented=0,compared=0;
+  nodes.get('compare').disabled=false;nodes.get('compare').onclick=()=>compared++;
+  const key=extra=>({altKey:true,shiftKey:true,code:'KeyC',preventDefault(){prevented++;},stopPropagation(){},...extra});
+  host.style.display='none';handler(key());assert.equal(compared,0);
   host.style.display='block';handler(key({target:{tagName:'INPUT'}}));assert.equal(prevented,0);
   nodes.get('openMicTest').onclick();handler(key());assert.equal(prevented,0);nodes.get('closeTools').onclick();
-  handler(key());await waitUntil(()=>nodes.get('favoriteVideo').getAttribute('aria-pressed')==='true');assert.equal(prevented,1);
-  assert.equal((await storage.getFavorite('video')).videoId,'video');(await storage.ready).close();
+  handler(key());assert.equal(compared,1);assert.equal(prevented,1);
+  handler(key({code:'KeyF'}));assert.equal(prevented,1);assert.equal(await storage.getFavorite('video'),undefined);
+  nodes.get('compare').disabled=true;handler(key());assert.equal(compared,1);assert.equal(prevented,1);
+  (await storage.ready).close();
 });
 
 test('current-clip original playback stops before an overlapping next cue and restores explicit manual bounds',async()=>{
@@ -1670,5 +1675,28 @@ test('current-clip original playback stops before an overlapping next cue and re
   nodes.get('end').value='8';nodes.get('end').onchange();await new Promise(r=>setTimeout(r,5));
   assert.equal((await storage.getSession('video')).clipRangeAdjusted,true);
   const restored=await mount(storage,{video});assert.equal(Number(restored.nodes.get('end').value),8);
+  (await storage.ready).close();
+});
+
+test('record shortcut starts and ends one capture, and recordings-page replay uses the selected-recording action',async()=>{
+  const storage=createStorage(new IDBFactory()),video=leadInVideo({hold:true});let starts=0,stops=0;
+  class MediaRecorder{
+    static isTypeSupported(){return true;}
+    constructor(){this.state='inactive';this.mimeType='audio/webm';}
+    start(){this.state='recording';starts++;}
+    stop(){this.state='inactive';this.ondataavailable({data:new Blob(['shortcut voice'])});queueMicrotask(()=>this.onstop());}
+  }
+  const {nodes,document,events}=await mount(storage,{video,globals:{MediaRecorder,
+    navigator:{mediaDevices:{async getUserMedia(){return {getTracks:()=>[{stop(){stops++;}}]};}}},
+    requestAnimationFrame:fn=>setTimeout(fn,1),cancelAnimationFrame:clearTimeout}});
+  document.documentElement.children[0].style.display='block';
+  const press=code=>events.get('keydown')({altKey:true,shiftKey:true,code,preventDefault(){},stopPropagation(){}});
+  press('KeyR');await waitUntil(()=>starts===1 && video.plays.length===1);
+  press('KeyR');await waitUntil(()=>nodes.get('record').disabled===false);
+  const takes=await storage.listTakes('video');assert.equal(takes.length,1);assert.equal(await takes[0].blob.text(),'shortcut voice');assert.equal(stops,1);
+  let practiceReplays=0,selectedReplays=0;
+  nodes.get('replay').onclick=()=>practiceReplays++;nodes.get('reviewReplay').onclick=()=>selectedReplays++;
+  press('KeyP');assert.equal(practiceReplays,1);
+  nodes.get('tab-recordings').onclick();press('KeyP');assert.equal(selectedReplays,1);assert.equal(practiceReplays,1);
   (await storage.ready).close();
 });
