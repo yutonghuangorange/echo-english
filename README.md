@@ -11,7 +11,7 @@
 | 电脑 | 能流畅播放 YouTube 的电脑，无需独立显卡 | 多核 CPU，使用两个 CPU 线程；NVIDIA CUDA 加速可选，本机已验证 RTX 3060 Laptop 6 GB |
 | 内存 | 建议整机 8 GB 或以上 | 建议整机 8 GB 起步，16 GB 更宽裕，尤其同时打开多个浏览器标签页时 |
 | 磁盘 | 按录音数量预留空间；无损录音和合成文件更大 | 建议至少预留 5 GB，供 Python 环境、工具、模型、处理中间文件与伴奏缓存使用；长期录音需另留空间 |
-| 系统 | Windows / macOS / Linux 上的新版桌面 Chrome | Linux x86_64、macOS Intel / Apple 芯片、Windows x64；Mac / Windows 尚待实机验证 |
+| 系统 | Windows / macOS / Linux 上的新版桌面 Chrome | Linux x86_64、macOS Intel / Apple 芯片、Windows x64；macOS 15 双架构自动验证通过；Windows 待实机验证 |
 | 软件 | 仅需 Chrome，不需要 Python、Node.js 或 API Key | Python 3.10–3.12、FFmpeg（含 ffprobe）、Node.js 22+ 或 Deno；安装方式见下方 |
 | 音频设备 | 录音需要麦克风及浏览器、系统权限；建议戴耳机 | 同左；戴耳机可减少伴奏被麦克风收进去 |
 | 网络 | 观看 YouTube、读取在线字幕及查词需要联网；已缓存录音可本地回听 | 首次安装、首次下载模型及提取 YouTube 音频需要联网；已有伴奏可直接回听和录唱 |

@@ -6,7 +6,7 @@
 
 - macOS 自动模式直接使用 CPU，不提示安装 NVIDIA 驱动；显式指定 CUDA 时给出 Mac 对应的说明。
 - 安装入口兼容系统 Bash 3.2，保留用户已选 Homebrew 路径，检查 Python / venv 与当前终端架构一致，避免混用 Apple 芯片与 Intel 环境。
-- 新增 Apple 芯片 / Intel Mac 的 GitHub Actions：实际安装依赖、运行前端与服务测试，并用正式 CPU worker 分离两秒合成音频、编码 MP3。真实 Chrome 麦克风录音仍需当地人工验证。
+- 新增 Apple 芯片 / Intel Mac 的 GitHub Actions：实际安装依赖、运行前端与服务测试，并用正式 CPU worker 分离两秒合成音频、编码 MP3。两种架构均已通过原生 CI，含根目录服务启动 / 停止检查；真实 Chrome 麦克风录音仍需当地人工验证。
 
 ## 0.21.1 可选 CUDA 加速
 

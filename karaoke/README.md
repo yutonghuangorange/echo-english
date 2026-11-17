@@ -46,7 +46,7 @@ python3 -m pip --python .venv/bin/python install --index-url https://download.py
 python3 -m pip --python .venv/bin/python install -r karaoke/requirements.txt
 ```
 
-Mac 推荐直接使用根目录脚本；手动安装时用本机 Python 创建 venv，再安装 `karaoke/requirements.txt`，平台标记会选择对应的 PyTorch 版本。macOS / Windows 的真实安装、音频设备与分离仍待实机验证；默认安装 CPU 依赖。
+Mac 推荐直接使用根目录脚本；手动安装时用本机 Python 创建 venv，再安装 `karaoke/requirements.txt`，平台标记会选择对应的 PyTorch 版本。macOS 15 的两种架构已通过原生 CI 安装与分离验证，音频设备与 Chrome 录音仍需人工试听；Windows 尚待实机验证。默认安装 CPU 依赖。
 
 依赖参考：[Demucs](https://github.com/facebookresearch/demucs)、[yt-dlp 安装](https://github.com/yt-dlp/yt-dlp/wiki/Installation)、[YouTube JS runtime](https://github.com/yt-dlp/yt-dlp/wiki/EJS)。
 

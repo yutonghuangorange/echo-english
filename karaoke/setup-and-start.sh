@@ -16,7 +16,7 @@ if [[ "${1:-}" == '--help' ]]; then
   exit 0
 fi
 echo 'Echo 伴奏服务：首次安装需要联网和约 1–2 GB 磁盘空间，模型在首次生成时下载。'
-echo 'Linux 已验证；macOS 安装路径尚待实机验证。Ctrl+C 可停止，稍后重新运行可继续。'
+echo 'Linux 已验证；macOS 15 已通过双架构自动验证，麦克风录音仍需实机试听。Ctrl+C 可停止，稍后重新运行可继续。'
 if [[ "$system" == Darwin ]]; then
   # Respect an explicitly selected Homebrew / Python (and avoid mixing layouts).
   if ! command -v brew >/dev/null 2>&1; then
