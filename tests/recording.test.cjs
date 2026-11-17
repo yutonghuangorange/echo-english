@@ -63,7 +63,7 @@ test('sidetone stays silent during preparation and mutes immediately on pause, s
   f.options.microphone.createInput=async(mic,db,env,options)=>{setup=options;return f.input;};
   f.input.setMonitoring=value=>states.push(value);
   const session=create(f.options);await session.prepare();assert.deepEqual(states,[]);
-  assert.deepEqual(setup,{sidetone:true,sidetoneVolume:0.4,sidetoneMode:'standard'});
+  assert.deepEqual(setup,{sidetone:true,sidetoneVolume:0.4,sidetoneMode:'minimum'});
   session.start();session.pause();session.resume();session.pauseFeedback();session.stop();
   assert.deepEqual(states,[true,false,true,false,false]);
   assert.equal(f.count.input,0); // Encoder is still flushing; headphones are already muted.

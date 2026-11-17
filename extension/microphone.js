@@ -2,7 +2,7 @@
 (function(root){
   function clampDb(value){return Number.isFinite(value)?Math.max(0,Math.min(24,value)):0;}
   function clampMonitorVolume(value){return Number.isFinite(value)?Math.max(0,Math.min(1,value)):0.35;}
-  async function createInput(microphone,db=0,env=root,{sidetone=false,sidetoneVolume=0.35,sidetoneMode='standard'}={}){
+  async function createInput(microphone,db=0,env=root,{sidetone=false,sidetoneVolume=0.35,sidetoneMode='minimum'}={}){
     db=clampDb(db);
     if(db===0 && !sidetone)return {stream:microphone,db,dispose(){}};
     let context,source,gain,destination,monitorGain,disposed=false,monitoring=false;

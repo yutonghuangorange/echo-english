@@ -22,7 +22,7 @@
   let qualityPreferences={speech:'standard',sing:'standard'};
   let modelPreferences={speech:EchoKaraoke.DEFAULT_MODEL,sing:EchoKaraoke.DEFAULT_MODEL};
   let paragraphFirst=0,paragraphLast=1,assemblyChoices=[],assemblyContext=null;
-  let recordingQuality='high',inputDeviceId='',sidetoneEnabled=false,sidetoneVolume=0.35,sidetoneMode='standard';
+  let recordingQuality='high',inputDeviceId='',sidetoneEnabled=false,sidetoneVolume=0.35,sidetoneMode='minimum';
   let inputDeviceRequest=0,inputDeviceList=[];
   const microphonePreferenceKey='echo-microphone-v1';
   const echoPreferences={speech:true,sing:false};
@@ -31,7 +31,7 @@
   try {
     const saved=JSON.parse(window.localStorage.getItem(microphonePreferenceKey));
     sidetoneEnabled=saved?.sidetoneEnabled===true;
-    if(saved?.sidetoneMode==='minimum')sidetoneMode='minimum';
+    if(['standard','minimum'].includes(saved?.sidetoneMode))sidetoneMode=saved.sidetoneMode;
     sidetoneVolume=EchoMicrophone.clampMonitorVolume(saved?.sidetoneVolume);
     if(typeof saved?.inputDeviceId==='string')inputDeviceId=saved.inputDeviceId;
     if(saved?.recordingQuality==='lossless')recordingQuality='lossless';

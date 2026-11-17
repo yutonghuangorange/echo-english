@@ -1533,3 +1533,16 @@ test('live latency diagnostics follow the active capture and persist in recordin
   const [take]=await storage.listTakes('video');assert.equal(take.recordingInfo.monitoring.baseLatency,0.0027);
   (await storage.ready).close();
 });
+
+test('sidetone defaults to minimum latency without enabling monitoring or replacing an existing mode preference',async()=>{
+  for(const [saved,expected] of [[{},'minimum'],[{sidetoneMode:'standard'},'standard'],[{sidetoneMode:'minimum'},'minimum'],[{sidetoneMode:'invalid'},'minimum']]){
+    const storage=createStorage(new IDBFactory()),preferences=new Map([['echo-microphone-v1',JSON.stringify(saved)]]);
+    const globals={window:{localStorage:{getItem:key=>preferences.get(key)||null,setItem:(key,value)=>preferences.set(key,value)},addEventListener(){},speechSynthesis:{cancel(){}}}};
+    const {nodes}=await mount(storage,{globals});
+    assert.equal(nodes.get('sidetoneMode').value,expected);assert.equal(nodes.get('sidetoneEnabled').checked,false);
+    nodes.get('sidetoneEnabled').checked=true;nodes.get('sidetoneEnabled').onchange();
+    assert.equal(JSON.parse(preferences.get('echo-microphone-v1')).sidetoneMode,expected);
+    const restored=await mount(storage,{globals});assert.equal(restored.nodes.get('sidetoneMode').value,expected);assert.equal(restored.nodes.get('sidetoneEnabled').checked,true);
+    (await storage.ready).close();
+  }
+});

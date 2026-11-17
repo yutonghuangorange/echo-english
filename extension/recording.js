@@ -1,7 +1,7 @@
 // Own one capture's microphone, gain graph, monitor, meter and encoder.
 // UI state, video timing and persistence belong to the calling coordinator.
 (function(root) {
-  function create({constraints, gainDb, quality, sidetone=false, sidetoneVolume=0.35, sidetoneMode='standard', active, createMonitor, createMeter, onComplete, onError, microphone = root.EchoMicrophone, env = root}) {
+  function create({constraints, gainDb, quality, sidetone=false, sidetoneVolume=0.35, sidetoneMode='minimum', active, createMonitor, createMeter, onComplete, onError, microphone = root.EchoMicrophone, env = root}) {
     const options = microphone.recordingOptions(quality, env.MediaRecorder);
     let mic, micTrack, input, monitor, meter, recorder, info;
     let stopping = false, settled = false, released = false;
