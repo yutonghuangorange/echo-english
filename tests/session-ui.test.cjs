@@ -479,7 +479,8 @@ test('dry vocal downloads can be mixed per take or assembled as a full song with
   const {nodes,downloads}=await mount(storage,{title:'我的歌曲 / 现场版 - YouTube',video:{duration:20},globals:{setTimeout:(fn,ms)=>setTimeout(fn,ms===30000?0:ms),
     EchoAudioExport:{...require('../extension/audio-export.js'),async render(options){exports.push(options);return {blob:new Blob(['wave']),gaps:[]};}}}});
   nodes.get('activityMode').value='sing';nodes.get('activityMode').onchange();
-  nodes.get('openSongRecording').onclick();assert.equal(nodes.get('recordingDetails').open,true);
+  nodes.get('openSongRecording').onclick();assert.equal(nodes.get('recordingDetails').open,false);
+  assert.equal(nodes.get('page-recordings').hidden,false);assert.equal(nodes.get('download').style.display,'block');
   nodes.get('replayVocalVolume').value='1.5';nodes.get('replayBackingVolume').value='0.4';
   assert.equal(nodes.get('takeMixDownload').hidden,false);await nodes.get('takeMixDownload').onclick();
   assert.equal(exports[0].vocalVolume,1.5);assert.equal(exports[0].volume,0.4);

@@ -279,7 +279,7 @@
     $('previewBacking').disabled=busy || !ready;
     $('songReadiness').textContent=!usesBacking()?'清唱 · 不播放伴奏':ready?`${name}已就绪`:mode==='separating'?`正在准备${name}…`:restoringBacking?`正在查找已有${name}…`:`尚未准备${name}`;
     $('openBacking').textContent=ready?`调整${name}`:`准备${name} →`;
-    $('backingSummary').textContent=!usesBacking()?'清唱':ready?`已就绪 · 监听 ${Math.round(Number($('backingVolume').value)*100)}%`:mode==='separating'?'生成中…':'未生成';
+    $('backingSummary').textContent=!usesBacking()?'清唱':`${qualityPreferences[activity]==='lossless'?'FLAC 无损':'MP3'} · ${ready?'已就绪':mode==='separating'?'生成中…':'未生成'}`;
     $('prepareBacking').disabled=busy || !!ready;
     $('karaokeNotice').hidden=!karaokeIssue;
     $('karaokeNotice').textContent=karaokeIssue;
@@ -828,7 +828,7 @@
     const end=Number.isFinite(value.capturedEnd)?Math.min(value.end,value.capturedEnd):value.end;
     return exportAudio([value],end-value.start,value.start,true);
   }
-  $('openSongRecording').onclick=()=>{if(mode!=='idle' || !songTake)return;setTake(songTake);showPage('recordings',true);$('recordingDetails').open=true;};
+  $('openSongRecording').onclick=()=>{if(mode!=='idle' || !songTake)return;setTake(songTake);showPage('recordings',true);};
   $('takeMixDownload').onclick=guarded(()=>exportTake(take));
   $('assembleSong').onclick=guarded(()=>{
     if(mode!=='idle')return;
