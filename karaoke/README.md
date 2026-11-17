@@ -46,9 +46,33 @@ python3 -m pip --python .venv/bin/python install --index-url https://download.py
 python3 -m pip --python .venv/bin/python install -r karaoke/requirements.txt
 ```
 
-Mac 推荐直接使用根目录脚本；手动安装时用本机 Python 创建 venv，再安装 `karaoke/requirements.txt`，平台标记会选择对应的 PyTorch 版本。macOS / Windows 的真实安装、音频设备与分离仍待实机验证；默认均用 CPU。
+Mac 推荐直接使用根目录脚本；手动安装时用本机 Python 创建 venv，再安装 `karaoke/requirements.txt`，平台标记会选择对应的 PyTorch 版本。macOS / Windows 的真实安装、音频设备与分离仍待实机验证；默认安装 CPU 依赖。
 
 依赖参考：[Demucs](https://github.com/facebookresearch/demucs)、[yt-dlp 安装](https://github.com/yt-dlp/yt-dlp/wiki/Installation)、[YouTube JS runtime](https://github.com/yt-dlp/yt-dlp/wiki/EJS)。
+
+### 可选：NVIDIA GPU 加速
+
+先完成普通安装并按 Ctrl+C 停止服务。有兼容 NVIDIA GPU 和驱动的 Linux x86_64 / Windows x64 用户，可将项目环境升级为 CUDA 12.1 版 PyTorch。以下版本与项目现有依赖匹配，来自 [PyTorch 官方安装表](https://pytorch.org/get-started/previous-versions/#v251)；不需要单独安装 CUDA Toolkit，但需要可用的 NVIDIA 驱动。很新的 GPU 可能不受这组固定版本支持，应先检查启动时的设备检测结果。
+
+Linux：
+
+```bash
+.venv/bin/python -m pip install --upgrade --index-url https://download.pytorch.org/whl/cu121 torch==2.5.1 torchaudio==2.5.1
+bash start-karaoke.sh
+```
+
+Windows PowerShell（代码适配，尚待实机验证）：
+
+```powershell
+.\.venv\Scripts\python.exe -m pip install --upgrade --index-url https://download.pytorch.org/whl/cu121 torch==2.5.1 torchaudio==2.5.1
+powershell -NoProfile -ExecutionPolicy Bypass -File .\start-karaoke.ps1
+```
+
+CUDA 环境明显大于 CPU 版，建议至少预留 10 GB 磁盘空间。后续普通启动与依赖更新会保留兼容的 CUDA 安装，不改回 CPU。服务默认 `--device auto`：实际运行一个 CUDA 小运算确认可用后选择 GPU；不支持时使用 CPU。自动模式分离过程中遇到显存不足等 CUDA 运行错误，会释放子进程后仅重试一次 CPU，界面显示回退原因。模型、4 秒分段和缓存身份均保持一致，歌曲与电影背景音共用加速。
+
+终端显示设备名称；扩展的现有服务状态显示「GPU 加速」或「CPU」，生成进度显示实际使用的设备。需要排查时可指定 `bash start-karaoke.sh --device cpu`；`--device cuda` 则要求 GPU 可用，失败时报错，不静默回退。Windows 在上述启动命令末尾加同样参数。macOS 仍用 CPU，暂不启用 MPS。
+
+Linux / RTX 3060 Laptop 6 GB 实测同一段约 20 秒电影素材：Demucs CPU 30.89 秒，GPU 5.06 秒，约快 6.1 倍；不包含提取 YouTube 音频或下载模型，不能按此保证整曲耗时。BandIt 独立实验结果见 [性能对比](../CINEMATIC_EVALUATION.md#gpu-补测)，尚未接入正式服务。
 
 ## 每次使用
 
@@ -89,7 +113,7 @@ Demucs 原为音乐分离模型，可能残留对白或误删环境音；此功�
 ## 资源与数据
 
 - 不需要独立显卡，也不需要安装 CUDA。建议整机内存 8 GB 起步、16 GB 更宽裕，磁盘至少预留 5 GB；这是配置建议，未做最低配置测试，长录音与缓存还需另留空间。插件本身不需要 Python 或分离模型，详见项目首页的 [所需配置](../README.md#所需配置)。
-- 默认 CPU、两个线程、4 秒模型分段、单任务，无需显卡。`--shifts 0` 减少重复推理。
+- 默认安装 CPU 依赖；服务自动检测可用 CUDA，也可强制 CPU。两个 CPU 线程、4 秒模型分段、单任务；`--shifts 0` 减少重复推理。
 - 本机 i7-1165G7 / 16 GB RAM 测试：15 秒音乐片段约 35 秒，分离进程内存峰值约 1.5 GiB（包含首次模型下载与载入）。这不是对其他机器或长片段的保证；更短的片段也有模型载入开销。
 - 本次 Linux CPU 环境约 953 MB，模型约 80 MB，此外会占用片段缓存空间。生成伴奏时会联网访问 YouTube 和模型下载地址；麦克风录音留在浏览器 IndexedDB，不会发给本机分离服务或第三方。
 - 伴奏、恢复信息与日志放在仓库 `.cache/karaoke/`；模型在 `.cache/torch/`。失败详情查看对应任务目录的 `worker.log`。这些目录和 `.venv/` 均被 Git 忽略。

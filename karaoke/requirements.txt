@@ -1,4 +1,4 @@
-# Install the matching CPU-only torch/torchaudio wheels first (see README).
+# Install matching CPU or optional CUDA torch/torchaudio wheels first (see README).
 # PyTorch stopped publishing Intel macOS wheels after 2.2.x.
 torch==2.2.2; sys_platform == "darwin" and platform_machine == "x86_64"
 torchaudio==2.2.2; sys_platform == "darwin" and platform_machine == "x86_64"

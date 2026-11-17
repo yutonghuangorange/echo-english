@@ -22,6 +22,20 @@ MAX_SECONDS = 600
 ACTIVE_STATES = ("queued", "downloading", "converting", "separating", "encoding")
 
 
+def probe_device(requested):
+    if requested == "cpu":
+        return {"device": "cpu", "deviceName": "CPU"}
+    try:
+        output = subprocess.check_output(
+            [sys.executable, str(Path(__file__).with_name("accelerator.py")), "--device", requested],
+            stderr=subprocess.PIPE, timeout=45, text=True)
+        return json.loads(output)
+    except (OSError, subprocess.SubprocessError, ValueError) as error:
+        if requested == "cuda":
+            raise RuntimeError("无法启用 CUDA。请检查驱动与 CUDA 版 PyTorch，或使用 --device cpu。") from error
+        return {"device": "cpu", "deviceName": "CPU", "deviceNote": "GPU 检测失败，使用 CPU。"}
+
+
 def process_options():
     # Each worker owns its descendants (yt-dlp may launch FFmpeg).
     if sys.platform == "win32":
@@ -81,13 +95,15 @@ class Cancelled(Exception):
 
 
 class Jobs:
-    def __init__(self, cache, runner=None):
+    def __init__(self, cache, runner=None, accelerator=None, allow_cpu_fallback=True):
         self.cache = Path(cache)
         self.cache.mkdir(parents=True, exist_ok=True)
         self.lock = threading.RLock()
         self.jobs = {}
         self.worker = None
         self.runner = runner or self.separate
+        self.accelerator = accelerator or {"device": "cpu", "deviceName": "CPU"}
+        self.allow_cpu_fallback = allow_cpu_fallback
         self.restore()
 
     def restore(self):
@@ -171,11 +187,13 @@ class Jobs:
                     log.seek(0, 2)
                     log.seek(max(0, log.tell() - 8192))
                     output = log.read().decode(errors="replace")
+                    output = output.rsplit("Echo: CUDA failed; retrying on CPU.", 1)[-1]
                     percent, eta = separation_progress(output)
                     if percent is None and re.search(r'Downloading:.*https?://', output):
                         result["modelDownloading"] = True
             except OSError:
                 pass
+        result.update({k: job[k] for k in ("device", "deviceNote") if k in job})
         return dict(result, progress=percent, remainingSeconds=eta,
                     elapsedSeconds=round((job["finished"] or time.monotonic()) - job["started"]))
 
@@ -230,6 +248,38 @@ class Jobs:
             finally:
                 stop_process(proc)
 
+    def separate_audio(self, job):
+        """Shared separation path for songs and film backgrounds."""
+        directory = job["directory"]
+        job["device"] = self.accelerator["device"]
+        args = [sys.executable, "-m", "demucs", "--two-stems", "vocals", "-n", "htdemucs",
+                "-d", job["device"], "--segment", "4", "--shifts", "0", "-j", "1",
+                "-o", str(directory / "stems"), str(directory / "clip.wav")]
+        log = directory / "worker.log"
+        offset = log.stat().st_size if log.exists() else 0
+        try:
+            self.command(job, args, 3600, "本机去原唱失败；首次运行需联网下载模型。")
+        except RuntimeError:
+            # Retry only GPU runtime failures, never downloads, cancellation or
+            # arbitrary model errors. A new process releases all CUDA allocations.
+            if not log.is_file():
+                raise
+            with log.open("rb") as source:
+                source.seek(max(offset, log.stat().st_size - 16384))
+                tail = source.read().decode(errors="replace")
+            gpu_failure = re.search(r"CUDA out of memory|CUDA error:|CUDA-capable device|"
+                                    r"CUDA driver|CUDNN_STATUS|CUBLAS_STATUS|Torch not compiled with CUDA", tail, re.I)
+            if job["device"] != "cuda" or not self.allow_cpu_fallback or not gpu_failure:
+                raise
+            if job["cancel"].is_set():
+                raise Cancelled()
+            job.update(device="cpu", deviceNote="GPU 处理失败，已自动改用 CPU。")
+            shutil.rmtree(directory / "stems", ignore_errors=True)
+            with log.open("a") as output:
+                output.write("\nEcho: CUDA failed; retrying on CPU.\n")
+            args[args.index("-d") + 1] = "cpu"
+            self.command(job, args, 3600, "CPU 回退分离失败，详情见 worker.log。")
+
     def separate(self, job):
         for package in ("yt_dlp", "demucs", "torch", "torchaudio"):
             if importlib.util.find_spec(package) is None:
@@ -251,10 +301,7 @@ class Jobs:
                           "-t", str(job["end"] - job["start"]), "-ar", "44100", "-ac", "2",
                           str(directory / "clip.wav")], 120, "音频片段转换失败。")
         job["state"] = "separating"
-        self.command(job, [sys.executable, "-m", "demucs", "--two-stems", "vocals", "-n", "htdemucs",
-                          "-d", "cpu", "--segment", "4", "--shifts", "0", "-j", "1",
-                          "-o", str(directory / "stems"), str(directory / "clip.wav")], 3600,
-                     "本机去原唱失败；首次运行需联网下载模型。")
+        self.separate_audio(job)
         job["state"] = "encoding"
         self.command(job, ["ffmpeg", "-nostdin", "-v", "error", "-y", "-i",
                           str(directory / "stems" / "htdemucs" / "clip" / "no_vocals.wav"),
@@ -289,7 +336,8 @@ def handler(jobs):
             if not self.allowed():
                 return
             if self.path == "/health":
-                return self.reply(200, {"service": "echo-karaoke", "version": 1, "maxSeconds": MAX_SECONDS})
+                return self.reply(200, dict(service="echo-karaoke", version=1,
+                                           maxSeconds=MAX_SECONDS, **jobs.accelerator))
             cached = re.fullmatch(r"/backings/([A-Za-z0-9_-]{11})", self.path)
             if cached:
                 with jobs.lock:
@@ -343,9 +391,16 @@ def handler(jobs):
 def main():
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--cache", type=Path, default=Path(__file__).resolve().parent.parent / ".cache" / "karaoke")
+    parser.add_argument("--device", choices=("auto", "cpu", "cuda"), default="auto",
+                        help="auto: use CUDA when available, otherwise CPU; cuda: require GPU")
     args = parser.parse_args()
     args.cache.mkdir(parents=True, exist_ok=True)
-    jobs = Jobs(args.cache)
+    try:
+        accelerator = probe_device(args.device)
+    except RuntimeError as error:
+        print(str(error), file=sys.stderr)
+        return 1
+    jobs = Jobs(args.cache, accelerator=accelerator, allow_cpu_fallback=args.device == "auto")
     try:
         server = ThreadingHTTPServer(("127.0.0.1", PORT), handler(jobs))
     except OSError as error:
@@ -354,6 +409,9 @@ def main():
         print(f"端口 {PORT} 已被占用。请在旧终端按 Ctrl+C，再运行 ./start-karaoke.sh（Windows：start-karaoke.ps1）。", file=sys.stderr)
         return 1
     print(f"Echo 伴奏服务已启动：http://127.0.0.1:{PORT}（Ctrl+C 停止）", flush=True)
+    print(f"分离设备：{accelerator['deviceName']}（{accelerator['device']}）", flush=True)
+    if accelerator.get("deviceNote"):
+        print(accelerator["deviceNote"], flush=True)
     try:
         server.serve_forever()
     except KeyboardInterrupt:

@@ -34,7 +34,7 @@ class Tests(unittest.TestCase):
 
     def test_occupied_port_explains_how_to_restart_the_service(self):
         output = io.StringIO()
-        with patch.object(sys, "argv", ["server.py", "--cache", self.temp.name]), \
+        with patch.object(sys, "argv", ["server.py", "--cache", self.temp.name, "--device", "cpu"]), \
                 patch("server.ThreadingHTTPServer", side_effect=OSError(errno.EADDRINUSE, "busy")), \
                 redirect_stderr(output):
             self.assertEqual(main(), 1)

@@ -22,6 +22,8 @@ elif [[ "$1" == -m && "$2" == pip ]]; then
   echo "$*" >> "$ECHO_SETUP_LOG"
 elif [[ "$1" == -m && "$2" == ensurepip ]]; then
   rm -f "$ECHO_SETUP_LOG.missing-pip"
+elif [[ "$1" == -c && "$2" == *torch.version.cuda* && -f "$ECHO_SETUP_LOG.cuda" ]]; then
+  echo cuda
 fi
 `,{mode:0o755});
     for(const name of ['ffmpeg','ffprobe','node'])fs.writeFileSync(path.join(dir,'bin',name),'#!/bin/bash\nexit 0\n',{mode:0o755});
@@ -34,6 +36,12 @@ fi
     fs.rmSync(path.join(dir,'.venv/.echo-requirements'));fs.writeFileSync(log+'.missing-pip','');
     const repaired=run();assert.equal(repaired.status,0,repaired.stderr);
     assert.match(repaired.stdout,/修复未完成安装的 pip/);assert.equal(fs.existsSync(log+'.missing-pip'),false);
+    // Updating unrelated dependencies must preserve an existing CUDA wheel.
+    fs.rmSync(path.join(dir,'.venv/.echo-requirements'));fs.writeFileSync(log+'.cuda','');fs.writeFileSync(log,'');
+    const gpu=run();assert.equal(gpu.status,0,gpu.stderr);
+    assert.match(fs.readFileSync(log,'utf8'),/install -r/);
+    assert.doesNotMatch(fs.readFileSync(log,'utf8'),/download.pytorch.org\/whl\/cpu/);
+    fs.rmSync(log+'.cuda');
     // Simulate both Homebrew layouts with keg-only Python absent from PATH.
     const brew=path.join(dir,'Homebrew with spaces');
     fs.mkdirSync(path.join(brew,'opt/python@3.12/bin'),{recursive:true});

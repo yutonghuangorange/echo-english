@@ -11,7 +11,7 @@ case "$system/$(uname -m)" in
   *) echo '此脚本支持 Linux x86_64、macOS Intel / Apple 芯片；Windows 请使用 start-karaoke.ps1。' >&2; exit 1 ;;
 esac
 if [[ "${1:-}" == '--help' ]]; then
-  echo '用法：bash start-karaoke.sh [服务参数]'
+  echo '用法：bash start-karaoke.sh [--device auto|cpu|cuda] [--cache PATH]'
   echo '首次安装依赖并启动；以后复用环境直接启动。系统依赖安装可能要求 sudo 密码。'
   exit 0
 fi
@@ -111,7 +111,9 @@ if ! cmp -s "$project_dir/karaoke/requirements.txt" "$marker" || ! "$venv_python
     fi
   fi
   "$venv_python" -m pip install --upgrade pip
-  if [[ "$system" == Linux ]]; then
+  # Preserve a compatible CUDA installation when other requirements change.
+  torch_variant="$("$venv_python" -c 'import torch,torchaudio; print("cuda" if torch.__version__.split("+")[0] == torchaudio.__version__.split("+")[0] == "2.5.1" and torch.version.cuda else "cpu")' 2>/dev/null || true)"
+  if [[ "$system" == Linux && "$torch_variant" != cuda ]]; then
     "$venv_python" -m pip install --index-url https://download.pytorch.org/whl/cpu torch==2.5.1 torchaudio==2.5.1
   fi
   "$venv_python" -m pip install -r "$project_dir/karaoke/requirements.txt"

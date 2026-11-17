@@ -210,7 +210,7 @@ test('Escape stops playback, restores idle actions and clears the playing status
 
 test('singing detects offline service and retry collapses setup help after connection',async()=>{
   const storage=createStorage(new IDBFactory());let online=false,checks=0,starts=0;
-  const {nodes}=await mount(storage,{health:()=>{checks++;return online?{service:'echo-karaoke',maxSeconds:600}:{error:'offline'};},globals:{chrome:{runtime:{onMessage:{addListener(){}},async sendMessage(){starts++;return {};}}}}});
+  const {nodes}=await mount(storage,{health:()=>{checks++;return online?{service:'echo-karaoke',maxSeconds:600,device:'cuda',deviceName:'Test GPU'}:{error:'offline'};},globals:{chrome:{runtime:{onMessage:{addListener(){}},async sendMessage(){starts++;return {};}}}}});
   assert.equal(checks,0);
   nodes.get('activityMode').value='sing';nodes.get('activityMode').onchange();
   await nodes.get('checkKaraoke').onclick();
@@ -218,6 +218,8 @@ test('singing detects offline service and retry collapses setup help after conne
   assert.equal(starts,0);assert.equal(nodes.get('record').disabled,false);
   online=true;await nodes.get('checkKaraoke').onclick();
   assert.match(nodes.get('karaokeService').textContent,/已连接/);assert.equal(nodes.get('karaokeHelp').open,false);assert.equal(starts,0);
+  assert.match(nodes.get('karaokeService').textContent,/GPU 加速/);assert.equal(nodes.get('karaokeService').title,'Test GPU');
+  online=false;await nodes.get('checkKaraoke').onclick();assert.equal(nodes.get('karaokeService').title,'');
   (await storage.ready).close();
 });
 test('offline generation shows setup next to the button even while cache lookup is pending',async()=>{

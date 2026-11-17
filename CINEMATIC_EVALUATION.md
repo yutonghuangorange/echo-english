@@ -27,6 +27,23 @@ BandIt 推理本身为 236.65 秒，其余约 3.24 秒为准备与保存。所�
 
 试听用 MP3 均施加同一个增益以避免削波，再编码为 192 kbps，没有分别做响度归一化；原始 WAV 保留。需人工对比对白残留、音乐与音效损失、混响以及处理伪影。当前结论是 **CPU 技术可行、成本较高，音质优劣待试听**，正式功能先采用 Demucs，BandIt 保留为独立实验。
 
+## GPU 补测
+
+同一台 Linux / i7-11800H 电脑，使用 NVIDIA RTX 3060 Laptop GPU（6 GB）、驱动 580.178.04、PyTorch / TorchAudio `2.5.1+cu121`。复用上述约 20 秒素材与已缓存权重，模型、窗口、步长、batch 和两个 CPU 线程不变，仅改用 CUDA，未使用半精度：
+
+| 引擎 | 先前 CPU 总耗时 | GPU 总耗时 | 总耗时加速比 |
+| --- | --- | --- | --- |
+| Demucs `htdemucs` | 30.89 秒 | 5.06 秒 | 6.1× |
+| BandIt v2，多语言 | 239.89 秒 | 9.64 秒 | 24.9× |
+
+均不含素材与模型下载，包含准备、模型加载和音频写出。Demucs 用完整 CLI 进程计时；BandIt 沿用脚本内部计时口径，并在 CUDA 计时边界同步。BandIt GPU 推理为 5.47 秒，准备约 4.10 秒，PyTorch 张量显存分配峰值 1993.76 MiB、缓存分配器预留峰值 3054 MiB，进程内存峰值约 1.43 GiB。显存数值不包含所有驱动／CUDA 上下文开销，不是最低显存要求。
+
+输出已核验时长、双声道与有限采样，并与 CPU 结果比较差异，详见本机 `gpu-validation.json`。GPU 加速不会换用另一个分离模型，不能据此宣称音质提升。另以缓存源文件代替下载，实跑正式服务的 FFmpeg → Demucs CUDA → MP3 → HTTP 状态与缓存恢复流程，确认 CPU / GPU 可共用现有缓存。未重复验证实际 YouTube 下载，也未完成长歌曲或长电影片段的 GPU 测试。
+
+这组结果表明 BandIt 在本机 GPU 上的耗时已值得进一步评估；它仍是独立实验，正式伴奏和可选电影背景音继续共用 Demucs。不能用此单次短片段测试保证其他 GPU 或长素材的表现。
+
+安装 CUDA 依赖见 [GPU 配置](karaoke/README.md#可选nvidia-gpu-加速)。下方 CPU 复现保持不变；GPU 复现只需给 BandIt 命令增加 `--device cuda`、使用不同输出目录，Demucs 命令将 `-d cpu` 改为 `-d cuda`。
+
 ## 复现（当前仅验证 Linux）
 
 先配置现有伴奏 `.venv`，在项目根目录执行下列命令。额外依赖安装到单独目录，不修改正常伴奏环境；无需安装上游的 Ray、CUDA 或训练集工具。
@@ -42,7 +59,7 @@ ffmpeg -nostdin -v error -y -ss 10 -i .cache/cinematic-benchmark/sintel.ogv -t 2
 PYTHONPATH=.cache/cinematic-deps .venv/bin/python karaoke/experiments/cinematic.py --input .cache/cinematic-benchmark/original.wav --output .cache/cinematic-benchmark/bandit --bandit-repo .cache/bandit-v2 --checkpoint .cache/cinematic-benchmark/checkpoint-multi.ckpt
 ```
 
-脚本只接受最长 30 秒的单声道或双声道输入，校验官方权重后加载，严格匹配模型参数，在 CPU 上运行。输出 Float WAV，避免音乐与音效相加时在写文件阶段削波；记录时长、峰值、RMS、耗时及可获取的进程内存峰值。这里的峰值／RMS 是音频电平，不能当作分离质量或发音评分。
+脚本只接受最长 30 秒的单声道或双声道输入，校验官方权重后加载，严格匹配模型参数，默认在 CPU 上运行，可指定 `--device cuda`。输出 Float WAV，避免音乐与音效相加时在写文件阶段削波；记录时长、峰值、RMS、耗时及可获取的进程内存峰值。这里的峰值／RMS 是音频电平，不能当作分离质量或发音评分。
 
 基线复现：
 
@@ -58,4 +75,4 @@ OMP_NUM_THREADS=2 MKL_NUM_THREADS=2 TORCH_HOME="$PWD/.cache/torch" .venv/bin/pyt
 - 配音模式已提供默认关闭的「保留背景音」，需要时再展开提取、试听和背景音量，不新增一套录音主流程。
 - 始终单独录人声，回听和下载时才混入背景；歌曲与电影共用音轨管理，保留配音／唱歌各自的麦克风处理偏好。
 - 此方案移除的是原对白整体，尚不能只去掉某个角色而保留其他角色。重叠对白、叫喊、呼吸与混响仍需单独试听。
-- 新模型的 CPU 耗时和资源需求必须单独提示，不能套用歌曲伴奏的速度估计或直接放开长片段。Windows / macOS、GPU 和长片段尚未验证。
+- 新模型的 CPU 耗时和资源需求必须单独提示，不能套用歌曲伴奏的速度估计或直接放开长片段。Windows / macOS 和长片段尚未验证；GPU 仅完成上文的 Linux 短片段补测。

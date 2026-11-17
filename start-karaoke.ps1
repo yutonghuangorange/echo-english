@@ -24,10 +24,16 @@ function Test-Dependencies([string]$Program) {
     return $LASTEXITCODE -eq 0
 }
 
+function Test-CudaTorch([string]$Program) {
+    $ErrorActionPreference = 'Continue'
+    $variant = & $Program -c "import torch,torchaudio; print('cuda' if torch.__version__.split('+')[0] == torchaudio.__version__.split('+')[0] == '2.5.1' and torch.version.cuda else 'cpu')" 2>$null
+    return $LASTEXITCODE -eq 0 -and $variant -eq 'cuda'
+}
+
 try {
     if ($env:OS -ne 'Windows_NT') { throw 'Use bash start-karaoke.sh on macOS / Linux.' }
     if ($ServerArguments -contains '--help') {
-        Write-Host 'Usage: powershell -NoProfile -ExecutionPolicy Bypass -File .\start-karaoke.ps1 [--cache PATH]'
+        Write-Host 'Usage: powershell -NoProfile -ExecutionPolicy Bypass -File .\start-karaoke.ps1 [--device auto|cpu|cuda] [--cache PATH]'
         Write-Host 'Requires x64 Python 3.10-3.12, FFmpeg (with ffprobe), and Node.js 22+ or Deno on PATH.'
         exit 0
     }
@@ -76,10 +82,12 @@ try {
         $ready = Test-Dependencies $venvPython
     }
     if (-not $ready) {
-        Write-Host 'Installing local CPU dependencies. Downloads may take several minutes.'
+        Write-Host 'Installing local dependencies. Downloads may take several minutes.'
         Invoke-Checked $venvPython @('-m', 'ensurepip', '--upgrade')
         Invoke-Checked $venvPython @('-m', 'pip', 'install', '--upgrade', 'pip')
-        Invoke-Checked $venvPython @('-m', 'pip', 'install', '--index-url', 'https://download.pytorch.org/whl/cpu', 'torch==2.5.1', 'torchaudio==2.5.1')
+        if (-not (Test-CudaTorch $venvPython)) {
+            Invoke-Checked $venvPython @('-m', 'pip', 'install', '--index-url', 'https://download.pytorch.org/whl/cpu', 'torch==2.5.1', 'torchaudio==2.5.1')
+        }
         Invoke-Checked $venvPython @('-m', 'pip', 'install', '-r', $requirements)
         Invoke-Checked $venvPython @('-m', 'pip', 'check')
         [IO.File]::WriteAllText($marker, [IO.File]::ReadAllText($requirements))

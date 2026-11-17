@@ -16,6 +16,7 @@
     if(job.state==='separating')text=job.modelDownloading?'首次准备 · 正在下载分离模型，请保持本机服务运行':text+(Number.isFinite(job.progress)?` ${job.progress}%`:' · 正在加载模型或准备分离');
     if(Number.isFinite(job.elapsedSeconds))text+=` · 已用 ${clock(job.elapsedSeconds)}`;
     if(job.state==='separating' && Number.isFinite(job.remainingSeconds))text+=` · 本阶段预计剩余 ${clock(job.remainingSeconds)}`;
+    if(job.state==='separating' && job.device)text+=job.deviceNote?` · ${job.deviceNote}`:job.device==='cuda'?' · GPU 加速':' · CPU';
     return text;
   }
   function blobFromBase64(value) {

@@ -6,10 +6,10 @@
 
 | 平台 | 安装入口 | 分离依赖 | 验证状态 |
 | --- | --- | --- | --- |
-| Linux x86_64 | `bash start-karaoke.sh` | CPU torch / torchaudio 2.5.1 | 本机自动化、实际短片段分离已验证 |
+| Linux x86_64 | `bash start-karaoke.sh` | torch / torchaudio 2.5.1，默认 CPU，可选 CUDA 12.1 | 本机自动化、CPU / RTX 3060 Laptop 短片段分离已验证 |
 | macOS Apple 芯片 | `bash start-karaoke.sh` | torch / torchaudio 2.5.1，CPU | 代码适配；等待实机安装与录音验证 |
 | macOS Intel | `bash start-karaoke.sh` | torch / torchaudio 2.2.2，CPU | 已修正版本选择；等待实机验证 |
-| Windows x64 | `start-karaoke.ps1` | CPU torch / torchaudio 2.5.1 | 已补安装入口和进程清理；等待实机验证 |
+| Windows x64 | `start-karaoke.ps1` | torch / torchaudio 2.5.1，默认 CPU，可选 CUDA 12.1 | 已补安装入口和进程清理；CPU / GPU 均等待实机验证 |
 
 Windows ARM64 原生 Python 不在本次目标内。Apple 芯片使用原生 arm64 Python，避免混用 Rosetta、Intel Homebrew 和 arm64 虚拟环境。所有系统使用 Python 3.10–3.12；不要复制其他机器的 `.venv` 或项目专用 Node，重新运行本机安装脚本即可。
 

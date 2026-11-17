@@ -704,9 +704,11 @@
         if(result.service!=='echo-karaoke')throw Error('服务不匹配');
         serviceState='online';serviceMaxSeconds=Number.isFinite(result.maxSeconds)?result.maxSeconds:300;
         $('karaokeService').textContent=serviceMaxSeconds<600?'伴奏服务 · 已连接旧版，请重启服务以支持 10 分钟':'伴奏服务 · 已连接';
+        if(serviceMaxSeconds>=600 && result.device)$('karaokeService').textContent+=result.device==='cuda'?' · GPU 加速':' · CPU';
+        $('karaokeService').title=[result.deviceName,result.deviceNote].filter(Boolean).join(' · ');
         $('karaokeHelp').open=serviceMaxSeconds<600;
       }catch{
-        serviceState='offline';$('karaokeService').textContent='伴奏服务 · 未连接（未启动或不可用）';$('karaokeHelp').open=true;
+        serviceState='offline';$('karaokeService').textContent='伴奏服务 · 未连接（未启动或不可用）';$('karaokeService').title='';$('karaokeHelp').open=true;
       }finally{$('checkKaraoke').disabled=false;serviceCheck=null;updateBackingControls();}
     })();
     return serviceCheck;
