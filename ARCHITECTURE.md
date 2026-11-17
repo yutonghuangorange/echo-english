@@ -110,3 +110,9 @@ python3 -m unittest discover -s karaoke -p test_server.py
 `Jobs` 与 `ModelManager` 共用锁，只能有一个安装或分离任务；管理接口在锁内拒绝与音频任务冲突的操作。安装在后台线程运行，HTTP 立即返回，取消复用事件与工作子进程树清理。就绪状态来自权重 SHA-256、固定源码版本与成功构造模型并严格载入权重后的依赖标记，不能由扩展写入。权重原子下载，`.part` 断点续传；额外依赖通过临时目录安装并检查后发布，基础环境保持独立。
 
 Demucs 缓存沿用旧 key，只有非默认模型增加 model 字段参与 key；服务元数据与浏览器音频均保存 model；BandIt 使用 v2 元数据，使旧版服务跳过其结果，避免降级后误读为 Demucs。录音的 backingModel 决定回听、导出所用背景音，不追随用户后来切换的模型。下载、转换、压缩、缓存、取消与 GPU 失败回退共用 Jobs 流程，BandIt 仅替换模型工作命令与输入采样率。
+
+## 背景音音质与传输
+
+`quality` 仅允许 standard / lossless；默认值不参与旧缓存 key，lossless 使用独立 key 和 v3 服务元数据。`Jobs.audio_path`、`audio_mime`、`encode_audio` 统一决定扩展名、MIME 与编码，两种分离模型共用。无损分离链路保留浮点中间文件，最终编码 24 位 FLAC。
+
+`EchoKaraoke.qualityOf`、`covers` 与 `backingForTake` 统一匹配录音的 backingQuality。`fetchAudio` 按 1 MiB 请求分块，验证连续位置、固定总长度与 MIME，保存为不可变 Blob 分块后组装，避免在 Chrome 消息中传递整个大文件。后台 relay 只能请求固定音频路径和固定分块上限，服务只读已完成任务的指定字节范围；取消和页面切换通过 active 回调丢弃过期返回。

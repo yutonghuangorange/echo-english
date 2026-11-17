@@ -193,3 +193,29 @@ BandIt 建议额外预留 2 GiB（含下载、安装临时文件和处理中间�
 ```
 
 首次执行会安装 BandIt，需联网。Mac 原生双架构 CI 同样安装并运行 CPU 测试；每次结果以工作流为准，Windows 尚待当地实机验收。
+
+## 背景音保存音质（0.23.0）
+
+在背景音／伴奏设置的「保存音质」下拉框中选择：
+
+| 选项 | 服务缓存 | 编码与用途 |
+| --- | --- | --- |
+| 标准（默认） | `accompaniment.mp3` | MP3 192 kbps，约 1.4 MB／分钟，节省磁盘与浏览器存储 |
+| 无损 | `accompaniment.flac` | 24 位整数 PCM 的 FLAC 无损压缩；Demucs 44.1 kHz、BandIt 48 kHz，立体声，体积取决于内容 |
+
+无损模式在视频音频解码和片段转换时使用 float32 PCM，Demucs 分离输出同样使用 float32 WAV；BandIt 原本就输出 float32。最终量化为 24 位 PCM 后使用 FLAC 保存，不经过 MP3。FLAC 解码保留编码时的 24 位 PCM；不代表保留浮点模型输出的每一位，也不能恢复 YouTube 原音频或模型分离已经丢失的内容。
+
+这项选择只影响背景音提取与缓存，不改变麦克风的录音音质设置。回听与混合导出直接解码对应 FLAC；混合导出继续使用现有的 44.1 kHz / 16 位 WAV 格式，经过混音、必要的重采样和削波保护，不是 FLAC 原文件的逐位复制。
+
+音质按视频、配音／唱歌分别记忆；标准缓存沿用原有编号，无损增加独立标识。录音的 `backingQuality` 保存其原始背景音音质，回听和导出不追随后来改动。无损任务使用 v3 元数据，让不支持此功能的旧服务跳过这些文件；已有标准缓存不受影响。
+
+长 FLAC 不会一次通过 Chrome 消息传输：扩展向固定本机端点请求 1 MiB HTTP Range 分块，校验位置、总大小和 MIME 一致性后组装 Blob；总大小上限 192 MiB，覆盖最长 10 分钟的双声道 24 位音频。停止或切换视频时丢弃未完成的加载。浏览器存储不足时仍沿用现有保存失败提示。
+
+更新后需重新加载扩展、刷新 YouTube，并在原终端停止、重启本机服务。开发验证：
+
+```bash
+.venv/bin/python karaoke/smoke_test.py --quality lossless --device cpu
+.venv/bin/python karaoke/smoke_test.py --model bandit-v2-multi --quality lossless --device cuda --seconds 9
+```
+
+验证 FLAC 编码、位深、时长、声道与解码误差；单元测试另验证 24 位 PCM 的逐采样精确往返，不访问 YouTube 或申请麦克风权限。

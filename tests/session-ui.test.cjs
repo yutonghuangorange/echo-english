@@ -1453,3 +1453,31 @@ test('Mac service display reflects CPU for BandIt and MPS for Demucs',async()=>{
   assert.match(nodes.get('karaokeService').textContent,/GPU 加速/);
   (await storage.ready).close();
 });
+
+test('lossless selection uses chunked FLAC and remembers per-activity preferences',async()=>{
+  const storage=createStorage(new IDBFactory()),calls=[];
+  await storage.saveSession({videoId:'video',activity:'speech',start:0,end:5,useBacking:true,backingPreferences:{speech:true},cues:[],index:-1});
+  const {nodes}=await mount(storage,{video:{duration:60,pause(){}},health:()=>({service:'echo-karaoke',maxSeconds:600,losslessBackings:true}),globals:{chrome:{runtime:{onMessage:{addListener(){}},async sendMessage(message){
+    calls.push(message);
+    if(message.action==='start')return {id:'a'.repeat(32),state:'ready',quality:message.quality};
+    if(message.action==='audio-chunk')return {audio:'ZkxBQw==',offset:0,totalBytes:4,mime:'audio/flac'};
+    return {};
+  }}}}});
+  nodes.get('backingQuality').value='lossless';nodes.get('backingQuality').onchange();
+  await nodes.get('prepareBacking').onclick();
+  assert.equal(calls.find(c=>c.action==='start').quality,'lossless');assert.ok(calls.some(c=>c.action==='audio-chunk'));assert.ok(!calls.some(c=>c.action==='audio'));
+  const [backing]=await storage.listBackings('video');assert.equal(backing.quality,'lossless');assert.equal(backing.blob.type,'audio/flac');assert.match(backing.key,/:lossless$/);
+  nodes.get('activityMode').value='sing';nodes.get('activityMode').onchange();assert.equal(nodes.get('backingQuality').value,'standard');
+  nodes.get('activityMode').value='speech';nodes.get('activityMode').onchange();assert.equal(nodes.get('backingQuality').value,'lossless');
+  await new Promise(r=>setTimeout(r,10));assert.equal((await storage.getSession('video')).qualityPreferences.speech,'lossless');
+  (await storage.ready).close();
+});
+
+test('old service cannot silently return MP3 when lossless was selected',async()=>{
+  const storage=createStorage(new IDBFactory());let starts=0;
+  const {nodes}=await mount(storage,{video:{duration:60,pause(){}},globals:{chrome:{runtime:{onMessage:{addListener(){}},async sendMessage(message){if(message.action==='start')starts++;return {};}}}}});
+  nodes.get('activityMode').value='sing';nodes.get('activityMode').onchange();
+  nodes.get('backingQuality').value='lossless';nodes.get('backingQuality').onchange();
+  await nodes.get('prepareBacking').onclick();assert.equal(starts,0);assert.match(nodes.get('karaokeNotice').textContent,/无损音质需要新版服务/);
+  (await storage.ready).close();
+});

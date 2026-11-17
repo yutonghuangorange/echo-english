@@ -21,6 +21,7 @@ from models import ModelManager, DEFAULT_MODEL, BANDIT_MODEL, model_id, INSTALL_
 
 PORT = 8765
 MAX_SECONDS = 600
+AUDIO_CHUNK_BYTES = 1024 * 1024
 ACTIVE_STATES = ("queued", "downloading", "converting", "separating", "encoding") + INSTALL_STATES
 
 
@@ -95,9 +96,13 @@ def validate_clip(data):
         raise ValueError("片段时间必须为有限数字。")
     if start < 0 or end <= start or end - start > MAX_SECONDS or end > 86400:
         raise ValueError("请选择不超过 10 分钟的片段。")
+    quality = data.get("quality", "standard")
+    if quality not in ("standard", "lossless"):
+        raise ValueError("不支持的音质选项。")
     model = model_id(data.get("model", DEFAULT_MODEL))
     return {"videoId": video, "start": round(start, 3), "end": round(end, 3),
-            **({"model": model} if model != DEFAULT_MODEL else {})}
+            **({"model": model} if model != DEFAULT_MODEL else {}),
+            **({"quality": quality} if quality != "standard" else {})}
 
 
 class Cancelled(Exception):
@@ -124,10 +129,10 @@ class Jobs:
                 continue
             try:
                 metadata = json.loads((directory / "metadata.json").read_text())
-                if not isinstance(metadata, dict) or metadata.get("version") not in (1, 2) or metadata.get("state") != "ready":
+                if not isinstance(metadata, dict) or metadata.get("version") not in (1, 2, 3) or metadata.get("state") != "ready":
                     continue
                 clip = validate_clip(metadata)
-                audio = directory / "accompaniment.mp3"
+                audio = self.audio_path(directory, clip)
                 if not audio.is_file() or audio.is_symlink() or audio.stat().st_size == 0:
                     continue
                 elapsed = float(metadata.get("elapsedSeconds", 0))
@@ -144,6 +149,14 @@ class Jobs:
             self.jobs[job["id"]] = job
 
     @staticmethod
+    def audio_path(directory, clip):
+        return directory / ("accompaniment.flac" if clip.get("quality") == "lossless" else "accompaniment.mp3")
+
+    @staticmethod
+    def audio_mime(job):
+        return "audio/flac" if job.get("quality") == "lossless" else "audio/mpeg"
+
+    @staticmethod
     def clip_key(clip):
         return hashlib.sha256(json.dumps(clip, sort_keys=True).encode()).hexdigest()[:24]
 
@@ -152,7 +165,9 @@ class Jobs:
         metadata = {k: job[k] for k in ("videoId", "start", "end", "createdAt")}
         if "model" in job:
             metadata["model"] = job["model"]
-        metadata.update(version=2 if job.get("model") == BANDIT_MODEL else 1, state="ready", elapsedSeconds=job["finished"]-job["started"])
+        if "quality" in job:
+            metadata["quality"] = job["quality"]
+        metadata.update(version=3 if job.get("quality") == "lossless" else 2 if job.get("model") == BANDIT_MODEL else 1, state="ready", elapsedSeconds=job["finished"]-job["started"])
         temporary = job["directory"] / "metadata.json.tmp"
         temporary.write_text(json.dumps(metadata))
         temporary.replace(job["directory"] / "metadata.json")
@@ -177,7 +192,7 @@ class Jobs:
             directory = self.cache / job_id
             directory.mkdir()
             job = dict(clip, id=job_id, key=key, state="queued", error=None, started=time.monotonic(), finished=None, createdAt=time.time(),
-                       directory=directory, audio=directory / "accompaniment.mp3", cancel=threading.Event())
+                       directory=directory, audio=self.audio_path(directory, clip), cancel=threading.Event())
             self.jobs[job_id] = job
             self.worker = threading.Thread(target=self.run, args=(job,))
             self.worker.start()
@@ -217,6 +232,7 @@ class Jobs:
         if job["state"] in INSTALL_STATES:
             percent = job.get("progress")
         result["model"] = job.get("model", DEFAULT_MODEL)
+        result["quality"] = job.get("quality", "standard")
         result.update({k: job[k] for k in ("device", "deviceNote") if k in job})
         return dict(result, progress=percent, remainingSeconds=eta,
                     elapsedSeconds=round((job["finished"] or time.monotonic()) - job["started"]))
@@ -285,6 +301,8 @@ class Jobs:
         args = [sys.executable, str(Path(__file__).with_name("separate.py")), "--two-stems", "vocals", "-n", "htdemucs",
                 "-d", job["device"], "--segment", "4", "--shifts", "0", "-j", "1",
                 "-o", str(directory / "stems"), str(directory / "clip.wav")]
+        if job.get("quality") == "lossless":
+            args.insert(2, "--float32")
         if job.get("model") == BANDIT_MODEL:
             if not self.models:
                 raise RuntimeError("BandIt 需要新版模型管理服务。")
@@ -340,24 +358,31 @@ class Jobs:
                           "--js-runtimes", "node", "--js-runtimes", "deno",
                           "-f", "bestaudio/best", "--download-sections", f"*{job['start']}-{job['end']}",
                           "--force-keyframes-at-cuts", "-x", "--audio-format", "wav",
+                          *(["--postprocessor-args", "ExtractAudio+ffmpeg_o:-c:a pcm_f32le"] if job.get("quality") == "lossless" else []),
                           "-o", str(directory / "source.%(ext)s"),
                           f"https://www.youtube.com/watch?v={job['videoId']}"], 600,
                      "无法读取此视频音频；视频可能要求登录、限制访问，或需更新 yt-dlp。")
         job["state"] = "converting"
         self.command(job, ["ffmpeg", "-nostdin", "-v", "error", "-y", "-i", str(directory / "source.wav"),
                           "-t", str(job["end"] - job["start"]), "-ar", "48000" if job.get("model") == BANDIT_MODEL else "44100", "-ac", "2",
+                          *(["-c:a", "pcm_f32le"] if job.get("quality") == "lossless" else []),
                           str(directory / "clip.wav")], 120, "音频片段转换失败。")
         job["state"] = "separating"
         self.separate_audio(job)
         job["state"] = "encoding"
-        self.command(job, ["ffmpeg", "-nostdin", "-v", "error", "-y", "-i",
-                          str(self.separation_output(job)),
-                          "-codec:a", "libmp3lame", "-b:a", "192k", str(job["audio"])], 120,
-                     "伴奏压缩失败。")
+        self.encode_audio(job)
         # Keep only the accompaniment and diagnostic log after success.
         shutil.rmtree(directory / "stems", ignore_errors=True)
         for name in ("source.wav", "clip.wav", "background.wav"):
             (directory / name).unlink(missing_ok=True)
+
+    def encode_audio(self, job):
+        if job.get("quality") == "lossless":
+            codec = ["-codec:a", "flac", "-sample_fmt", "s32", "-bits_per_raw_sample", "24", "-compression_level", "5"]
+        else:
+            codec = ["-codec:a", "libmp3lame", "-b:a", "192k"]
+        self.command(job, ["ffmpeg", "-nostdin", "-v", "error", "-y", "-i", str(self.separation_output(job)),
+                           *codec, str(job["audio"])], 120, "背景音编码保存失败。")
 
 
 def handler(jobs):
@@ -384,7 +409,7 @@ def handler(jobs):
                 return
             if self.path == "/health":
                 return self.reply(200, dict(service="echo-karaoke", version=1,
-                                           maxSeconds=MAX_SECONDS, modelManagement=jobs.models is not None, **jobs.accelerator))
+                                           maxSeconds=MAX_SECONDS, modelManagement=jobs.models is not None, losslessBackings=True, **jobs.accelerator))
             if self.path == "/models" and jobs.models:
                 with jobs.lock:
                     result = jobs.models.catalog()
@@ -407,13 +432,38 @@ def handler(jobs):
                 return self.reply(200, jobs.public(job))
             if job["state"] != "ready":
                 return self.reply(409, {"error": "伴奏尚未生成。"})
-            data = job["audio"].read_bytes()
-            self.send_response(200)
-            self.send_header("Content-Type", "audio/mpeg")
-            self.send_header("Content-Length", str(len(data)))
-            self.send_header("Cache-Control", "no-store")
-            self.end_headers()
-            self.wfile.write(data)
+            try:
+                with job["audio"].open("rb") as source:
+                    size = job["audio"].stat().st_size
+                    start, end = 0, size - 1
+                    requested = self.headers.get("Range")
+                    if requested:
+                        part = re.fullmatch(r"bytes=(\d+)-(\d+)", requested)
+                        if not part:
+                            return self.reply(416, {"error": "无效的音频分块范围。"})
+                        start, end = int(part[1]), min(int(part[2]), size - 1)
+                        if start > end or end - start + 1 > AUDIO_CHUNK_BYTES:
+                            return self.reply(416, {"error": "音频分块范围超出限制。"})
+                    self.send_response(206 if requested else 200)
+                    self.send_header("Content-Type", jobs.audio_mime(job))
+                    self.send_header("Content-Length", str(end - start + 1))
+                    self.send_header("Accept-Ranges", "bytes")
+                    if requested:
+                        self.send_header("Content-Range", f"bytes {start}-{end}/{size}")
+                    self.send_header("Cache-Control", "no-store")
+                    self.end_headers()
+                    source.seek(start)
+                    remaining = end - start + 1
+                    while remaining:
+                        block = source.read(min(remaining, 65536))
+                        if not block:
+                            break
+                        self.wfile.write(block)
+                        remaining -= len(block)
+            except (BrokenPipeError, ConnectionResetError):
+                pass
+            except FileNotFoundError:
+                self.reply(404, {"error": "音频缓存已清理，请重新生成。"})
 
         def do_POST(self):
             if not self.allowed():

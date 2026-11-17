@@ -45,7 +45,7 @@ jobs:
           npm test
           .venv/bin/python -m unittest discover -s karaoke -p 'test_*.py'
       - name: Separate synthetic audio with the production CPU worker
-        run: .venv/bin/python karaoke/smoke_test.py --launcher
+        run: .venv/bin/python karaoke/smoke_test.py --launcher --quality lossless
       - name: Test MPS on actual available hardware (never disguise CPU as GPU)
         run: |
           .venv/bin/python - <<'PY'
@@ -54,7 +54,7 @@ jobs:
           print(json.dumps({'architecture': platform.machine(), 'mpsAvailable': available}), flush=True)
           if available:
               for device in ('cpu', 'mps'):
-                  subprocess.run([sys.executable, 'karaoke/smoke_test.py', '--device', device, '--seconds', '20'], check=True)
+                  subprocess.run([sys.executable, 'karaoke/smoke_test.py', '--device', device, '--seconds', '20', '--quality', 'lossless'], check=True)
           else:
               print('MPS unavailable on this runner: GPU inference and speed are NOT validated.', flush=True)
           PY
@@ -66,5 +66,5 @@ jobs:
           restore-keys: bandit-v1-${{ runner.os }}-
       - name: Install optional BandIt in isolation and separate with CPU
         run: |
-          .venv/bin/python karaoke/smoke_test.py --model bandit-v2-multi --device cpu --seconds 2
+          .venv/bin/python karaoke/smoke_test.py --model bandit-v2-multi --device cpu --seconds 2 --quality lossless
           .venv/bin/python -m pip check

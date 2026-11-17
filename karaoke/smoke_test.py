@@ -66,6 +66,7 @@ def main():
     parser.add_argument("--launcher", action="store_true", help="Also test the POSIX root launcher; port 8765 must be free")
     parser.add_argument("--device", choices=("cpu", "cuda", "mps", "auto"), default="cpu")
     parser.add_argument("--model", choices=(DEFAULT_MODEL, BANDIT_MODEL), default=DEFAULT_MODEL)
+    parser.add_argument("--quality", choices=("standard", "lossless"), default="standard")
     parser.add_argument("--seconds", type=float, default=2)
     args = parser.parse_args()
     if not 0 < args.seconds <= 30:
@@ -91,7 +92,8 @@ def main():
         accelerator = probe_device(args.device)
         models = ModelManager(Path(__file__).resolve().parent.parent) if args.model == BANDIT_MODEL else None
         jobs = Jobs(directory, accelerator=accelerator, allow_cpu_fallback=args.device == "auto", models=models)
-        job = {"directory": directory, "cancel": threading.Event(), "model": args.model}
+        job = {"directory": directory, "cancel": threading.Event(), "model": args.model, "quality": args.quality}
+        job["audio"] = jobs.audio_path(directory, job)
         try:
             if models:
                 models.ensure(args.model, job, jobs.command)
@@ -100,12 +102,15 @@ def main():
             data, output_rate = soundfile.read(output)
             assert data.shape == (frames, 2) and output_rate == rate
             assert np.isfinite(data).all()
-            subprocess.run(["ffmpeg", "-nostdin", "-v", "error", "-y", "-i", str(output),
-                            "-codec:a", "libmp3lame", "-b:a", "192k", str(directory / "backing.mp3")],
-                           check=True, timeout=30)
+            jobs.encode_audio(job)
             info = json.loads(subprocess.check_output(
                 ["ffprobe", "-v", "error", "-show_format", "-show_streams", "-of", "json",
-                 str(directory / "backing.mp3")], text=True, timeout=30))
+                 str(job["audio"])], text=True, timeout=30))
+            if args.quality == "lossless":
+                assert info["streams"][0]["codec_name"] == "flac"
+                assert int(info["streams"][0]["bits_per_raw_sample"]) == 24
+                decoded, _ = soundfile.read(job["audio"], dtype="float32")
+                np.testing.assert_allclose(decoded, data, atol=2**-23)
             assert info["streams"][0]["channels"] == 2
             assert abs(float(info["format"]["duration"]) - args.seconds) < 0.1
         except Exception:
@@ -120,7 +125,7 @@ def main():
     print(json.dumps({"platform": platform.platform(), "architecture": platform.machine(),
                       "torch": torch.__version__, "torchaudio": torchaudio.__version__,
                       "requestedDevice": args.device, "device": job["device"],
-                      "model": args.model, "durationSeconds": frames / rate,
+                      "quality": args.quality, "model": args.model, "durationSeconds": frames / rate,
                       "elapsedSeconds": round(time.monotonic() - started, 2)},
                      indent=2))
 

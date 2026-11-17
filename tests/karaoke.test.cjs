@@ -186,3 +186,34 @@ test('model management relay allows only fixed models and endpoints',async()=>{
   await request({action:'start',videoId:'jNQXAC9IVRw',start:0,end:5,model:'bandit-v2-multi'},sender,fetcher);
   assert.equal(JSON.parse(calls.at(-1).options.body).model,'bandit-v2-multi');
 });
+
+test('lossless identity is separate while recordings retain their original backing quality',()=>{
+  const {qualityOf,key,covers,backingForTake}=require('../extension/karaoke.js');
+  const standard={videoId:'video',start:0,end:5,key:'video:0.000:5.000'},lossless={...standard,quality:'lossless',key:'video:0.000:5.000:lossless'};
+  assert.equal(qualityOf(standard),'standard');assert.notEqual(key('video',standard),key('video',lossless));
+  assert.equal(covers(standard,'video',lossless),false);
+  assert.equal(backingForTake([standard,lossless],{start:0,end:5,backingKey:lossless.key,backingQuality:'lossless'},'video'),lossless);
+  assert.equal(backingForTake([lossless],{start:0,end:5},'video'),null);
+});
+
+test('lossless transfer assembles bounded chunks and rejects inconsistent or cancelled downloads',async()=>{
+  const {fetchAudio}=require('../extension/karaoke.js');
+  const size=1024*1024,total=size+17,offsets=[];
+  const request=async(action,{offset})=>{assert.equal(action,'audio-chunk');offsets.push(offset);return {audio:Buffer.alloc(offset?17:size,offset?2:1).toString('base64'),offset,totalBytes:total,mime:'audio/flac'};};
+  const result=await fetchAudio(request,{jobId:id});
+  assert.deepEqual(offsets,[0,size]);assert.equal(result.blob.size,total);assert.equal(result.blob.type,'audio/flac');
+  const bytes=new Uint8Array(await result.blob.arrayBuffer());assert.equal(bytes[size-1],1);assert.equal(bytes[size],2);
+  await assert.rejects(fetchAudio(async()=>({audio:'YQ==',offset:5,totalBytes:1,mime:'audio/flac'}),{jobId:id}),/分块无效/);
+  let active=true;
+  await assert.rejects(fetchAudio(async()=>{active=false;return {};},{jobId:id,active:()=>active}),/已取消/);
+});
+
+test('audio chunk relay requests bounded HTTP ranges and validates server ranges',async()=>{
+  const headers=new Map([['Content-Length','3'],['Content-Type','audio/flac'],['Content-Range','bytes 10-12/13']]);
+  const fetcher=async(url,options)=>{assert.equal(url,`http://127.0.0.1:8765/jobs/${id}/audio`);assert.equal(options.headers.Range,'bytes=10-1048585');return {ok:true,status:206,headers,arrayBuffer:async()=>new Uint8Array([1,2,3]).buffer};};
+  const result=await request({action:'audio-chunk',jobId:id,offset:10},sender,fetcher);
+  assert.equal(result.offset,10);assert.equal(result.totalBytes,13);assert.equal(result.mime,'audio/flac');
+  await assert.rejects(request({action:'audio-chunk',jobId:id,offset:-1},sender,fetcher),/无效/);
+  headers.set('Content-Range','bytes 0-2/13');
+  await assert.rejects(request({action:'audio-chunk',jobId:id,offset:10},sender,fetcher),/分块响应无效/);
+});
