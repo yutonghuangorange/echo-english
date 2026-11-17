@@ -3,8 +3,21 @@ name: macOS compatibility
 on:
   push:
     branches: [master]
+    paths:
+      - 'karaoke/**'
+      - 'start-karaoke*'
+      - '.github/workflows/macos.yml'
   pull_request:
+    paths:
+      - 'karaoke/**'
+      - 'start-karaoke*'
+      - '.github/workflows/macos.yml'
   workflow_dispatch:
+
+# Superseded pushes need not keep downloading and loading the same models.
+concurrency:
+  group: macos-audio-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: true
 
 permissions:
   contents: read

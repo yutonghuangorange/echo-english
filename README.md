@@ -166,12 +166,14 @@ powershell -NoProfile -ExecutionPolicy Bypass -File .\start-karaoke.ps1
 
 ## 验证
 
+每次提交的快速兼容性检查覆盖 Linux（Python 3.10／3.12）、Windows x64 和 Intel Mac，包括扩展、服务、音频拼接与对应系统启动脚本测试；这些检查不需要下载模型。后端／启动脚本改动另外触发 macOS Intel／Apple 芯片真实模型分离检查，也可手动运行该工作流。托管 runner 不提供可用 GPU 时，MPS 测试会明确报告未验证；自动化测试不代表已验证麦克风、声卡或耳返延迟。
+
 模块职责与媒体流程约定见 [代码结构说明](ARCHITECTURE.md)。开发测试使用 `npm ci` 后运行 `npm test`；fake-indexeddb 仅用于测试数据库迁移、版本保留、删除恢复和会话存储。插件依旧无需安装依赖或构建，直接加载 `extension/`。
 
 运行：
 
 ```sh
-node --test tests/*.test.cjs
+npm test
 node --check extension/content.js
 node --check extension/background.js
 ```
