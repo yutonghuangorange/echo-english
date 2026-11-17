@@ -244,6 +244,8 @@
     $('backingHelpTitle').textContent=`首次使用：如何启用${backingName()}？`;
     $('backingSettingsHint').textContent=singing?'按上方录唱范围生成，最长 10 分钟。准备好后回到主区录唱。':'去掉原对白，尽量保留音乐和环境音。按上方配音范围提取，最长 10 分钟，建议先试短片段；可能残留对白或损失音效。录音只保存自己的人声。';
     $('backingVolumeLabel').textContent=singing?'录唱监听音量':'背景监听音量';
+    $('backingLiveLabel').textContent=singing?'伴奏':'背景音';
+    $('backingLiveVolume').setAttribute('aria-label',singing?'录音中伴奏监听音量':'录音中背景音监听音量');
     $('backingVolume').setAttribute('aria-label',singing?'录唱监听音量':'背景监听音量');
     $('practiceToolsSummary').hidden=false;
     $('practiceTools').className='fold';
@@ -452,6 +454,8 @@
     for(const id of ['openSongRecording','takeMixDownload','assembleSong'])$(id).disabled=busy;
     const recording=mode==='recording' || mode==='lead-in';
     $('panel').setAttribute('aria-busy',String(['loading','reading','importing','exporting','saving','permission'].includes(mode)));
+    $('backingLiveControls').hidden=!recording || !recordingSession?.monitor;
+    $('backingLiveVolume').disabled=$('backingLiveControls').hidden;
     $('sidetoneLiveControls').hidden=!recording || !sidetoneEnabled;
     $('sidetoneLatency').hidden=!recording || !sidetoneEnabled;
     $('sidetoneLatency').textContent=EchoMicrophone.describeMonitoring(recordingSession?.sidetoneInfo);
@@ -487,8 +491,8 @@
     if(isParagraph())for(const id of ['start','end','markStart','markEnd','startEarlier','startLater','endEarlier','endLater'])$(id).disabled=true;
     $('autoNext').disabled=busy || $('practiceScope').value!=='clip';
     $('useBacking').disabled=busy;
-    $('backingVolume').disabled=!hasBackingTools() || !['idle','backing','recording'].includes(mode);
-    $('backingVolumeValue').textContent=`${Math.round(Number($('backingVolume').value)*100)}%`;
+    $('backingVolume').disabled=!hasBackingTools() || !['idle','backing','lead-in','recording'].includes(mode);
+    renderBackingVolume();
     $('prev').disabled=busy || index<=0;
     $('next').disabled=busy || index<0 || index>=cues.length-1;
     updateBackingControls();
@@ -847,13 +851,19 @@
     }catch{/* Cache lookup is optional; ordinary dubbing and explicit generation still work. */}
     finally{if(request===backingRestoreRequest){restoringBacking=false;controls();}}
   }
-  $('backingVolume').oninput=()=>{
+  function renderBackingVolume(){
     const volume=Number($('backingVolume').value);
-    $('backingVolumeValue').textContent=`${Math.round(volume*100)}%`;
-    updateBackingControls();
-    backingOutput?.setVolume(volume);recordingSession?.setVolume(volume);
-  };
-  $('backingVolume').onchange=saveProgress;
+    $('backingLiveVolume').value=volume;
+    for(const id of ['backingVolumeValue','backingLiveValue'])$(id).textContent=`${Math.round(volume*100)}%`;
+  }
+  for(const id of ['backingVolume','backingLiveVolume']){
+    $(id).oninput=()=>{
+      const value=Number($(id).value),volume=Number.isFinite(value)?Math.max(0,Math.min(2,value)):1;
+      $('backingVolume').value=volume;renderBackingVolume();updateBackingControls();
+      backingOutput?.setVolume(volume);recordingSession?.setVolume(volume);
+    };
+    $(id).onchange=saveProgress;
+  }
   $('useBacking').onchange=()=>{
     if(mode!=='idle'){$('useBacking').checked=backingPreferences[activity];return;}
     backingPreferences[activity]=$('useBacking').checked;

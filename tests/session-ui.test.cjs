@@ -1580,3 +1580,29 @@ test('headphone recommendation saves only the current activity, retains manual g
   assert.equal(restored.nodes.get('manualGainDb').value,6);assert.equal(restored.nodes.get('sidetoneEnabled').checked,true);
   (await storage.ready).close();
 });
+
+for(const activity of ['sing','speech'])test(`${activity} capture exposes live backing volume and keeps both controls, persisted preference and dry vocals consistent`,async()=>{
+  const storage=createStorage(new IDBFactory()),video=leadInVideo({hold:true}),mic={getTracks:()=>[{stop(){}}]};let gain=1;
+  await storage.saveBacking({key:'background',videoId:'video',start:0,end:60,createdAt:1,blob:new Blob(['music'])});
+  class MediaRecorder{
+    static isTypeSupported(){return true;}
+    constructor(stream){assert.equal(stream,mic);this.state='inactive';this.mimeType='audio/webm';}
+    start(){this.state='recording';}
+    stop(){this.state='inactive';this.ondataavailable({data:new Blob(['dry vocal'])});queueMicrotask(()=>this.onstop());}
+  }
+  const {nodes}=await mount(storage,{video,globals:{MediaRecorder,navigator:{mediaDevices:{getUserMedia:async()=>mic}},EchoKaraoke:{...require('../extension/karaoke.js'),createMonitor:async()=>({sync:async()=>{},pause(){},dispose(){},setVolume(value){gain=value;}})}}});
+  nodes.get('activityMode').value=activity;nodes.get('activityMode').onchange();
+  if(activity==='speech'){nodes.get('useBacking').checked=true;nodes.get('useBacking').onchange();}
+  const recording=nodes.get('record').onclick();await waitUntil(()=>!nodes.get('backingLiveControls').hidden);
+  assert.equal(nodes.get('backingLiveVolume').disabled,false);assert.equal(nodes.get('karaokeSettings').hidden,true);
+  assert.equal(nodes.get('backingLiveLabel').textContent,activity==='sing'?'伴奏':'背景音');
+  nodes.get('backingLiveVolume').value='2';nodes.get('backingLiveVolume').oninput();assert.equal(gain,2);assert.equal(nodes.get('backingVolume').value,2);assert.equal(nodes.get('backingVolumeValue').textContent,'200%');
+  nodes.get('backingVolume').value='0.5';nodes.get('backingVolume').oninput();assert.equal(nodes.get('backingLiveVolume').value,0.5);assert.equal(nodes.get('backingLiveValue').textContent,'50%');
+  nodes.get('backingLiveVolume').value='0';nodes.get('backingLiveVolume').oninput();assert.equal(gain,0);nodes.get('backingLiveVolume').onchange();
+  assert.equal(nodes.get('replayBackingVolume').value,1);
+  nodes.get('stop').onclick();await recording;assert.equal(nodes.get('backingLiveControls').hidden,true);
+  const [take]=await storage.listTakes('video');assert.equal(await take.blob.text(),'dry vocal');assert.equal(take.withBacking,undefined);
+  const saved=await storage.getSession('video');assert.equal(saved.backingVolume,0);
+  const restored=await mount(storage,{video});assert.equal(restored.nodes.get('backingLiveVolume').value,0);assert.equal(restored.nodes.get('backingVolumeValue').textContent,'0%');
+  (await storage.ready).close();
+});
