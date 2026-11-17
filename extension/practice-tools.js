@@ -13,15 +13,14 @@
   }
   function attach({view,doc=root.document,env=root,getSettings,onPreset,onConfigure,onBeforeTest=()=>{},onClose=()=>{},recording=root.EchoRecording,meter=root.EchoLiveMeter}){
     const $=id=>view.getElementById(id),dialog=$('toolsDialog'),audio=$('micTestAudio');
-    let session=null,revision=0,timer=null,url=null,returnId='openPresets';
+    let session=null,revision=0,timer=null,url=null;
     function isOpen(){return !!dialog.open;}
     function clearAudio(){audio.pause?.();audio.removeAttribute('src');audio.load?.();audio.hidden=true;if(url)env.URL.revokeObjectURL(url);url=null;}
     function render(running=false){$('micTestStart').disabled=running;$('micTestStop').hidden=!running;$('micTestConfigure').disabled=running;for(const id of ['presetHeadphones','presetMovie','presetSong','presetSpeaker'])$(id).disabled=running;}
     function cancel(){revision++;env.clearTimeout(timer);timer=null;const previous=session;session=null;previous?.pauseFeedback();void previous?.stop();clearAudio();$('testMeter').hidden=true;render();}
-    function close(){cancel();if(dialog.close)dialog.close();else dialog.open=false;$(returnId)?.focus();onClose();}
+    function close(){cancel();if(dialog.close)dialog.close();else dialog.open=false;$('openPreparation').focus();onClose();}
     function open(section='preset'){
       if(!isOpen()){if(dialog.showModal)dialog.showModal();else dialog.open=true;}
-      returnId=section==='mic'?'openMicTest':'openPresets';
       $('micTestSettings').textContent=getSettings().description;
       $('micTestMessage').textContent='';render(!!session);
       if(section==='help'){$('shortcutHelp').open=true;$('shortcutHelp').scrollIntoView?.({block:'start'});}

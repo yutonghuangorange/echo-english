@@ -51,7 +51,7 @@
   async function requestStream(mediaDevices,constraints){
     try{return await mediaDevices.getUserMedia({audio:constraints,video:false});}
     catch(error){
-      if(constraints.deviceId && ['NotFoundError','OverconstrainedError'].includes(error.name))throw Error('所选麦克风不可用，请在「速度与麦克风」中重新检测并选择输入设备。',{cause:error});
+      if(constraints.deviceId && ['NotFoundError','OverconstrainedError'].includes(error.name))throw Error('所选麦克风不可用，请在「录音设置」中重新检测并选择输入设备。',{cause:error});
       throw error;
     }
   }

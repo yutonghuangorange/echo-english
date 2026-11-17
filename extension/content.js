@@ -254,8 +254,7 @@
       if(p.backing)void restoreServerBacking();
     }
   });
-  $('openPresets').onclick=()=>{if(mode==='idle')tools.open('preset');};
-  $('openMicTest').onclick=()=>{if(mode==='idle')tools.open('mic');};
+  $('openPreparation').onclick=()=>{if(mode==='idle')tools.open('preset');};
   void refreshFavorite();
   $('openLanguageSettings').onclick=()=>{if(mode==='idle')settings.open('captions','openLanguageSettings');};
   $('backToPractice').onclick = () => showPage('practice',true);
@@ -526,8 +525,8 @@
       const covered=assemblyPlan.segments.reduce((sum,s)=>sum+s.end-s.start,0);
       $('assemblyInfo').textContent=`${EchoPractice.recordingQueue(voices).length} 段独立人声 · 已选 ${covered.toFixed(1)} / ${assemblyPlan.duration.toFixed(1)} 秒。`;
     }
-    $('activityMode').hidden=recording;$('prepActions').hidden=recording;
-    for(const id of ['openPresets','openMicTest'])$(id).disabled=mode!=='idle';renderFavorite();
+    $('activityMode').hidden=recording;
+    $('openPreparation').disabled=mode!=='idle';renderFavorite();
     $('scopeControls').hidden=recording;
     $('wholeScopeHint').hidden=$('practiceScope').value!=='whole';
     $('paragraphSelection').hidden=!isParagraph();$('paragraphScopeOption').disabled=cues.length<2;
