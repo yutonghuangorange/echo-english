@@ -11,8 +11,9 @@
   function progressText(job,activity='sing') {
     const clock=seconds=>{const n=Math.max(0,Math.round(seconds));return `${Math.floor(n/60)}分${String(n%60).padStart(2,'0')}秒`;};
     const name=activity==='speech'?'背景音':'伴奏';
-    const stages={queued:'等待处理',downloading:'提取视频音频',converting:'整理音频片段',separating:activity==='speech'?'去除原对白':'去掉原唱',encoding:`压缩并保存${name}`,ready:`${name}已生成，正在加载`};
+    const stages={installing:'安装 BandIt 额外依赖', 'model-downloading':'下载分离模型',verifying:'校验模型与依赖',queued:'等待处理',downloading:'提取视频音频',converting:'整理音频片段',separating:activity==='speech'?'去除原对白':'去掉原唱',encoding:`压缩并保存${name}`,ready:`${name}已生成，正在加载`};
     let text=stages[job.state] || `准备${name}`;
+    if(job.state==='model-downloading' && Number.isFinite(job.progress))text+=` ${job.progress}%`;
     if(job.state==='separating')text=job.modelDownloading?'首次准备 · 正在下载分离模型，请保持本机服务运行':text+(Number.isFinite(job.progress)?` ${job.progress}%`:' · 正在加载模型或准备分离');
     if(Number.isFinite(job.elapsedSeconds))text+=` · 已用 ${clock(job.elapsedSeconds)}`;
     if(job.state==='separating' && Number.isFinite(job.remainingSeconds))text+=` · 本阶段预计剩余 ${clock(job.remainingSeconds)}`;

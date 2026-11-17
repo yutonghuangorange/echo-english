@@ -37,7 +37,7 @@ async function mount(storage, overrides = {}) {
   const context={document:doc,location:{href:'https://www.youtube.com/watch?v=video',pathname:'/watch'},indexedDB:{},URL,Blob,console,setTimeout,clearTimeout,cancelAnimationFrame(){},requestAnimationFrame(){},crypto:globalThis.crypto,
     window:{addEventListener(){},speechSynthesis:{cancel(){}}},chrome:{runtime:{onMessage:{addListener(){}}}},
     EchoCaptionTracks:require('../extension/caption-tracks.js'),EchoPanelView:require('../extension/panel-view.js'),EchoTransport:require('../extension/transport.js'),EchoPlayback:require('../extension/playback.js'),
-    EchoAudioExport:require('../extension/audio-export.js'),EchoAssembly:require('../extension/assembly.js'),EchoPanelSize:require('../extension/panel-size.js'),EchoLanguages:require('../extension/languages.js'),EchoKaraoke:require('../extension/karaoke.js'),EchoStorage:{...require('../extension/storage.js'),createStorage:()=>storage},EchoSelection:require('../extension/selection.js'),EchoPractice:require('../extension/practice.js'),EchoDictionary:require('../extension/dictionary.js'),EchoSubtitles:require('../extension/subtitles.js'),EchoLibrary:require('../extension/library.js'),EchoLiveMeter:require('../extension/live-meter.js'),EchoRecording:require('../extension/recording.js'),EchoMicrophone:require('../extension/microphone.js'),EchoAudioAnalysis:require('../extension/audio-analysis.js')};
+    EchoAudioExport:require('../extension/audio-export.js'),EchoAssembly:require('../extension/assembly.js'),EchoPanelSize:require('../extension/panel-size.js'),EchoLanguages:require('../extension/languages.js'),EchoKaraoke:require('../extension/karaoke.js'),EchoStorage:{...require('../extension/storage.js'),createStorage:()=>storage},EchoSelection:require('../extension/selection.js'),EchoPractice:require('../extension/practice.js'),EchoDictionary:require('../extension/dictionary.js'),EchoSubtitles:require('../extension/subtitles.js'),EchoLibrary:require('../extension/library.js'),EchoModels:require('../extension/models.js'),EchoLiveMeter:require('../extension/live-meter.js'),EchoRecording:require('../extension/recording.js'),EchoMicrophone:require('../extension/microphone.js'),EchoAudioAnalysis:require('../extension/audio-analysis.js')};
   Object.assign(context,overrides.globals || {});
   // Existing UI fixtures provide a caption transport; integration fixtures can
   // pass the real page-context client to verify fetch rather than messaging.
@@ -1385,5 +1385,61 @@ test('plain dubbing starts capture before video playback and records startup off
   nodes.get('end').value=1;nodes.get('end').onchange();
   const pending=nodes.get('record').onclick();await waitUntil(()=>!nodes.get('transport').hidden);video.currentTime=1;await pending;
   const [take]=await storage.listTakes('video');assert.equal(take.vocalOffset,.3);assert.equal(take.start,0);assert.equal(take.end,1);
+  (await storage.ready).close();
+});
+
+test('background model choice is remembered for speech while singing keeps Demucs and its own cache',async()=>{
+  const storage=createStorage(new IDBFactory());
+  await storage.saveSession({videoId:'video',activity:'speech',start:0,end:5,useBacking:true,backingPreferences:{speech:true,sing:true},modelPreferences:{speech:'bandit-v2-multi'},cues:[],index:-1});
+  await storage.saveBacking({videoId:'video',key:'video:0.000:5.000',start:0,end:5,createdAt:1,blob:new Blob(['demucs'])});
+  const {nodes}=await mount(storage);
+  assert.equal(nodes.get('backingModel').value,'bandit-v2-multi');
+  assert.equal(nodes.get('previewBacking').disabled,true);
+  nodes.get('backingModel').value='demucs-htdemucs';nodes.get('backingModel').onchange();
+  assert.equal(nodes.get('previewBacking').disabled,false);
+  nodes.get('backingModel').value='bandit-v2-multi';nodes.get('backingModel').onchange();
+  nodes.get('activityMode').value='sing';nodes.get('activityMode').onchange();
+  assert.equal(nodes.get('backingModel').value,'demucs-htdemucs');assert.equal(nodes.get('banditModelOption').disabled,true);
+  nodes.get('activityMode').value='speech';nodes.get('activityMode').onchange();
+  assert.equal(nodes.get('backingModel').value,'bandit-v2-multi');
+  await new Promise(r=>setTimeout(r,10));
+  assert.equal((await storage.getSession('video')).modelPreferences.speech,'bandit-v2-multi');
+  (await storage.ready).close();
+});
+
+test('model dialog installs on demand and asks before deleting only weights',async()=>{
+  const storage=createStorage(new IDBFactory()),calls=[];
+  const catalog={models:[{id:'bandit-v2-multi',name:'BandIt',purpose:'电影',ready:false,state:'missing',downloadBytes:446680129,weightBytes:0}],busy:false,dependencyBytes:0};
+  const {nodes}=await mount(storage,{globals:{chrome:{runtime:{onMessage:{addListener(){}},async sendMessage(message){calls.push(message.action);return catalog;}}}}});
+  await nodes.get('manageModels').onclick();assert.equal(nodes.get('modelDialog').open,true);
+  const card=nodes.get('modelList').children[0];
+  await card.children.at(-1).children[0].onclick();assert.ok(calls.includes('model-install'));
+  catalog.models[0]={...catalog.models[0],ready:true,state:'ready',weightBytes:446680129};
+  await nodes.get('refreshModels').onclick();
+  nodes.get('modelList').children[0].children.at(-1).children[0].onclick();
+  assert.equal(nodes.get('modelConfirm').hidden,false);assert.ok(!calls.includes('model-remove'));
+  await nodes.get('modelConfirmYes').onclick();assert.ok(calls.includes('model-remove'));
+  nodes.get('closeModels').onclick();assert.equal(nodes.get('modelDialog').open,false);
+  (await storage.ready).close();
+});
+
+test('install-and-extract sends the selected model and saves a matching background cache',async()=>{
+  const storage=createStorage(new IDBFactory()),calls=[];
+  await storage.saveSession({videoId:'video',activity:'speech',start:0,end:5,useBacking:true,backingPreferences:{speech:true},modelPreferences:{speech:'bandit-v2-multi'},cues:[],index:-1});
+  const catalog={models:[{id:'bandit-v2-multi',name:'BandIt',ready:false,state:'missing',downloadBytes:446680129,weightBytes:0}],busy:false,dependencyBytes:0};
+  const {nodes}=await mount(storage,{video:{duration:60,pause(){}},health:()=>({service:'echo-karaoke',maxSeconds:600,modelManagement:true}),globals:{chrome:{runtime:{onMessage:{addListener(){}},async sendMessage(message){
+    calls.push(message);
+    if(message.action==='models')return catalog;
+    if(message.action==='start')return {id:'a'.repeat(32),state:'ready',model:message.model};
+    if(message.action==='audio')return {audio:'YXVkaW8=',mime:'audio/mpeg'};
+    return {};
+  }}}}});
+  await nodes.get('checkKaraoke').onclick();
+  assert.equal(nodes.get('prepareBacking').textContent,'安装并提取背景音');
+  await nodes.get('prepareBacking').onclick();
+  assert.equal(calls.find(call=>call.action==='start').model,'bandit-v2-multi');
+  const [backing]=await storage.listBackings('video');
+  assert.equal(backing.model,'bandit-v2-multi');assert.match(backing.key,/bandit-v2-multi$/);
+  assert.equal(nodes.get('previewBacking').disabled,false);
   (await storage.ready).close();
 });

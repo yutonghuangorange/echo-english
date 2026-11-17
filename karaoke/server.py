@@ -17,9 +17,11 @@ import time
 import uuid
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 
+from models import ModelManager, DEFAULT_MODEL, BANDIT_MODEL, model_id, INSTALL_STATES, InstallCancelled
+
 PORT = 8765
 MAX_SECONDS = 600
-ACTIVE_STATES = ("queued", "downloading", "converting", "separating", "encoding")
+ACTIVE_STATES = ("queued", "downloading", "converting", "separating", "encoding") + INSTALL_STATES
 
 
 def probe_device(requested):
@@ -93,7 +95,9 @@ def validate_clip(data):
         raise ValueError("片段时间必须为有限数字。")
     if start < 0 or end <= start or end - start > MAX_SECONDS or end > 86400:
         raise ValueError("请选择不超过 10 分钟的片段。")
-    return {"videoId": video, "start": round(start, 3), "end": round(end, 3)}
+    model = model_id(data.get("model", DEFAULT_MODEL))
+    return {"videoId": video, "start": round(start, 3), "end": round(end, 3),
+            **({"model": model} if model != DEFAULT_MODEL else {})}
 
 
 class Cancelled(Exception):
@@ -101,10 +105,11 @@ class Cancelled(Exception):
 
 
 class Jobs:
-    def __init__(self, cache, runner=None, accelerator=None, allow_cpu_fallback=True):
+    def __init__(self, cache, runner=None, accelerator=None, allow_cpu_fallback=True, models=None):
         self.cache = Path(cache)
         self.cache.mkdir(parents=True, exist_ok=True)
-        self.lock = threading.RLock()
+        self.models = models
+        self.lock = models.lock if models else threading.RLock()
         self.jobs = {}
         self.worker = None
         self.runner = runner or self.separate
@@ -145,6 +150,8 @@ class Jobs:
     @staticmethod
     def persist(job):
         metadata = {k: job[k] for k in ("videoId", "start", "end", "createdAt")}
+        if "model" in job:
+            metadata["model"] = job["model"]
         metadata.update(version=1, state="ready", elapsedSeconds=job["finished"]-job["started"])
         temporary = job["directory"] / "metadata.json.tmp"
         temporary.write_text(json.dumps(metadata))
@@ -158,6 +165,8 @@ class Jobs:
             for job in self.jobs.values():
                 if job["key"] == key and job["state"] == "ready" and job["audio"].exists():
                     return self.public(job)
+            if self.models and self.models.active:
+                raise RuntimeError("已有模型正在安装，请完成或停止后重试。")
             if any(j["state"] in ACTIVE_STATES for j in self.jobs.values()):
                 raise RuntimeError("已有一个伴奏正在生成，请完成或停止后重试。")
             # Keep at most eight recent jobs and their files.
@@ -182,6 +191,8 @@ class Jobs:
         # Let command() reap the process tree before the interpreter exits.
         if worker is not None:
             worker.join()
+        if self.models:
+            self.models.close()
 
     @staticmethod
     def public(job):
@@ -194,11 +205,18 @@ class Jobs:
                     log.seek(max(0, log.tell() - 8192))
                     output = log.read().decode(errors="replace")
                     output = re.split(r"Echo: (?:CUDA|GPU) failed; retrying on CPU\.", output)[-1]
-                    percent, eta = separation_progress(output)
+                    if job.get("model") == BANDIT_MODEL:
+                        values = re.findall(r"Echo progress: (\d+)", output)
+                        percent = int(values[-1]) if values else None
+                    else:
+                        percent, eta = separation_progress(output)
                     if percent is None and re.search(r'Downloading:.*https?://', output):
                         result["modelDownloading"] = True
             except OSError:
                 pass
+        if job["state"] in INSTALL_STATES:
+            percent = job.get("progress")
+        result["model"] = job.get("model", DEFAULT_MODEL)
         result.update({k: job[k] for k in ("device", "deviceNote") if k in job})
         return dict(result, progress=percent, remainingSeconds=eta,
                     elapsedSeconds=round((job["finished"] or time.monotonic()) - job["started"]))
@@ -226,7 +244,7 @@ class Jobs:
             job["finished"] = time.monotonic()
             self.persist(job)
             job["state"] = "ready"
-        except Cancelled:
+        except (Cancelled, InstallCancelled):
             job["state"] = "cancelled"
         except Exception as error:
             job["error"] = str(error)
@@ -254,6 +272,12 @@ class Jobs:
             finally:
                 stop_process(proc)
 
+    @staticmethod
+    def separation_output(job):
+        if job.get("model") == BANDIT_MODEL:
+            return job["directory"] / "background.wav"
+        return job["directory"] / "stems/htdemucs/clip/no_vocals.wav"
+
     def separate_audio(self, job):
         """Shared separation path for songs and film backgrounds."""
         directory = job["directory"]
@@ -261,6 +285,18 @@ class Jobs:
         args = [sys.executable, str(Path(__file__).with_name("separate.py")), "--two-stems", "vocals", "-n", "htdemucs",
                 "-d", job["device"], "--segment", "4", "--shifts", "0", "-j", "1",
                 "-o", str(directory / "stems"), str(directory / "clip.wav")]
+        if job.get("model") == BANDIT_MODEL:
+            if not self.models:
+                raise RuntimeError("BandIt 需要新版模型管理服务。")
+            if job["device"] == "mps":
+                if not self.allow_cpu_fallback:
+                    raise RuntimeError("BandIt 暂不支持 MPS，请用 --device cpu 或 auto 启动。")
+                job.update(device="cpu", deviceNote="BandIt 在 Mac 上暂用 CPU。")
+            args = [sys.executable, str(Path(__file__).with_name("bandit.py")),
+                    "--deps", str(self.models.deps), "--source", str(self.models.source),
+                    "--checkpoint", str(self.models.weight(BANDIT_MODEL)), "-d", job["device"],
+                    "--input", str(directory / "clip.wav"),
+                    "--output", str(self.separation_output(job))]
         log = directory / "worker.log"
         offset = log.stat().st_size if log.exists() else 0
         try:
@@ -294,6 +330,8 @@ class Jobs:
                 raise RuntimeError("请先按 karaoke/README.md 安装本机分离依赖。")
         if not shutil.which("ffmpeg") or not shutil.which("ffprobe"):
             raise RuntimeError("请先安装 FFmpeg（含 ffprobe）。")
+        if self.models:
+            self.models.ensure(job.get("model", DEFAULT_MODEL), job, self.command)
         directory = job["directory"]
         job["state"] = "downloading"
         self.command(job, [sys.executable, "-m", "yt_dlp", "--ignore-config", "--no-playlist",
@@ -306,18 +344,18 @@ class Jobs:
                      "无法读取此视频音频；视频可能要求登录、限制访问，或需更新 yt-dlp。")
         job["state"] = "converting"
         self.command(job, ["ffmpeg", "-nostdin", "-v", "error", "-y", "-i", str(directory / "source.wav"),
-                          "-t", str(job["end"] - job["start"]), "-ar", "44100", "-ac", "2",
+                          "-t", str(job["end"] - job["start"]), "-ar", "48000" if job.get("model") == BANDIT_MODEL else "44100", "-ac", "2",
                           str(directory / "clip.wav")], 120, "音频片段转换失败。")
         job["state"] = "separating"
         self.separate_audio(job)
         job["state"] = "encoding"
         self.command(job, ["ffmpeg", "-nostdin", "-v", "error", "-y", "-i",
-                          str(directory / "stems" / "htdemucs" / "clip" / "no_vocals.wav"),
+                          str(self.separation_output(job)),
                           "-codec:a", "libmp3lame", "-b:a", "192k", str(job["audio"])], 120,
                      "伴奏压缩失败。")
         # Keep only the accompaniment and diagnostic log after success.
         shutil.rmtree(directory / "stems", ignore_errors=True)
-        for name in ("source.wav", "clip.wav"):
+        for name in ("source.wav", "clip.wav", "background.wav"):
             (directory / name).unlink(missing_ok=True)
 
 
@@ -345,7 +383,12 @@ def handler(jobs):
                 return
             if self.path == "/health":
                 return self.reply(200, dict(service="echo-karaoke", version=1,
-                                           maxSeconds=MAX_SECONDS, **jobs.accelerator))
+                                           maxSeconds=MAX_SECONDS, modelManagement=jobs.models is not None, **jobs.accelerator))
+            if self.path == "/models" and jobs.models:
+                with jobs.lock:
+                    result = jobs.models.catalog()
+                    result["busy"] = result["busy"] or any(j["state"] in ACTIVE_STATES for j in jobs.jobs.values())
+                return self.reply(200, result)
             cached = re.fullmatch(r"/backings/([A-Za-z0-9_-]{11})", self.path)
             if cached:
                 with jobs.lock:
@@ -383,14 +426,31 @@ def handler(jobs):
                     raise ValueError("请求格式错误。")
                 if self.path == "/jobs":
                     return self.reply(202, jobs.start(data))
+                model_action = re.fullmatch(r"/models/([a-z0-9-]+)/(install|cancel|remove)", self.path)
+                if model_action and jobs.models:
+                    model, action = model_action.groups()
+                    model_id(model)
+                    with jobs.lock:
+                        if action == "cancel":
+                            jobs.models.cancel(model)
+                        else:
+                            if any(j["state"] in ACTIVE_STATES for j in jobs.jobs.values()):
+                                raise RuntimeError("请先完成或停止音频提取任务。")
+                            if action == "install":
+                                jobs.models.start(model, jobs.command)
+                            else:
+                                jobs.models.remove(model)
+                    return self.reply(200, jobs.models.catalog())
                 match = re.fullmatch(r"/jobs/([a-f0-9]{32})/cancel", self.path)
                 if match:
                     return self.reply(200, jobs.cancel(match[1]))
                 self.reply(404, {"error": "路径不存在。"})
-            except (ValueError, TypeError):
-                self.reply(400, {"error": "请选择有效的视频和 0–600 秒片段。"})
+            except (ValueError, TypeError) as error:
+                self.reply(400, {"error": str(error) or "请求格式错误。"})
             except KeyError:
                 self.reply(404, {"error": "任务不存在。"})
+            except OSError as error:
+                self.reply(409, {"error": f"无法写入本机文件，请检查权限和磁盘空间：{error}"})
             except RuntimeError as error:
                 self.reply(409, {"error": str(error)})
     return Handler
@@ -408,7 +468,8 @@ def main():
     except RuntimeError as error:
         print(str(error), file=sys.stderr)
         return 1
-    jobs = Jobs(args.cache, accelerator=accelerator, allow_cpu_fallback=args.device == "auto")
+    models = ModelManager(Path(__file__).resolve().parent.parent)
+    jobs = Jobs(args.cache, accelerator=accelerator, allow_cpu_fallback=args.device == "auto", models=models)
     try:
         server = ThreadingHTTPServer(("127.0.0.1", PORT), handler(jobs))
     except OSError as error:

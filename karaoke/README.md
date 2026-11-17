@@ -158,3 +158,38 @@ python3 -m unittest discover -s karaoke -p 'test_*.py'
 生成失败原因会保留在生成按钮下方。超过 10 分钟的视频请改选「当前练习片段」。
 
 Apple 芯片固定使用 PyTorch / TorchAudio 2.6.0，以修复 [2.5.1 的 MPS 卷积限制](https://github.com/pytorch/pytorch/issues/152278)；旧版错误建议的 `PYTORCH_ENABLE_MPS_FALLBACK=1` 无法解决该问题，因此项目不依赖这一开关。统一分离入口继续调用原版 Demucs；为兼容新版 weights-only 模型加载，只允许官方 `htdemucs` 权重所需的模型类、Fraction 与 NumPy 元数据类型，不关闭新版加载保护。Intel Mac 2.2.2 保留原有加载方式。
+
+## 在扩展中安装与管理模型（0.22.0）
+
+先运行项目根目录启动脚本；扩展不会安装 Python 或启动本机服务。旧服务需在原终端按 Ctrl+C 后重新启动，新扩展需重新加载并刷新 YouTube。
+
+在「伴奏设置／背景音设置」选择处理方式。歌曲默认 Demucs，电影背景音可选择 BandIt v2 multi-language；配音、唱歌的选择按视频分别保存，歌曲保留 Demucs。尚未安装时主按钮为「安装并提取」，完成安装后继续原有音频提取流程。安装、下载、校验和分离共用一个进度区；停止可以取消安装子进程或下载，下次可继续未完成的权重下载。
+
+「管理模型」是独立弹窗，显示是否就绪、权重大小、设备、许可、错误与额外依赖占用。支持单独安装、重试和删除权重（删除前确认）。删除权重不会删除生成结果、浏览器缓存或人声录音；BandIt 的源码和额外依赖暂时保留。安装和分离互斥，普通配音及已有音频回听不受影响。
+
+| 模型 | 用途 | 模型权重 | 额外依赖 | 设备 |
+| --- | --- | --- | --- | --- |
+| Demucs htdemucs | 歌曲伴奏；通用背景音 | 80.2 MiB | 复用基础环境 | CPU / NVIDIA CUDA / Apple MPS |
+| BandIt v2 multi-language | 电影对白与音乐、音效分离 | 426 MiB | 约 363 MiB（文件系统占用约 381 MiB，因平台而异） | CPU / NVIDIA CUDA；Mac 暂用 CPU |
+
+BandIt 建议额外预留 2 GiB（含下载、安装临时文件和处理中间音频），整机建议 16 GiB RAM。不是歌曲分离质量升级的保证；电影结果也可能残留对白或损失音效。支持与 Demucs 相同的最长 10 分钟，采用 8 秒窗口 / 4 秒重叠、单窗口推理及流式拼接，避免整段预测留在显存。CPU 处理可能很慢；服务单阶段超时为一小时。显式 `--device mps` 不适用于 BandIt，请使用 `auto` 或 `cpu`；`auto` 下 Mac 的 BandIt 使用 CPU，Demucs 仍可使用 MPS。
+
+模型、依赖由 Python 服务执行固定来源安装，扩展不能指定下载地址、包名或文件路径：
+
+- Demucs 权重：`.cache/torch/hub/checkpoints/955717e8-8726e21a.th`，SHA-256 `8726e21a993978c7ba086d3872e7608d7d5bfca646ca4aca459ffda844faa8b4`。
+- BandIt 权重：`.cache/models/bandit-v2-multi/checkpoint.ckpt`，SHA-256 `abcfccf65446752a057f4a302c941479a54b7560ebf8d7bca039d2ea98e64cfc`；来自 [作者发布的 Zenodo 模型](https://zenodo.org/records/12701995)，权重 CC BY-SA 4.0。
+- BandIt 源码：`.cache/models/bandit-v2-multi/source`，固定 [官方仓库提交 d5563d9](https://github.com/kwatcharasupat/bandit-v2/tree/d5563d9031e95fdaa3e5a73d5020b9a0df61adb6)，Apache 2.0，下载压缩包同样校验 SHA-256。曾运行实验的电脑会将已校验的实验权重移动至正式路径，避免重复下载；实验依赖仍保留。
+- 额外依赖：`.cache/models/bandit-deps`；按 `karaoke/bandit-requirements.txt` 用 pip `--target --no-deps` 安装在独立目录，仅 BandIt 工作子进程加入搜索路径，不升级基础 PyTorch / TorchAudio。安装后执行导入检查，成功后才原子发布就绪标记。
+- 安装日志：`.cache/models/logs/<模型编号>/worker.log`；「安装并提取」的安装日志与该次音频任务共用 `.cache/karaoke/<任务编号>/worker.log`。
+
+旧 Demucs 缓存继续有效，BandIt 结果使用独立缓存标识，录音保存所用模型，回听和导出不会误用另一个模型的背景音。已有录音不会因切换模型而重新处理。
+
+开发验证（不访问 YouTube、不申请麦克风）：
+
+```bash
+.venv/bin/python karaoke/smoke_test.py --model bandit-v2-multi --device cpu --seconds 2
+# NVIDIA GPU：
+.venv/bin/python karaoke/smoke_test.py --model bandit-v2-multi --device cuda --seconds 9
+```
+
+首次执行会安装 BandIt，需联网。Mac 原生双架构 CI 同样安装并运行 CPU 测试；每次结果以工作流为准，Windows 尚待当地实机验收。

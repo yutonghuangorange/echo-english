@@ -89,3 +89,7 @@ CI 会打印 `mpsAvailable`，仅在设备可用时，用同一段 20 秒合成�
 第二条显式要求 MPS，不会退回 CPU。耗时包含模型载入和音频写出；合成信号用于运行正确性检查，音质仍需真实内容人工试听。
 
 Apple 芯片固定使用 PyTorch / TorchAudio 2.6.0，以修复 [2.5.1 的 MPS 卷积限制](https://github.com/pytorch/pytorch/issues/152278)；旧版错误建议的 `PYTORCH_ENABLE_MPS_FALLBACK=1` 无法解决该问题，因此项目不依赖这一开关。统一分离入口继续调用原版 Demucs；为兼容新版 weights-only 模型加载，只允许官方 `htdemucs` 权重所需的模型类、Fraction 与 NumPy 元数据类型，不关闭新版加载保护。Intel Mac 2.2.2 保留原有加载方式。
+
+## BandIt 可选模型
+
+0.22.0 通过扩展「管理模型」安装。使用独立 pip target 目录和跨平台 Python 文件操作，不更改基础 PyTorch；所有安装子进程沿用现有 POSIX / Windows 进程树清理。Mac 暂用 CPU，不将 Demucs 的 MPS 验证结果套用到 BandIt。Mac 双架构 CI 新增真实 BandIt 安装和两秒 CPU 分离；Windows 仍需按相同命令当地验收，重点检查依赖 wheels、安装取消与删除权重后已缓存音频可用。

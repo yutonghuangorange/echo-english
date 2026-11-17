@@ -19,6 +19,7 @@
   let activity = 'speech';
   let backingPreferences={speech:false,sing:true};
   let scopePreferences={speech:'clip',sing:'whole'};
+  let modelPreferences={speech:EchoKaraoke.DEFAULT_MODEL,sing:EchoKaraoke.DEFAULT_MODEL};
   let paragraphFirst=0,paragraphLast=1,assemblyChoices=[],assemblyContext=null;
   let recordingQuality='high';
   const microphonePreferenceKey='echo-microphone-v1';
@@ -83,7 +84,7 @@
   $('mixControls').open=false;
   $('replayWithBacking').checked=true;
   $('replayWithBacking').onchange=()=>{replayMonitor?.setEnabled($('replayWithBacking').checked);renderMixControls();saveProgress();};
-  let serviceState='unknown',serviceCheck=null,serviceMaxSeconds=null;
+  let serviceState='unknown',serviceCheck=null,serviceMaxSeconds=null,modelManagement=false;
   let wordRequest = 0, selectedWord = null, analysisRequest = 0;
   let videoId = currentId();
   let savedTitle = '';
@@ -94,6 +95,7 @@
     savedBackings=values;deletedTake=null;$('undoDelete').hidden=true;
     await refreshHistory(take?.id);controls();
   }});
+  const models=EchoModels.attach({view:root,doc:document,request:karaokeRequest,onCatalog:()=>updateBackingControls()});
   const assembly=EchoAssembly.attach({view:root,doc:document,env:globalThis,
     onChange:choices=>{assemblyChoices=choices;saveProgress();controls();},
     onClose:()=>{assemblyContext=null;if(mode==='assembly'){mode='idle';controls();}},
@@ -161,6 +163,7 @@
   function renderActivity() {
     $('activityMode').value=activity;
     $('practiceScope').value=scopePreferences[activity];
+    $('backingModel').value=modelPreferences[activity];$('banditModelOption').disabled=isSinging();
     $('practiceScopeLabel').textContent=isSinging()?'录唱范围':'配音范围';
     $('wholeScopeOption').textContent=isSinging()?'整首歌曲':'整段视频';
     renderMicrophoneSettings();
@@ -170,7 +173,7 @@
     $('useBackingLabel').textContent=singing?'录唱时播放伴奏（仅录人声）':'保留背景音（电影配音，可选）';
     $('backingSettingsTitle').textContent=singing?'伴奏设置':'背景音设置';
     $('backingHelpTitle').textContent=`首次使用：如何启用${backingName()}？`;
-    $('backingSettingsHint').textContent=singing?'按上方录唱范围生成，最长 10 分钟。准备好后回到主区录唱。':'使用 Demucs 去掉原对白，尽量保留音乐和环境音。按上方配音范围提取，最长 10 分钟，建议先试短片段；可能残留对白或损失音效。录音只保存自己的人声。';
+    $('backingSettingsHint').textContent=singing?'按上方录唱范围生成，最长 10 分钟。准备好后回到主区录唱。':'去掉原对白，尽量保留音乐和环境音。按上方配音范围提取，最长 10 分钟，建议先试短片段；可能残留对白或损失音效。录音只保存自己的人声。';
     $('backingVolumeLabel').textContent=singing?'录唱监听音量':'背景监听音量';
     $('backingVolume').setAttribute('aria-label',singing?'录唱监听音量':'背景监听音量');
     $('practiceToolsSummary').hidden=false;
@@ -187,7 +190,13 @@
     renderActivity();syncParagraphBounds();chooseCurrentTake();updateSummaries();controls();saveProgress();
     if(hasBackingTools()){void checkKaraokeService();void restoreServerBacking();}
   };
-  function backingFor(r) {return savedBackings.find(value=>EchoKaraoke.covers(value,videoId,r)) || null;}
+  function backingFor(r) {return savedBackings.find(value=>EchoKaraoke.covers(value,videoId,{...r,model:r.model || modelPreferences[activity]})) || null;}
+  $('backingModel').onchange=()=>{
+    if(mode!=='idle'){$('backingModel').value=modelPreferences[activity];return;}
+    modelPreferences[activity]=!isSinging() && $('backingModel').value===EchoModels.BANDIT_MODEL?EchoModels.BANDIT_MODEL:EchoKaraoke.DEFAULT_MODEL;
+    backingRestoreRequest++;restoringBacking=false;karaokeIssue='';
+    controls();saveProgress();void restoreServerBacking();
+  };
   function isParagraph(){return $('practiceScope').value==='paragraph';}
   function cueOptionLabel(cue,i){return `第 ${i+1} 句 · ${recordingTime(cue.start)} · ${captionText(cue).slice(0,50)}`;}
   function syncClipSelection(){
@@ -238,8 +247,13 @@
     try { return {value:EchoSelection.resolve(selectionInput()),error:null}; }
     catch(error) { return {value:null,error}; }
   }
-  function selectedRange() { return EchoSelection.resolve(selectionInput(video().duration)).range; }
+  function selectedRange() { return {...EchoSelection.resolve(selectionInput(video().duration)).range,model:modelPreferences[activity]}; }
   function updateBackingControls() {
+    $('backingModel').disabled=mode!=='idle';
+    const selectedModel=models.model(modelPreferences[activity]);
+    $('backingModelHint').textContent=modelPreferences[activity]===EchoModels.BANDIT_MODEL
+      ?selectedModel?.ready?'BandIt 已就绪 · 适合电影背景音；Mac 暂用 CPU，耗时较长。':'首次安装约 0.8 GiB，建议预留 2 GiB。Mac 暂用 CPU；模型权重 CC BY-SA 4.0。'
+      :selectedModel?.ready?'Demucs 已就绪 · 歌曲推荐，也可用于电影背景音。': 'Demucs · 首次使用需下载约 80 MiB 权重。';
     if(!hasBackingTools()){
       for(const id of ['previewBacking','prepareBacking'])$(id).disabled=true;
       return;
@@ -256,6 +270,7 @@
     $('karaokeNotice').hidden=!karaokeIssue;
     $('karaokeNotice').textContent=karaokeIssue;
     $('prepareBacking').textContent=mode==='separating'?`正在生成${name}…`:ready?`${name}已就绪`:isSinging()?(whole?'生成整首伴奏':paragraph?'生成段落伴奏':'生成片段伴奏'):`提取${whole?'整段':paragraph?'段落':'片段'}背景音`;
+    if(!busy && !ready && selectedModel && !selectedModel.ready)$('prepareBacking').textContent=`安装并${isSinging()?'生成伴奏':'提取背景音'}`;
     $('previewBacking').textContent=`▷ 试听${name}`;
     if(busy)return;
     if(restoringBacking)$('karaokeInfo').textContent=`正在查找已生成的${name}…`;
@@ -546,7 +561,7 @@
     if (!Number.isFinite(start) || !Number.isFinite(end) || start < 0 || end <= start) return;
     const title=currentVideoTitle();
     scopePreferences[activity]=$('practiceScope').value;
-    const session = {title:title || videoId,scopes:{...scopePreferences},assemblyChoices,loopCount:$('loopCount').value,prepSeconds:$('prepSeconds').value,autoNext:$('autoNext').checked,leadInMode:$('leadInMode').value,leadInSeconds:EchoPractice.leadInSeconds($('leadInSeconds').value),activity,paragraphFirst,paragraphLast,useBacking:$('useBacking').checked,backingPreferences:{...backingPreferences,[activity]:$('useBacking').checked},captionSource,captionSourceName,loadedCaptionSource,replayVocalVolume:replayMix().vocal,replayBackingVolume:replayMix().backing,replayWithBacking:$('replayWithBacking').checked,backingVolume:Number($('backingVolume').value),contentLanguage:$('contentLanguage').value,captionLayout:$('captionLayout').value,videoId,cues:cues.map(c=>({...c})),index,start,end,speed:$('speed').value,showChinese:$('showChinese').checked,hideText:$('hideText').checked,followCaptions:$('followCaptions').checked,selectedTakeId:take?.id,updatedAt:Date.now()};
+    const session = {modelPreferences:{...modelPreferences},title:title || videoId,scopes:{...scopePreferences},assemblyChoices,loopCount:$('loopCount').value,prepSeconds:$('prepSeconds').value,autoNext:$('autoNext').checked,leadInMode:$('leadInMode').value,leadInSeconds:EchoPractice.leadInSeconds($('leadInSeconds').value),activity,paragraphFirst,paragraphLast,useBacking:$('useBacking').checked,backingPreferences:{...backingPreferences,[activity]:$('useBacking').checked},captionSource,captionSourceName,loadedCaptionSource,replayVocalVolume:replayMix().vocal,replayBackingVolume:replayMix().backing,replayWithBacking:$('replayWithBacking').checked,backingVolume:Number($('backingVolume').value),contentLanguage:$('contentLanguage').value,captionLayout:$('captionLayout').value,videoId,cues:cues.map(c=>({...c})),index,start,end,speed:$('speed').value,showChinese:$('showChinese').checked,hideText:$('hideText').checked,followCaptions:$('followCaptions').checked,selectedTakeId:take?.id,updatedAt:Date.now()};
     void storage.saveSession(session).catch(()=>{
       if (!progressWarning && session.videoId === videoId) { progressWarning=true; status('练习位置未能保存，请检查本地存储空间。录音仍可下载。'); }
     });
@@ -631,6 +646,7 @@
           sing:typeof session.backingPreferences?.sing==='boolean'?session.backingPreferences.sing:session.activity==='sing'?session.useBacking!==false:true};
         assemblyChoices=Array.isArray(session.assemblyChoices)?session.assemblyChoices:[];
         scopePreferences=EchoSelection.restoreScopes(session);
+        modelPreferences={speech:session.modelPreferences?.speech===EchoModels.BANDIT_MODEL?EchoModels.BANDIT_MODEL:EchoKaraoke.DEFAULT_MODEL,sing:EchoKaraoke.DEFAULT_MODEL};
         if(['speech','sing'].includes(session.activity))activity=session.activity;
         renderActivity();
         captionSource=typeof session.captionSource==='string'?session.captionSource:'auto';captionSourceName=session.captionSourceName || '';loadedCaptionSource=session.loadedCaptionSource || '';renderCaptionSources();
@@ -707,8 +723,10 @@
         if(serviceMaxSeconds>=600 && result.device)$('karaokeService').textContent+=['cuda','mps'].includes(result.device)?' · GPU 加速':' · CPU';
         $('karaokeService').title=[result.deviceName,result.deviceNote].filter(Boolean).join(' · ');
         $('karaokeHelp').open=serviceMaxSeconds<600;
+        modelManagement=result.modelManagement===true;
+        if(modelManagement)await models.refresh().catch(()=>{});
       }catch{
-        serviceState='offline';$('karaokeService').textContent='伴奏服务 · 未连接（未启动或不可用）';$('karaokeService').title='';$('karaokeHelp').open=true;
+        modelManagement=false;serviceState='offline';$('karaokeService').textContent='伴奏服务 · 未连接（未启动或不可用）';$('karaokeService').title='';$('karaokeHelp').open=true;
       }finally{$('checkKaraoke').disabled=false;serviceCheck=null;updateBackingControls();}
     })();
     return serviceCheck;
@@ -733,7 +751,7 @@
       if(!cached)return;
       const audio=await karaokeRequest('audio',{jobId:cached.id});
       if(id!==videoId || request!==backingRestoreRequest)return;
-      const stored=await keepBacking({key:EchoKaraoke.key(id,cached),videoId:id,start:cached.start,end:cached.end,createdAt:Date.now(),blob:EchoKaraoke.blobFromBase64(audio)});
+      const stored=await keepBacking({key:EchoKaraoke.key(id,cached),videoId:id,model:cached.model,start:cached.start,end:cached.end,createdAt:Date.now(),blob:EchoKaraoke.blobFromBase64(audio)});
       if(stored && id===videoId && hasBackingTools() && mode==='idle')status('已恢复之前生成的伴奏，无需重新分离。');
     }catch{/* Cache lookup is optional; ordinary dubbing and explicit generation still work. */}
     finally{if(request===backingRestoreRequest){restoringBacking=false;controls();}}
@@ -816,6 +834,14 @@
       $('karaokeHelp').open=true;controls();status(karaokeIssue);
       $('karaokeNotice').scrollIntoView?.({block:'nearest'});return;
     }
+    if(r.model!==EchoKaraoke.DEFAULT_MODEL && !modelManagement){
+      const context={id:videoId,token:generation};
+      await checkKaraokeService();
+      if(context.id!==videoId || context.token!==generation || mode!=='idle')return;
+      const current=selectedRange();
+      if(current.start!==r.start || current.end!==r.end || current.model!==r.model)return;
+      if(!modelManagement){karaokeIssue='BandIt 需要新版本机服务，请在终端停止旧服务，再运行根目录启动脚本并重新检测。';controls();status(karaokeIssue);return;}
+    }
     const id=videoId, token=++generation;
     video().pause();mode='separating';controls();
     $('karaokeSettings').open=false;$('singDetails').scrollIntoView?.({block:'nearest'});
@@ -824,7 +850,7 @@
     $('karaokeNotice').textContent='正在连接本机伴奏服务，请稍候…';$('karaokeNotice').hidden=false;
     let job;
     try {
-      job=await karaokeRequest('start',{videoId:id,start:r.start,end:r.end});
+      job=await karaokeRequest('start',{videoId:id,start:r.start,end:r.end,model:r.model});
       if(token!==generation){void karaokeRequest('cancel',{jobId:job.id}).catch(()=>{});return;}
       activeKaraokeJob=job.id;
       $('karaokeNotice').hidden=true;
@@ -833,7 +859,7 @@
         if(job.state==='cancelled')throw Error(`${name}任务已停止，请重新生成。`);
         if(job.state==='ready')break;
         const text=EchoKaraoke.progressText(job,activity);
-        if(job.state==='separating' && Number.isFinite(job.progress))$('karaokeProgress').value=job.progress;
+        if(Number.isFinite(job.progress))$('karaokeProgress').value=job.progress;
         else $('karaokeProgress').removeAttribute('value');
         status(`正在生成${name}，可随时停止。`);$('karaokeInfo').textContent=text;
         await new Promise(resolve=>setTimeout(resolve,1500));
@@ -844,7 +870,7 @@
       $('karaokeProgress').value=100;status(`正在加载${name}…`);$('karaokeInfo').textContent=EchoKaraoke.progressText(job,activity);
       const result=await karaokeRequest('audio',{jobId:job.id});
       if(token!==generation || id!==videoId)return;
-      const stored=await keepBacking({key:EchoKaraoke.key(id,r),videoId:id,start:r.start,end:r.end,createdAt:Date.now(),blob:EchoKaraoke.blobFromBase64(result)});
+      const stored=await keepBacking({key:EchoKaraoke.key(id,r),videoId:id,model:job.model || r.model,start:r.start,end:r.end,createdAt:Date.now(),blob:EchoKaraoke.blobFromBase64(result)});
       if(token!==generation || id!==videoId)return;
       $('useBacking').checked=true;backingPreferences[activity]=true;saveProgress();if(stored)status(`${name}已生成并保存，刷新后也可恢复。准备好后回到主区${isSinging()?'录唱':'配音'}。`);
     } catch(error) {
@@ -853,6 +879,7 @@
       $('karaokeHelp').open=true;
       $('karaokeInfo').textContent='';status(`未能生成${name}，请查看按钮下方提示。`);
     } finally {
+      if(modelManagement)void models.refresh().catch(()=>{});
       if(token===generation){activeKaraokeJob=null;$('karaokeProgress').hidden=true;mode='idle';controls();if(karaokeIssue)$('karaokeNotice').scrollIntoView?.({block:'nearest'});}
     }
   });
@@ -1331,6 +1358,7 @@
     if(event.key!=='Escape')return;
     event.preventDefault();event.stopPropagation();
     if(assembly.isOpen()){assembly.close();return;}
+    if(models.isOpen()){models.close();return;}
     if(library.isOpen()){library.escape();return;}
     if(!$('wordcard').hidden)closeWord();
     else if(mode!=='idle')stop();
@@ -1440,7 +1468,7 @@
     backingRestoreRequest++;
     restoringBacking = false;
     karaokeIssue = '';
-    activity = 'speech';backingPreferences={speech:false,sing:true};scopePreferences={speech:'clip',sing:'whole'};paragraphFirst=0;paragraphLast=1;assemblyChoices=[];
+    activity = 'speech';modelPreferences={speech:EchoKaraoke.DEFAULT_MODEL,sing:EchoKaraoke.DEFAULT_MODEL};backingPreferences={speech:false,sing:true};scopePreferences={speech:'clip',sing:'whole'};paragraphFirst=0;paragraphLast=1;assemblyChoices=[];
     captionTracks=[];captionListRequest++;captionSource='auto';captionSourceName='';loadedCaptionSource='';renderCaptionSources();
     $('contentLanguage').value = 'auto';
     $('captionLayout').value = 'original';

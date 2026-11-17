@@ -5,7 +5,6 @@ inference dependencies and an unmodified checkout of the official repository.
 See CINEMATIC_EVALUATION.md for commands, provenance, and measured limitations.
 """
 import argparse
-import hashlib
 import json
 from pathlib import Path
 import platform
@@ -13,20 +12,8 @@ import sys
 import time
 
 
-CHECKPOINT_MD5 = "fea2868787551b0cff36cfcf7c3622a3"
-SAMPLE_RATE = 48000
-
-
-def load_checkpoint(torch, path):
-    # The official Lightning checkpoint may contain pickled training metadata.
-    # Only permit the exact published multi-language checkpoint before loading.
-    digest = hashlib.md5()
-    with path.open("rb") as source:
-        for block in iter(lambda: source.read(1024 * 1024), b""):
-            digest.update(block)
-    if digest.hexdigest() != CHECKPOINT_MD5:
-        raise ValueError("Checkpoint does not match the official BandIt multi-language weights.")
-    return torch.load(path, map_location="cpu", weights_only=False)
+sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
+from bandit import load_model, SAMPLE_RATE
 
 
 def main():
@@ -42,7 +29,6 @@ def main():
     import torch
     import torchaudio
     import soundfile
-    import yaml
 
     torch.set_num_threads(2)
     torch.set_num_interop_threads(1)
@@ -51,7 +37,6 @@ def main():
             parser.error("CUDA is unavailable; install CUDA PyTorch and check the NVIDIA driver.")
         torch.cuda.reset_peak_memory_stats()
     sys.path.insert(0, str(args.bandit_repo.resolve()))
-    from src.models.bandit.bandit import Bandit
     from src.system.inference_handler import StandardTensorChunkedInferenceHandler
 
     audio, rate = torchaudio.load(str(args.input), backend="soundfile")
@@ -61,14 +46,7 @@ def main():
         parser.error("Use mono or stereo audio.")
     if rate != SAMPLE_RATE:
         audio = torchaudio.functional.resample(audio, rate, SAMPLE_RATE)
-    config = yaml.safe_load((args.bandit_repo / "configs/models/bandit-mus64.yaml").read_text())
-    model = Bandit(fs=SAMPLE_RATE, stems=["speech", "music", "sfx"], **config["kwargs"])
-    checkpoint = load_checkpoint(torch, args.checkpoint)
-    state = {key.removeprefix("model."): value for key, value in checkpoint["state_dict"].items()
-             if key.startswith("model.")}
-    model.load_state_dict(state, strict=True)
-    del state, checkpoint
-    model.eval().to(args.device)
+    model = load_model(args.bandit_repo, args.checkpoint, args.device)
     audio = audio.to(args.device)
     # Same upstream overlap-add handler; smaller batch and 50% overlap for CPU.
     handler = StandardTensorChunkedInferenceHandler(

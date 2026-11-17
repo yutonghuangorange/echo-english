@@ -172,3 +172,17 @@ test('failed replay audio startup does not reroute the element away from HTML au
   await assert.rejects(require('../extension/karaoke.js').createAudioOutput({},1,{AudioContext}),/device unavailable/);
   assert.equal(attached,0);assert.equal(closed,1);
 });
+
+test('model management relay allows only fixed models and endpoints',async()=>{
+  const calls=[];
+  const fetcher=async(url,options)=>{calls.push({url,options});return {ok:true,json:async()=>({models:[]})};};
+  await request({action:'models'},sender,fetcher);
+  await request({action:'model-install',model:'bandit-v2-multi'},sender,fetcher);
+  await request({action:'model-cancel',model:'bandit-v2-multi'},sender,fetcher);
+  await request({action:'model-remove',model:'demucs-htdemucs'},sender,fetcher);
+  assert.deepEqual(calls.map(c=>c.url),['/models','/models/bandit-v2-multi/install','/models/bandit-v2-multi/cancel','/models/demucs-htdemucs/remove'].map(p=>'http://127.0.0.1:8765'+p));
+  assert.equal(calls[1].options.method,'POST');
+  await assert.rejects(request({action:'model-install',model:'../../arbitrary'},sender,fetcher),/不支持/);
+  await request({action:'start',videoId:'jNQXAC9IVRw',start:0,end:5,model:'bandit-v2-multi'},sender,fetcher);
+  assert.equal(JSON.parse(calls.at(-1).options.body).model,'bandit-v2-multi');
+});

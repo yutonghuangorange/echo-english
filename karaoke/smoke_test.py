@@ -20,6 +20,7 @@ import urllib.request
 import wave
 
 from server import Jobs, stop_process, probe_device
+from models import ModelManager, DEFAULT_MODEL, BANDIT_MODEL
 
 
 def check_launcher():
@@ -64,6 +65,7 @@ def main():
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--launcher", action="store_true", help="Also test the POSIX root launcher; port 8765 must be free")
     parser.add_argument("--device", choices=("cpu", "cuda", "mps", "auto"), default="cpu")
+    parser.add_argument("--model", choices=(DEFAULT_MODEL, BANDIT_MODEL), default=DEFAULT_MODEL)
     parser.add_argument("--seconds", type=float, default=2)
     args = parser.parse_args()
     if not 0 < args.seconds <= 30:
@@ -77,22 +79,26 @@ def main():
     with tempfile.TemporaryDirectory(prefix="echo smoke 中文 ") as temporary:
         directory = Path(temporary)
         # Synthetic stereo PCM; no copyrighted or private input.
-        frames = round(44100 * args.seconds)
-        samples = array.array("h", (int(8000 * math.sin(2 * math.pi * frequency * n / 44100))
+        rate = 48000 if args.model == BANDIT_MODEL else 44100
+        frames = round(rate * args.seconds)
+        samples = array.array("h", (int(8000 * math.sin(2 * math.pi * frequency * n / rate))
                                    for n in range(frames) for frequency in (220, 330)))
         if sys.byteorder != "little":
             samples.byteswap()
         with wave.open(str(directory / "clip.wav"), "wb") as audio:
-            audio.setparams((2, 2, 44100, 0, "NONE", "not compressed"))
+            audio.setparams((2, 2, rate, 0, "NONE", "not compressed"))
             audio.writeframes(samples.tobytes())
         accelerator = probe_device(args.device)
-        jobs = Jobs(directory, accelerator=accelerator, allow_cpu_fallback=args.device == "auto")
-        job = {"directory": directory, "cancel": threading.Event()}
+        models = ModelManager(Path(__file__).resolve().parent.parent) if args.model == BANDIT_MODEL else None
+        jobs = Jobs(directory, accelerator=accelerator, allow_cpu_fallback=args.device == "auto", models=models)
+        job = {"directory": directory, "cancel": threading.Event(), "model": args.model}
         try:
+            if models:
+                models.ensure(args.model, job, jobs.command)
             jobs.separate_audio(job)
-            output = directory / "stems/htdemucs/clip/no_vocals.wav"
-            data, rate = soundfile.read(output)
-            assert data.shape == (frames, 2) and rate == 44100
+            output = jobs.separation_output(job)
+            data, output_rate = soundfile.read(output)
+            assert data.shape == (frames, 2) and output_rate == rate
             assert np.isfinite(data).all()
             subprocess.run(["ffmpeg", "-nostdin", "-v", "error", "-y", "-i", str(output),
                             "-codec:a", "libmp3lame", "-b:a", "192k", str(directory / "backing.mp3")],
@@ -114,7 +120,7 @@ def main():
     print(json.dumps({"platform": platform.platform(), "architecture": platform.machine(),
                       "torch": torch.__version__, "torchaudio": torchaudio.__version__,
                       "requestedDevice": args.device, "device": job["device"],
-                      "durationSeconds": frames / 44100,
+                      "model": args.model, "durationSeconds": frames / rate,
                       "elapsedSeconds": round(time.monotonic() - started, 2)},
                      indent=2))
 

@@ -20,7 +20,7 @@ jobs:
           - runner: macos-15-intel
             architecture: x64
     runs-on: ${{ matrix.runner }}
-    timeout-minutes: 20
+    timeout-minutes: 30
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-python@v5
@@ -58,3 +58,11 @@ jobs:
           else:
               print('MPS unavailable on this runner: GPU inference and speed are NOT validated.', flush=True)
           PY
+      - uses: actions/cache@v4
+        with:
+          path: .cache/models
+          key: bandit-v1-${{ runner.os }}-${{ matrix.architecture }}-py312-${{ hashFiles('karaoke/bandit-requirements.txt') }}
+      - name: Install optional BandIt in isolation and separate with CPU
+        run: |
+          .venv/bin/python karaoke/smoke_test.py --model bandit-v2-multi --device cpu --seconds 2
+          .venv/bin/python -m pip check
