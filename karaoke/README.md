@@ -26,7 +26,7 @@ powershell -NoProfile -ExecutionPolicy Bypass -File .\start-karaoke.ps1
 
 脚本只为本次进程设置执行策略，创建 `.venv\Scripts\python.exe`、安装 CPU 依赖并启动。后续运行复用环境，不需要激活 venv；缺少系统组件时会提示，不自动安装系统组件。代码已适配，尚待 Windows 实机验证。
 
-不要复制其他机器的 `.venv` 或 `.cache/node`。macOS Apple 芯片应使用原生 arm64 Python；Intel Mac 自动选 torch / torchaudio 2.2.2，其余目标平台用 2.5.1。详见 [跨平台验证与 agent 交接](../PLATFORM_SUPPORT.md)。
+不要复制其他机器的 `.venv` 或 `.cache/node`。macOS Apple 芯片应使用原生 arm64 Python；Intel Mac 自动选 torch / torchaudio 2.2.2，Apple 芯片用 2.6.0，Linux / Windows 用 2.5.1。详见 [跨平台验证与 agent 交接](../PLATFORM_SUPPORT.md)。
 
 ### 手动安装（Linux）
 
@@ -46,7 +46,7 @@ python3 -m pip --python .venv/bin/python install --index-url https://download.py
 python3 -m pip --python .venv/bin/python install -r karaoke/requirements.txt
 ```
 
-Mac 推荐直接使用根目录脚本；手动安装时用本机 Python 创建 venv，再安装 `karaoke/requirements.txt`，平台标记会选择对应的 PyTorch 版本。macOS 15 的两种架构已通过原生 CI 安装与分离验证，音频设备与 Chrome 录音仍需人工试听；Windows 尚待实机验证。默认安装 CPU 依赖。
+Mac 推荐直接使用根目录脚本；手动安装时用本机 Python 创建 venv，再安装 `karaoke/requirements.txt`，平台标记会选择对应的 PyTorch 版本。macOS 15 的两种架构已通过原生 CI 安装与分离验证，音频设备与 Chrome 录音仍需人工试听；Windows 尚待实机验证。Linux / Windows 默认安装 CPU 版依赖；Mac 标准包包含 MPS 支持。
 
 依赖参考：[Demucs](https://github.com/facebookresearch/demucs)、[yt-dlp 安装](https://github.com/yt-dlp/yt-dlp/wiki/Installation)、[YouTube JS runtime](https://github.com/yt-dlp/yt-dlp/wiki/EJS)。
 
@@ -76,7 +76,7 @@ Linux / RTX 3060 Laptop 6 GB 实测同一段约 20 秒电影素材：Demucs CPU 
 
 ### Apple 芯片 Mac：MPS 加速
 
-使用现有安装即可，无需额外 CUDA 包或升级 PyTorch。默认 `bash start-karaoke.sh` 在原生 arm64 环境探测 MPS，并实际运行一个 GPU 小运算；可用时服务状态显示「GPU 加速」，悬停显示 Apple GPU（MPS）。Intel / Rosetta 环境继续使用 CPU。
+重新运行一键启动脚本会将 Apple 芯片的 PyTorch / TorchAudio 自动更新到 2.6.0，以修复旧版 MPS 卷积维度限制；无需手动安装 CUDA。默认 `bash start-karaoke.sh` 在原生 arm64 环境探测 MPS，并实际运行一个 GPU 小运算；可用时服务状态显示「GPU 加速」，悬停显示 Apple GPU（MPS）。Intel / Rosetta 环境继续使用 CPU。
 
 ```bash
 # 自动选择；GPU 算子不支持或内存不足时仅重试一次 CPU
@@ -128,7 +128,7 @@ Demucs 原为音乐分离模型，可能残留对白或误删环境音；此功�
 ## 资源与数据
 
 - 不需要独立显卡，也不需要安装 CUDA。建议整机内存 8 GB 起步、16 GB 更宽裕，磁盘至少预留 5 GB；这是配置建议，未做最低配置测试，长录音与缓存还需另留空间。插件本身不需要 Python 或分离模型，详见项目首页的 [所需配置](../README.md#所需配置)。
-- 默认安装 CPU 依赖；服务自动检测可用 CUDA / Apple MPS，也可强制 CPU。两个 CPU 线程、4 秒模型分段、单任务；`--shifts 0` 减少重复推理。
+- Linux / Windows 默认安装 CPU 版依赖，Mac 标准包包含 MPS 支持；服务自动检测可用 CUDA / Apple MPS，也可强制 CPU。两个 CPU 线程、4 秒模型分段、单任务；`--shifts 0` 减少重复推理。
 - 本机 i7-1165G7 / 16 GB RAM 测试：15 秒音乐片段约 35 秒，分离进程内存峰值约 1.5 GiB（包含首次模型下载与载入）。这不是对其他机器或长片段的保证；更短的片段也有模型载入开销。
 - 本次 Linux CPU 环境约 953 MB，模型约 80 MB，此外会占用片段缓存空间。生成伴奏时会联网访问 YouTube 和模型下载地址；麦克风录音留在浏览器 IndexedDB，不会发给本机分离服务或第三方。
 - 伴奏、恢复信息与日志放在仓库 `.cache/karaoke/`；模型在 `.cache/torch/`。失败详情查看对应任务目录的 `worker.log`。这些目录和 `.venv/` 均被 Git 忽略。
@@ -157,4 +157,4 @@ python3 -m unittest discover -s karaoke -p 'test_*.py'
 
 生成失败原因会保留在生成按钮下方。超过 10 分钟的视频请改选「当前练习片段」。
 
-MPS 的分离子进程单独设置 PyTorch 官方的 `PYTORCH_ENABLE_MPS_FALLBACK=1`：当前 PyTorch 2.5.1 的部分卷积存在 MPS 维度限制，这些算子允许转 CPU 执行，模型仍选择 MPS。显式 `--device mps` 禁止的是整项任务改用 CPU，不禁止这种算子级兼容处理；不能据此宣称所有计算都在 GPU 上。若兼容处理后仍失败，自动模式才会重新运行一次完整 CPU 任务，显式 MPS 则报错。
+Apple 芯片固定使用 PyTorch / TorchAudio 2.6.0，以修复 [2.5.1 的 MPS 卷积限制](https://github.com/pytorch/pytorch/issues/152278)；旧版错误建议的 `PYTORCH_ENABLE_MPS_FALLBACK=1` 无法解决该问题，因此项目不依赖这一开关。统一分离入口继续调用原版 Demucs；为兼容新版 weights-only 模型加载，只允许官方 `htdemucs` 权重所需的模型类、Fraction 与 NumPy 元数据类型，不关闭新版加载保护。Intel Mac 2.2.2 保留原有加载方式。

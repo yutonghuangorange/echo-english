@@ -7,7 +7,7 @@
 | 平台 | 安装入口 | 分离依赖 | 验证状态 |
 | --- | --- | --- | --- |
 | Linux x86_64 | `bash start-karaoke.sh` | torch / torchaudio 2.5.1，默认 CPU，可选 CUDA 12.1 | 本机自动化、CPU / RTX 3060 Laptop 短片段分离已验证 |
-| macOS Apple 芯片 | `bash start-karaoke.sh` | torch / torchaudio 2.5.1，CPU / 可选 MPS | macOS 15 原生 CI：安装、测试、CPU 分离通过；Chrome 录音待人工验证 |
+| macOS Apple 芯片 | `bash start-karaoke.sh` | torch / torchaudio 2.6.0，CPU / 可选 MPS | macOS 15 原生 CI：安装、测试、CPU 分离通过；Chrome 录音待人工验证 |
 | macOS Intel | `bash start-karaoke.sh` | torch / torchaudio 2.2.2，CPU | macOS 15 原生 CI 通过，固定 2.2.2；Chrome 录音待人工验证 |
 | Windows x64 | `start-karaoke.ps1` | torch / torchaudio 2.5.1，默认 CPU，可选 CUDA 12.1 | 已补安装入口和进程清理；CPU / GPU 均等待实机验证 |
 
@@ -84,4 +84,4 @@ CI 会打印 `mpsAvailable`，仅在设备可用时，用同一段 20 秒合成�
 
 第二条显式要求 MPS，不会退回 CPU。耗时包含模型载入和音频写出；合成信号用于运行正确性检查，音质仍需真实内容人工试听。
 
-MPS 的分离子进程单独设置 PyTorch 官方的 `PYTORCH_ENABLE_MPS_FALLBACK=1`：当前 PyTorch 2.5.1 的部分卷积存在 MPS 维度限制，这些算子允许转 CPU 执行，模型仍选择 MPS。显式 `--device mps` 禁止的是整项任务改用 CPU，不禁止这种算子级兼容处理；不能据此宣称所有计算都在 GPU 上。若兼容处理后仍失败，自动模式才会重新运行一次完整 CPU 任务，显式 MPS 则报错。
+Apple 芯片固定使用 PyTorch / TorchAudio 2.6.0，以修复 [2.5.1 的 MPS 卷积限制](https://github.com/pytorch/pytorch/issues/152278)；旧版错误建议的 `PYTORCH_ENABLE_MPS_FALLBACK=1` 无法解决该问题，因此项目不依赖这一开关。统一分离入口继续调用原版 Demucs；为兼容新版 weights-only 模型加载，只允许官方 `htdemucs` 权重所需的模型类、Fraction 与 NumPy 元数据类型，不关闭新版加载保护。Intel Mac 2.2.2 保留原有加载方式。
