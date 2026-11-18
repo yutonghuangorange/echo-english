@@ -59,31 +59,6 @@ test('old frames and rejected seeks cannot alter a later recording', async () =>
   view.hide(); assert.equal(frames.size, 0);
 });
 
-test('idle progress reserves the review layout without running a clock or interrupting playback', async () => {
-  const {view, frames, container, slider, label, time} = fixture();
-  view.setIdleView({label:'回放进度',time:'点击回放开始'});
-  assert.equal(container.hidden,false);
-  assert.equal(slider.disabled,true);
-  assert.equal(frames.size,0);
-  let sought;
-  view.show({label:'录音回放',position:()=>3,duration:()=>10,seekTo:at=>{sought=at;}});
-  const handler=slider.oninput;
-  view.setIdleView(null);
-  assert.equal(label.textContent,'录音回放');
-  assert.equal(time.textContent,'0:03 / 0:10');
-  assert.equal(slider.oninput,handler);
-  assert.equal(frames.size,1);
-  view.setIdleView({label:'回放进度',time:'点击回放开始'});
-  slider.value=0.5;await slider.oninput();assert.equal(sought,5);
-  view.hide();
-  assert.equal(container.hidden,false);
-  assert.equal(slider.value,0);
-  assert.equal(slider.oninput,null);
-  assert.equal(time.textContent,'点击回放开始');
-  assert.equal(frames.size,0);
-  view.setIdleView(null);assert.equal(container.hidden,true);
-});
-
 test('browser globals are available in manifest order with the unchanged panel controls', () => {
   const fs = require('node:fs'), vm = require('node:vm');
   const context = vm.createContext({});

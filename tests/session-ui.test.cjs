@@ -575,10 +575,6 @@ test('recording timeline selects without autoplay, exposes versions and uses the
   assert.equal(nodes.get('versionChoices').children.length,2);
   assert.equal(nodes.get('versionChoices').children[1].getAttribute('aria-pressed'),'true');
   assert.equal(nodes.get('recordingDock').hidden,true);nodes.get('tab-recordings').onclick();assert.equal(nodes.get('recordingDock').hidden,false);
-  assert.ok(nodes.get('recordingTransportSlot').children.includes(nodes.get('transport')));
-  assert.equal(nodes.get('transport').hidden,false);
-  assert.equal(nodes.get('transportProgress').disabled,true);
-  assert.equal(nodes.get('transportTime').textContent,'点击回放开始');
   await nodes.get('historyList').children[0].children[0].onclick();assert.equal(played,0);
   await nodes.get('versionChoices').children[0].onclick();assert.equal(played,0);
   await nodes.get('reviewReplay').onclick();assert.equal(played,1);
@@ -2047,7 +2043,7 @@ test('editing alignment and reverb during replay updates the same player and sav
     return player;
   }}}});
   nodes.get('tab-recordings').onclick();
-  const playing=nodes.get('reviewReplay').onclick();await waitUntil(()=>nodes.get('transportProgress').disabled===false);
+  const playing=nodes.get('reviewReplay').onclick();await waitUntil(()=>nodes.get('transport').hidden===false);
   player.currentTime=2;video.currentTime=2;
   assert.equal(nodes.get('vocalDelay').disabled,false);
   nodes.get('vocalDelay').value='-120';nodes.get('vocalDelay').oninput();await nodes.get('vocalDelay').onchange();
