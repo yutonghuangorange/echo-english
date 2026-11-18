@@ -25,6 +25,7 @@
   let cues = [], index = -1, take = null, mode = 'idle', generation = 0,clipRangeAdjusted=false;
   let recordingSession = null, audio = null, savedVideo = null;
   const playback = EchoPlayback.create();
+  let transportInRecordingDock = false;
   const transport = EchoTransport.create({
     container: $('transport'), slider: $('transportProgress'),
     label: $('transportLabel'), time: $('transportTime'),
@@ -621,6 +622,12 @@
     $('sidetoneLatency').hidden=!recording || !sidetoneEnabled;
     $('sidetoneLatency').textContent=EchoMicrophone.describeMonitoring(recordingSession?.sidetoneInfo);
     $('recordingDock').hidden=currentPage!=='recordings' || !take || ['recording','lead-in','permission','loading'].includes(mode);
+    const dockVisible=!$('recordingDock').hidden;
+    if(dockVisible!==transportInRecordingDock){
+      $(dockVisible?'recordingTransportSlot':'defaultTransportSlot').append($('transport'));
+      transportInRecordingDock=dockVisible;
+    }
+    transport.setIdleView(dockVisible?{label:'回放进度',time:'点击回放开始'}:null);
     $('practiceDock').hidden=currentPage!=='practice' || mode!=='idle';$('practiceUtilities').hidden=currentPage!=='practice' || mode!=='idle';
     $('historyBrowser').hidden=!videoHistory.length;
     $('playAll').hidden=!videoHistory.length;
