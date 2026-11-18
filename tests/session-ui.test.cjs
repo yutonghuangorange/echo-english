@@ -2470,10 +2470,20 @@ test('original preview exposes its volume beside progress without changing accom
   assert.equal(nodes.get('originalVolumeControl').hidden,true);
   const pending=nodes.get('original').onclick();await waitUntil(()=>nodes.get('originalVolumeControl').hidden===false);
   assert.equal(nodes.get('originalVolumeValue').textContent,'65%');
+  nodes.get('playbackSpeed').value='0.5';nodes.get('playbackSpeed').onchange();assert.equal(video.playbackRate,.5);assert.equal(nodes.get('speed').value,'0.5');
   nodes.get('originalVolume').value='.3';nodes.get('originalVolume').oninput();assert.equal(video.volume,.3);
   assert.equal(nodes.get('backingVolume').value,'1');
   await nodes.get('pausePlayback').onclick();assert.equal(nodes.get('originalVolumeControl').hidden,false);
   nodes.get('stop').onclick();await pending;
   assert.equal(nodes.get('originalVolumeControl').hidden,true);assert.equal(video.volume,.3);
+  (await storage.ready).close();
+});
+
+
+for(const speed of ['0.5','0.9','1.4'])test(`practice restores saved ${speed} speed`,async()=>{
+  const storage=createStorage(new IDBFactory());
+  await storage.saveSession({videoId:'video',start:0,end:5,speed,cues:[]});
+  const {nodes}=await mount(storage);
+  assert.equal(nodes.get('speed').value,speed);
   (await storage.ready).close();
 });

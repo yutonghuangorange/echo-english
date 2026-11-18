@@ -1,6 +1,7 @@
 // One owner for the shared pause, speed and original-volume controls. Late promises from a previous
 // playback cannot change the buttons or report errors against a newer one.
 (function(root){
+  const practice=typeof module!=='undefined'?require('./practice.js'):root.EchoPractice;
   function attach({pauseButton,speedControl,speedInput,volumeControl,volumeInput,volumeValue,clock,getSpeed,onSpeed,onError}){
     let owner=null,paused=false,changing=false;
     function renderVolume(){
@@ -39,7 +40,7 @@
     speedInput.onchange=()=>{
       if(!owner?.setSpeed || changing)return;
       const speed=Number(speedInput.value);
-      if(![0.75,1,1.25].includes(speed)){render();return;}
+      if(!practice.SPEEDS.includes(speed)){render();return;}
       try{owner.setSpeed(speed);onSpeed(speed);render();}catch(error){onError(error);}
     };
     render();

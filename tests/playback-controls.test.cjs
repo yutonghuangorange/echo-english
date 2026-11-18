@@ -46,3 +46,13 @@ test('original volume stays synchronized with native media and detaches on playb
   volumeInput.value='.9';volumeInput.oninput();assert.equal(media.volume,.5);
   controls.set(()=>{},()=>{},null,media);controls.clear();assert.equal(events.size,0);assert.equal(volumeControl.hidden,true);
 });
+
+
+test('all offered practice speeds apply during playback and unsupported speeds are ignored',()=>{
+  const f=fixture();let rate=1;
+  f.controls.set(()=>{},()=>{},value=>{rate=value;});
+  for(const speed of require('../extension/practice.js').SPEEDS){
+    f.speedInput.value=String(speed);f.speedInput.onchange();assert.equal(rate,speed);
+  }
+  f.speedInput.value='0.1';f.speedInput.onchange();assert.equal(rate,1.5);assert.equal(f.speedInput.value,'1.5');
+});

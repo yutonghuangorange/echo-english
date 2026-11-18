@@ -1,4 +1,5 @@
 (function(root) {
+  const SPEEDS=Object.freeze([0.5,0.6,0.7,0.75,0.8,0.9,1,1.1,1.2,1.25,1.3,1.4,1.5]);
   function splitCaption(text) {
     // Keep the original available: script-based separation is a display aid,
     // not translation or linguistic sentence alignment.
@@ -65,6 +66,6 @@
   async function playQueue({queue,active,play}) {
     for(let i=0;i<queue.length && active();i++)await play(queue[i],i,queue.length);
   }
-  const api = {paragraphRange,leadInSeconds,leadInStart,splitCaption,captionFrame,nudge,runLoop,runPractice,recordingQueue,playQueue,playbackTimeout};
+  const api = {SPEEDS,paragraphRange,leadInSeconds,leadInStart,splitCaption,captionFrame,nudge,runLoop,runPractice,recordingQueue,playQueue,playbackTimeout};
   if (typeof module !== 'undefined') module.exports = api; else root.EchoPractice = api;
 })(globalThis);

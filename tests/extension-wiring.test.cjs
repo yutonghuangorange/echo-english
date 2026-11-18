@@ -30,3 +30,12 @@ test('coordinator controls exist exactly once in the panel template',()=>{
   const source=fs.readFileSync(path.join(directory,'content.js'),'utf8');
   for(const match of source.matchAll(/\$\('([^']+)'\)/g))assert.ok(ids.includes(match[1]),`missing panel control: ${match[1]}`);
 });
+
+
+test('all speed selectors offer exactly the supported practice speeds',()=>{
+  const html=require('../extension/panel-view.js').html,speeds=require('../extension/practice.js').SPEEDS;
+  for(const id of ['speed','playbackSpeed','seSpeed']){
+    const options=html.match(new RegExp(`<select id="${id}"[^>]*>(.*?)</select>`))[1];
+    assert.deepEqual([...options.matchAll(/value="([^"]+)"/g)].map(match=>Number(match[1])),[...speeds]);
+  }
+});

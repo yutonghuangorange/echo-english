@@ -1106,7 +1106,7 @@
         $('captionLayout').value=['original','en-zh'].includes(session.captionLayout)?session.captionLayout:EchoLanguages.detect(sample)==='en'?'en-zh':'original';
         $('loopCount').value=['3','5','0'].includes(session.loopCount)?session.loopCount:'3';
         $('prepSeconds').value=['0','2','3','5'].includes(session.prepSeconds)?session.prepSeconds:'3';$('autoNext').checked=!!session.autoNext;
-        $('speed').value=['0.75','1','1.25'].includes(session.speed)?session.speed:'1';
+        $('speed').value=EchoPractice.SPEEDS.includes(Number(session.speed))?String(Number(session.speed)):'1';
         $('leadInSeconds').value=session.leadInSeconds===undefined?3:EchoPractice.leadInSeconds(session.leadInSeconds);
         $('leadInMode').value=['none','seconds','previous'].includes(session.leadInMode)?session.leadInMode:EchoPractice.leadInSeconds(session.leadInSeconds)>0?'seconds':'none';
         paragraphFirst=Number.isInteger(session.paragraphFirst)?session.paragraphFirst:0;paragraphLast=Number.isInteger(session.paragraphLast)?session.paragraphLast:1;
