@@ -882,7 +882,7 @@
       const updated=await storage.updateTakeEffects(id,effects);
       if(owner!==videoId || id!==take?.id || revision!==vocalEffectRevision)return;
       if(!updated)throw Error('录音已不存在，请重新选择。');
-      $('vocalEffectsStatus').textContent='已保存。播放中可直接调整并听到变化。';
+      $('vocalEffectsStatus').textContent='已保存到当前版本。';
     }catch(error){if(owner===videoId && id===take?.id && revision===vocalEffectRevision)$('vocalEffectsStatus').textContent=`保存失败：${error.message}`;}
   }
   $('vocalDelay').oninput=()=>applyVocalEffects();
