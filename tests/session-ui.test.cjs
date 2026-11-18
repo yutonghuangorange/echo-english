@@ -76,11 +76,11 @@ test('movie background is opt-in, keeps separate activity preferences and restor
   const globals={chrome:{runtime:{onMessage:{addListener(){}},async sendMessage(){return {};}}}};
   const {nodes}=await mount(storage,{health,globals});
   assert.equal(nodes.get('recordingPlayback').value,'silent');assert.equal(checks,0);
-  assert.equal(nodes.get('karaokeSettings').hidden,false);
+
   assert.match(nodes.get('recordingBackingOption').textContent,/背景音/);
   nodes.get('recordingPlayback').value='backing';nodes.get('recordingPlayback').onchange();
-  assert.equal(nodes.get('karaokeSettings').hidden,false);assert.equal(nodes.get('karaokeSettings').hidden,false);
-  assert.match(nodes.get('backingSettingsTitle').textContent,/准备背景音/);
+
+  assert.match(nodes.get('backingSummary').textContent,/未准备|可选/);
   assert.equal(nodes.get('prepareBacking').textContent,'提取片段背景音');
   nodes.get('activityMode').value='sing';nodes.get('activityMode').onchange();
   assert.equal(nodes.get('recordingPlayback').value,'backing');
@@ -94,7 +94,7 @@ test('movie background is opt-in, keeps separate activity preferences and restor
   const restored=await mount(storage,{health,globals});
   assert.equal(restored.nodes.get('recordingPlayback').value,'backing');
   restored.nodes.get('recordingPlayback').value='silent';restored.nodes.get('recordingPlayback').onchange();
-  assert.equal(restored.nodes.get('karaokeSettings').hidden,false);
+
   (await storage.ready).close();
 });
 
@@ -111,7 +111,7 @@ test('turning movie background off discards an in-flight cache restore',async()=
   release({audio:Buffer.from('background').toString('base64'),mime:'audio/mpeg'});
   await new Promise(resolve=>setTimeout(resolve,5));
   assert.equal((await storage.listBackings('video')).length,0);
-  assert.equal(nodes.get('karaokeSettings').hidden,false);assert.equal(nodes.get('record').disabled,false);
+  assert.equal(nodes.get('record').disabled,false);
   (await storage.ready).close();
 });
 
@@ -191,7 +191,7 @@ test('movie dubbing monitors cached background but records dry speech and uses s
   assert.equal(nodes.get('songAssembly').hidden,true);
   nodes.get('recordingPlayback').value='silent';nodes.get('recordingPlayback').onchange();
   nodes.get('reuseSongRange').onclick();
-  assert.equal(nodes.get('recordingPlayback').value,'silent');assert.equal(nodes.get('karaokeSettings').hidden,false);
+  assert.equal(nodes.get('recordingPlayback').value,'silent');
   (await storage.ready).close();
 });
 
@@ -389,10 +389,10 @@ test('song mode exposes main recording and guides missing accompaniment without 
   nodes.get('activityMode').value='sing';nodes.get('activityMode').onchange();
   assert.equal(nodes.get('scopeControls').hidden,false);assert.equal(nodes.get('practiceDock').hidden,false);
   assert.notEqual(nodes.get('settingsDialog').open,true);assert.equal(nodes.get('practiceToolsSummary').hidden,false);
-  assert.equal(nodes.get('karaokeSettings').hidden,false);assert.equal(nodes.get('record').disabled,false);
-  await nodes.get('record').onclick();assert.equal(micRequests,0);assert.equal(nodes.get('settingsDialog').open,true);assert.equal(nodes.get('settings-generation').hidden,false);
+  assert.equal(nodes.get('record').disabled,false);
+  await nodes.get('record').onclick();assert.equal(micRequests,0);assert.equal(nodes.get('settingsDialog').open,true);assert.equal(nodes.get('settings-backing').hidden,false);
   nodes.get('activityMode').value='speech';nodes.get('activityMode').onchange();
-  assert.equal(nodes.get('scopeControls').hidden,false);assert.equal(nodes.get('karaokeSettings').hidden,false);
+  assert.equal(nodes.get('scopeControls').hidden,false);
   assert.equal(nodes.get('practiceDock').hidden,false);assert.equal(nodes.get('practiceToolsSummary').hidden,false);
   (await storage.ready).close();
 });
@@ -405,7 +405,7 @@ test('volume remains adjustable during accompaniment preview and saves the chose
   class Audio{constructor(){sound=this;this.paused=true;}pause(){this.paused=true;}async play(){this.paused=false;}}
   const {nodes}=await mount(storage,{video,globals:{Audio,EchoKaraoke:{...require('../extension/karaoke.js'),async createBackingOutput(){return {setVolume(value){gain=value;},dispose(){}};}}}});
   nodes.get('activityMode').value='sing';nodes.get('activityMode').onchange();
-  nodes.get('openBacking').onclick();assert.equal(nodes.get('settingsDialog').open,true);
+  nodes.get('backingSettings').onclick();assert.equal(nodes.get('settingsDialog').open,true);
   nodes.get('generationScope').value='custom';nodes.get('generationStart').value='10';nodes.get('generationEnd').value='50';nodes.get('generationScope').onchange();
   const playing=nodes.get('previewBacking').onclick();
   for(let i=0;i<30 && !nodes.get('transportProgress').oninput;i++)await new Promise(r=>setTimeout(r,1));
@@ -416,7 +416,7 @@ test('volume remains adjustable during accompaniment preview and saves the chose
   await nodes.get('pausePlayback').onclick();assert.equal(sound.paused,true);
   listeners.get('playing')();assert.equal(sound.paused,true);
   await nodes.get('pausePlayback').onclick();assert.equal(sound.paused,false);
-  assert.equal(nodes.get('settings-generation').hidden,false);
+  assert.equal(nodes.get('settings-backing').hidden,false);
   assert.equal(nodes.get('backingVolume').disabled,false);
   nodes.get('backingVolume').value='1.5';nodes.get('backingVolume').oninput();
   assert.equal(gain,1.5);assert.equal(nodes.get('backingVolumeValue').textContent,'150%');
@@ -890,12 +890,12 @@ test('ordinary dubbing records the microphone directly with the accompaniment se
     EchoKaraoke:{...require('../extension/karaoke.js'),createMonitor:async()=>{mixes++;throw Error('Must not monitor ordinary dubbing');}},
     requestAnimationFrame:fn=>setTimeout(fn,0),cancelAnimationFrame:clearTimeout,
     chrome:{runtime:{onMessage:{addListener(){}},async sendMessage(){requests++;throw Error('offline');}}}}});
-  assert.equal(nodes.get('activityMode').value,'speech');assert.equal(nodes.get('karaokeSettings').hidden,false);
+  assert.equal(nodes.get('activityMode').value,'speech');
   assert.equal(requests,0); // No service contact until an explicit preparation request.
   nodes.get('activityMode').value='sing';nodes.get('activityMode').onchange();
-  assert.equal(nodes.get('karaokeSettings').hidden,false);nodes.get('recordingPlayback').value='backing';
+  nodes.get('recordingPlayback').value='backing';
   nodes.get('activityMode').value='speech';nodes.get('activityMode').onchange();
-  assert.equal(nodes.get('recordingPlayback').value,'silent');assert.equal(nodes.get('karaokeSettings').hidden,false);
+  assert.equal(nodes.get('recordingPlayback').value,'silent');
   // Leaving singing does not opt ordinary dubbing into background monitoring.
   await nodes.get('record').onclick();
   for(let i=0;i<20 && !(await storage.listTakes('video')).length;i++)await new Promise(r=>setTimeout(r,2));
@@ -1037,7 +1037,7 @@ for(const reference of ['backing','original'])test(`generated accompaniment rest
   assert.equal((await first.listBackings('video')).length,1);(await first.ready).close();
   const reopened=createStorage(factory);let requests=0;
   const {nodes}=await mount(reopened,{video:{duration:60},globals:{chrome:{runtime:{onMessage:{addListener(){}},async sendMessage(){requests++;throw Error('offline');}}}}});
-  assert.equal(nodes.get('activityMode').value,'sing');assert.equal(nodes.get('karaokeSettings').hidden,false);
+  assert.equal(nodes.get('activityMode').value,'sing');
   assert.equal(nodes.get('recordingPlayback').value,reference);
   assert.equal(nodes.get('previewBacking').disabled,false);assert.equal(nodes.get('record').disabled,false);
   assert.equal(nodes.get('prepareBacking').disabled,true);assert.equal(requests,0);
@@ -1791,7 +1791,7 @@ for(const activity of ['sing','speech'])test(`${activity} capture exposes live b
   nodes.get('activityMode').value=activity;nodes.get('activityMode').onchange();
   if(activity==='speech'){nodes.get('recordingPlayback').value='backing';nodes.get('recordingPlayback').onchange();}
   const recording=nodes.get('record').onclick();await waitUntil(()=>!nodes.get('backingLiveControls').hidden);
-  assert.equal(nodes.get('backingLiveVolume').disabled,false);assert.equal(nodes.get('karaokeSettings').hidden,true);
+  assert.equal(nodes.get('backingLiveVolume').disabled,false);
   assert.equal(nodes.get('backingLiveLabel').textContent,activity==='sing'?'伴奏':'背景音');
   nodes.get('backingLiveVolume').value='2';nodes.get('backingLiveVolume').oninput();assert.equal(gain,2);assert.equal(nodes.get('backingVolume').value,2);assert.equal(nodes.get('backingVolumeValue').textContent,'200%');
   nodes.get('backingVolume').value='0.5';nodes.get('backingVolume').oninput();assert.equal(nodes.get('backingLiveVolume').value,0.5);assert.equal(nodes.get('backingLiveValue').textContent,'50%');
@@ -1936,7 +1936,7 @@ test('infrequent settings open in one modal, preserve the practice page and supp
   nodes.get('openLanguageSettings').onclick();assert.equal(nodes.get('settings-captions').hidden,false);assert.equal(nodes.get('page-practice').hidden,false);
   await waitUntil(()=>nodes.get('read').disabled===false);nodes.get('closeSettings').onclick();
   nodes.get('openPreparation').onclick();nodes.get('micTestConfigure').onclick();assert.equal(nodes.get('toolsDialog').open,false);assert.equal(nodes.get('settingsDialog').open,true);assert.equal(nodes.get('settings-microphone').hidden,false);
-  nodes.get('closeSettings').onclick();nodes.get('recordingPlayback').value='backing';nodes.get('recordingPlayback').onchange();nodes.get('openBacking').onclick();assert.equal(nodes.get('settings-generation').hidden,false);
+  nodes.get('closeSettings').onclick();nodes.get('recordingPlayback').value='backing';nodes.get('recordingPlayback').onchange();nodes.get('backingSettings').onclick();assert.equal(nodes.get('settings-backing').hidden,false);
   nodes.get('close').onclick();assert.equal(nodes.get('settingsDialog').open,false);
   const restored=await mount(storage,{globals});assert.equal(restored.nodes.get('manualGainDb').value,6);assert.equal(restored.nodes.get('settingsDialog').open,undefined);
   (await storage.ready).close();
@@ -2086,33 +2086,33 @@ test('main background entry generates each selected clip without requiring prior
     if(message.action==='audio')return {audio:Buffer.from('background').toString('base64'),mime:'audio/mpeg'};
     return {};
   }}}}});
-  assert.equal(nodes.get('recordingPlayback').value,'silent');assert.equal(nodes.get('karaokeSettings').hidden,false);
-  assert.match(nodes.get('backingSettingsTitle').textContent,/准备背景音/);
-  nodes.get('openBacking').onclick();assert.equal(nodes.get('settings-generation').hidden,false);
+  assert.equal(nodes.get('recordingPlayback').value,'silent');
+  assert.match(nodes.get('backingSummary').textContent,/未准备|可选/);
+  nodes.get('backingSettings').onclick();assert.equal(nodes.get('settings-backing').hidden,false);
   assert.equal(nodes.get('prepareBacking').disabled,false);
   await nodes.get('prepareBacking').onclick();
-  assert.equal(nodes.get('recordingPlayback').value,'backing');assert.match(nodes.get('backingSettingsTitle').textContent,/调整背景音/);
+  assert.equal(nodes.get('recordingPlayback').value,'backing');assert.match(nodes.get('backingSummary').textContent,/已就绪/);
   nodes.get('clipCue').value='1';nodes.get('clipCue').onchange();
-  assert.match(nodes.get('backingSettingsTitle').textContent,/准备背景音/);
-  nodes.get('openBacking').onclick();await nodes.get('prepareBacking').onclick();
+  assert.match(nodes.get('backingSummary').textContent,/未准备|可选/);
+  nodes.get('backingSettings').onclick();await nodes.get('prepareBacking').onclick();
   assert.deepEqual(starts.map(r=>[r.start,r.end]),[[0,5],[5,10]]);
-  assert.match(nodes.get('backingSettingsTitle').textContent,/调整背景音/);
+  assert.match(nodes.get('backingSummary').textContent,/已就绪/);
   assert.equal((await storage.listBackings('video')).length,2);(await storage.ready).close();
 });
 
-test('generation page separates settings and reuses whole-video backing for the unchanged recording clip',async()=>{
+test('unified backing entry exposes preparation and preserves scope across model settings',async()=>{
   const storage=createStorage(new IDBFactory()),starts=[];
   const {nodes}=await mount(storage,{video:{duration:120,pause(){}},globals:{chrome:{runtime:{onMessage:{addListener(){}},async sendMessage(message){
     if(message.action==='start'){starts.push(message);return {id:'b'.repeat(32),state:'ready',quality:'standard'};}
     return {audio:'UklGRg==',mime:'audio/wav'};
   }}}}});
   nodes.get('backingSettings').onclick();assert.equal(nodes.get('settings-backing').hidden,false);
-  assert.equal(nodes.get('backingPreferencesTitle').textContent,'背景音设置');
-  nodes.get('closeSettings').onclick();assert.doesNotMatch(nodes.get('backingSettingsTitle').textContent,/→|->/);
-  nodes.get('openBacking').onclick();
-  assert.equal(nodes.get('settings-generation').hidden,false);assert.equal(nodes.get('settings-backing').hidden,true);assert.equal(nodes.get('settingsTabs').hidden,true);
+  assert.equal(nodes.get('backingPreferencesTitle').textContent,'背景音');
+  nodes.get('closeSettings').onclick();assert.doesNotMatch(nodes.get('backingPreferencesTitle').textContent,/→|->/);
+  nodes.get('backingSettings').onclick();
+  assert.equal(nodes.get('settings-backing').hidden,false);assert.equal(nodes.get('settings-backingOptions').hidden,true);assert.equal(nodes.get('settingsTabs').hidden,false);
   nodes.get('generationScope').value='whole';nodes.get('generationScope').onchange();
-  nodes.get('generationSettings').onclick();assert.equal(nodes.get('settings-backing').hidden,false);assert.equal(nodes.get('settings-generation').hidden,true);
+  nodes.get('generationSettings').onclick();assert.equal(nodes.get('settings-backingOptions').hidden,false);assert.equal(nodes.get('settings-backing').hidden,true);
   nodes.get('backToGeneration').onclick();assert.equal(nodes.get('generationScope').value,'whole');
   await nodes.get('prepareBacking').onclick();
   assert.deepEqual(starts.map(m=>[m.start,m.end]),[[0,120]]);
@@ -2128,7 +2128,7 @@ test('custom generation validates the independent interval and submits it withou
     if(message.action==='start'){starts.push(message);return {id:'c'.repeat(32),state:'ready',quality:'standard'};}
     return {audio:'UklGRg==',mime:'audio/wav'};
   }}}}});
-  nodes.get('openBacking').onclick();nodes.get('generationScope').value='whole';nodes.get('generationScope').onchange();
+  nodes.get('backingSettings').onclick();nodes.get('generationScope').value='whole';nodes.get('generationScope').onchange();
   assert.equal(nodes.get('prepareBacking').disabled,true);assert.match(nodes.get('generationRangeHint').textContent,/10 分钟/);
   nodes.get('generationScope').value='custom';nodes.get('generationScope').onchange();
   nodes.get('generationStart').value='30';nodes.get('generationEnd').value='20';nodes.get('generationEnd').oninput();
@@ -2146,7 +2146,7 @@ test('custom generation paragraph selects consecutive cues independently of reco
     if(message.action==='start'){starts.push(message);return {id:'d'.repeat(32),state:'ready',quality:'standard'};}
     return {audio:'UklGRg==',mime:'audio/wav'};
   }}}}});
-  nodes.get('openBacking').onclick();assert.equal(nodes.get('generationParagraphOption').disabled,false);
+  nodes.get('backingSettings').onclick();assert.equal(nodes.get('generationParagraphOption').disabled,false);
   nodes.get('generationScope').value='paragraph';nodes.get('generationScope').onchange();
   nodes.get('generationFirst').value='1';nodes.get('generationFirst').onchange();
   assert.equal(nodes.get('generationLast').value,'2');
@@ -2161,7 +2161,7 @@ test('custom generation paragraph selects consecutive cues independently of reco
 
 test('generation without subtitles offers time ranges and explains why custom paragraphs are unavailable',async()=>{
   const storage=createStorage(new IDBFactory()),{nodes}=await mount(storage);
-  nodes.get('openBacking').onclick();assert.equal(nodes.get('generationParagraphOption').disabled,true);assert.equal(nodes.get('generationParagraphHint').hidden,false);
+  nodes.get('backingSettings').onclick();assert.equal(nodes.get('generationParagraphOption').disabled,true);assert.equal(nodes.get('generationParagraphHint').hidden,false);
   assert.equal(nodes.get('generationScope').disabled,false);
   nodes.get('generationScope').value='paragraph';nodes.get('generationScope').onchange();assert.equal(nodes.get('prepareBacking').disabled,true);
   nodes.get('generationScope').value='custom';nodes.get('generationStart').value='10';nodes.get('generationEnd').value='20';nodes.get('generationScope').onchange();assert.equal(nodes.get('prepareBacking').disabled,false);
@@ -2438,4 +2438,24 @@ test('lead-in progress stays visible through a delayed seek and recording playba
   assert.equal(visibility.includes(true),false);
   nodes.get('stop').onclick();releasePlay();await pending;assert.equal(hidden,true);
   (await storage.ready).close();
+});
+
+
+test('unified backing page explains first-use setup and reflects model readiness',async()=>{
+  const storage=createStorage(new IDBFactory());let online=false;
+  const catalog={models:[{id:'demucs-htdemucs',name:'Demucs',ready:false,state:'missing',downloadBytes:83886080,weightBytes:0}],busy:false,dependencyBytes:0};
+  const {nodes}=await mount(storage,{health:()=>{if(!online)throw Error('offline');return {service:'echo-karaoke',maxSeconds:600,modelManagement:true};},globals:{chrome:{runtime:{onMessage:{addListener(){}},async sendMessage(message){return message.action==='models'?catalog:{};}}}}});
+  assert.equal(nodes.has('openBacking'),false);
+  nodes.get('backingSettings').onclick();
+  await waitUntil(()=>nodes.get('karaokeService').textContent.includes('未连接'));
+  assert.equal(nodes.get('settings-backing').hidden,false);
+  assert.equal(nodes.get('karaokeHelp').open,true);
+  assert.match(nodes.get('backingSetupStatus').textContent,/安装并启动本机服务/);
+  online=true;await nodes.get('checkKaraoke').onclick();
+  assert.match(nodes.get('backingSetupStatus').textContent,/管理与下载模型/);
+  await nodes.get('manageModels').onclick();assert.equal(nodes.get('modelDialog').open,true);
+  nodes.get('closeModels').onclick();
+  catalog.models[0].ready=true;await nodes.get('checkKaraoke').onclick();
+  assert.match(nodes.get('backingSetupStatus').textContent,/已就绪.*直接选择范围并生成/);
+  nodes.get('closeSettings').onclick();(await storage.ready).close();
 });

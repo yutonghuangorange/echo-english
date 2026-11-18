@@ -42,7 +42,6 @@
     .history-actions:has(>button[hidden]:only-child){display:none}
     .danger{color:#ffb4ad;background:transparent}.text-button{font-size:11px;padding:4px 8px;background:transparent;color:#b3eedb}
     #clipBounds{margin-bottom:14px}
-    .cue-backing{display:inline-flex;align-items:center;flex-shrink:0}
     .readiness-row{margin:4px 0 10px}.cue-nav{gap:6px;flex-wrap:wrap}.cue-nav>span:last-child{margin-left:auto}.caption-phase:empty{display:none}
     #songResult .fold{margin-top:8px}
     .history-delete{flex-shrink:0;font-size:11px;padding:7px;color:#ffb4ad;background:transparent;opacity:0}.history-item:hover .history-delete,.history-item:focus-within .history-delete{opacity:1}@media(hover:none){.history-delete{opacity:1}}
@@ -75,7 +74,7 @@
     .scope-label{position:absolute;width:1px;height:1px;overflow:hidden;clip-path:inset(50%)}
     .scope-row{gap:8px;margin:0 0 10px}.scope-row>select{flex:1;min-width:0}.header-actions #favoriteVideo{font-size:18px;padding:4px 6px}
     .practice-utilities{display:grid;grid-auto-flow:column;grid-auto-columns:minmax(0,1fr);gap:6px;padding:6px 20px;border-top:1px solid var(--dock-border);background:var(--dock-surface);flex-shrink:0}
-    .utility-setting{display:flex;align-items:center;justify-content:center;gap:5px;min-width:0;padding:8px 6px;text-align:left;font-size:11px;background:var(--dock-button);border-color:var(--dock-border)}.utility-setting:hover:not(:disabled){background:var(--dock-button-hover)}.utility-setting small,.utility-setting>span:last-child[aria-hidden]{display:none}.utility-setting #backingSummary{display:block;font-size:9px;white-space:nowrap;color:#90a4b6}
+    .utility-setting{display:flex;align-items:center;justify-content:center;gap:5px;min-width:0;padding:8px 6px;text-align:left;font-size:11px;background:var(--dock-button);border-color:var(--dock-border)}.utility-setting:hover:not(:disabled){background:var(--dock-button-hover)}.utility-setting small,.utility-setting>span:last-child[aria-hidden]{display:none}.utility-setting:has(#backingSummary){flex-direction:column;gap:3px}.utility-setting #backingSummary{display:block;font-size:10px;white-space:normal;color:var(--dock-muted)}
     .dock-heading-row{display:flex;align-items:center;justify-content:space-between;gap:10px;margin-bottom:8px}.dock-heading-row .dock-heading{margin:0}.playback-speed{display:flex;align-items:center;gap:6px;margin-left:auto}.playback-speed select{width:76px;padding:3px 6px;font-size:12px}.transport-heading{align-items:center}
     .pages:has(#page-practice:not([hidden])){--page-padding:12px;padding:12px 20px}.clip-selector-row{display:flex;gap:6px;align-items:center;margin:0 0 12px}.clip-selector-row select{min-width:0;flex:1}.clip-selector-row button{font-size:10px;padding:9px 7px;flex:0 0 auto}#clipBounds{margin-bottom:0}
     .cue-card{padding:12px}.panel[data-mode="idle"] .caption-context{display:none}.panel[data-mode="idle"] .caption{min-height:44px;padding:8px 0 10px}.panel[data-mode="idle"] .cue-card{margin-bottom:0}
@@ -127,7 +126,7 @@
 
           </div>
 
-        <div class="cue-card"><div class="cue-nav"><span class="eyebrow" id="cueHeading">当前台词</span><button id="openLanguageSettings" class="text-button">调整语言</button><span id="karaokeSettings" class="cue-backing"><button id="openBacking" class="text-button" aria-haspopup="dialog"><span id="backingSettingsTitle">准备伴奏</span></button><small id="backingSummary" class="scope-label">当前范围未准备</small></span><span><button id="prev" aria-label="上一句">‹</button><span aria-label="当前练习句">练习 <span id="position">手动片段</span></span><button id="next" aria-label="下一句">›</button></span></div>
+        <div class="cue-card"><div class="cue-nav"><span class="eyebrow" id="cueHeading">当前台词</span><button id="openLanguageSettings" class="text-button">调整语言</button><span><button id="prev" aria-label="上一句">‹</button><span aria-label="当前练习句">练习 <span id="position">手动片段</span></span><button id="next" aria-label="下一句">›</button></span></div>
           <div id="captionPrevious" class="caption-context" aria-label="上一句" hidden></div><div id="captionPhase" class="caption-phase"></div>
           <div class="caption-stage"><div class="caption" id="caption">从一句台词开始，听见自己的进步。</div></div><div id="translation" hidden></div>
           <div id="captionNext" class="caption-context" aria-label="下一句预告" hidden></div>
@@ -165,7 +164,7 @@
     </div>
     <div id="practiceUtilities" class="practice-utilities">        <button id="practiceTools" class="utility-setting" aria-haspopup="dialog"><span id="practiceToolsSummary">练习设置</span><small id="practiceToolsState"></small><span aria-hidden="true">›</span></button>
 
-<button id="backingSettings" class="utility-setting" aria-haspopup="dialog"><span id="backingPreferencesTitle">伴奏设置</span><span aria-hidden="true">›</span></button>
+<button id="backingSettings" class="utility-setting" aria-haspopup="dialog"><span id="backingPreferencesTitle">伴奏</span><small id="backingSummary">当前范围未准备</small><span aria-hidden="true">›</span></button>
 <button id="practiceSettings" class="utility-setting" aria-haspopup="dialog"><span>录音设置</span><small id="speedSummary"></small><span aria-hidden="true">›</span></button>
 </div><div id="practiceDock" class="practice-dock">
       <div class="dock-heading-row"><div class="dock-heading">播放与录音</div></div><div class="main-actions"><button id="original">▶ 听原声</button><button id="replay" disabled>▷ 回听录音</button><button class="primary" id="record">● 开始配音</button></div>
@@ -290,8 +289,13 @@
           <div class="hint" id="languageInfo">内容语言用于文本处理；字幕语言请在上方选择。</div>
           <div id="captionLayoutOption"><div class="row"><label class="hint" for="captionLayout">台词格式</label><select id="captionLayout" aria-label="台词格式"><option value="original" selected>完整原文（默认）</option><option value="en-zh">英中混排分开显示</option></select></div>
           <div class="hint">英中拆分仅用于英语内容。中文歌词、日语及韩语均保留原文。读音提示与自动翻译暂未提供。</div></div></div>
+        </section><section id="settings-backingOptions" class="fold-content" hidden>
+          <div class="utility-row"><button id="backToGeneration" class="text-button">返回伴奏／背景音</button></div><div class="settings-group"><h3>生成偏好</h3><div class="row readiness-row" id="songReadinessRow" hidden><span class="hint" id="songReadiness"></span></div>          <div class="field-heading"><label for="backingModel">分离模型</label></div><select id="backingModel"><option value="demucs-htdemucs">通用 · Demucs</option><option id="banditModelOption" value="bandit-v2-multi">电影背景音 · BandIt</option></select><p class="hint field-note" id="backingModelHint"></p><div class="field-heading"><label for="backingQuality">伴奏／背景音音质</label></div><select id="backingQuality" aria-describedby="backingQualityHint"><option value="standard">标准 · MP3</option><option value="lossless">无损 · FLAC</option></select><p class="hint field-note" id="backingQualityHint"></p>
+
+          </div>
+
         </section><section id="settings-backing" role="tabpanel" aria-labelledby="settingsBackingTab" class="fold-content" hidden>
-          <div class="utility-row"><button id="backToGeneration" class="text-button">← 返回生成音频</button></div><div class="service-tools">
+          <div class="service-tools">
           <details class="fold" id="karaokeHelp"><summary id="backingHelpTitle">首次使用：如何启用伴奏？</summary><div class="fold-content hint">
             <p>只需安装一个 Echo 扩展。提取伴奏和电影背景音共用这台电脑上的 Python、FFmpeg 和分离模型；普通配音、录音与回放无需这些组件。</p>
             <p>① macOS / Linux：在项目目录运行 <code>bash start-karaoke.sh</code>。Windows：按下方说明准备组件，再运行 <code>powershell -NoProfile -ExecutionPolicy Bypass -File .\\start-karaoke.ps1</code>。以后使用同一命令启动。<br>② 保持终端开启，回到这里点击“重新检测”，再生成伴奏。首次下载模型及分离歌曲可能需要几分钟。</p>
@@ -300,12 +304,7 @@
             <p>建议戴耳机录音。分离结果可能残留原唱或对白，也可能损失部分环境音。</p>
           </div></details>
         <div class="utility-row"><span class="hint" id="karaokeService" role="status">伴奏服务 · 尚未检测</span><button id="checkKaraoke" class="text-button">重新检测</button></div></div>
-          <div class="settings-group"><h3>生成偏好</h3><div class="row readiness-row" id="songReadinessRow" hidden><span class="hint" id="songReadiness"></span></div>          <div class="field-heading"><label for="backingModel">分离模型</label><button id="manageModels" class="text-button" aria-haspopup="dialog">管理模型 →</button></div><select id="backingModel"><option value="demucs-htdemucs">通用 · Demucs</option><option id="banditModelOption" value="bandit-v2-multi">电影背景音 · BandIt</option></select><p class="hint field-note" id="backingModelHint"></p><div class="field-heading"><label for="backingQuality">伴奏／背景音音质</label></div><select id="backingQuality" aria-describedby="backingQualityHint"><option value="standard">标准 · MP3</option><option value="lossless">无损 · FLAC</option></select><p class="hint field-note" id="backingQualityHint"></p>
-
-          </div>
-
-        </section><section id="settings-generation" class="fold-content" hidden>
-          <div class="utility-row"><p class="hint">选择要准备的音频范围，不改变录音选段。</p><button id="generationSettings" class="text-button">伴奏与背景音设置 →</button></div>
+          <div class="settings-group"><div class="field-heading"><strong>模型准备</strong><button id="manageModels" class="text-button" aria-haspopup="dialog">管理与下载模型</button></div><p id="backingSetupStatus" class="hint" role="status"></p></div><div class="utility-row"><p class="hint">选择要准备的音频范围，不改变录音选段。</p><button id="generationSettings" class="text-button">模型与音质</button></div>
           <div class="field-heading"><label for="generationScope">生成范围</label></div>
           <select id="generationScope"><option id="generationWholeOption" value="whole">整首／整段视频</option><option id="generationCurrentOption" value="current" selected>当前练习范围</option><option id="generationParagraphOption" value="paragraph">自定义段落</option><option value="custom">自定义时间区间</option></select>
           <div id="generationParagraph" hidden><div class="row"><label for="generationFirst">起句</label><select id="generationFirst" aria-label="生成段落起句"></select></div><div class="row"><label for="generationLast">止句</label><select id="generationLast" aria-label="生成段落止句"></select></div><p class="hint">包含起止句及中间的连续多句，最长 10 分钟。</p></div><p id="generationParagraphHint" class="hint" hidden>读取或导入至少两句字幕后，可按句选择自定义段落。</p>
