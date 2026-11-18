@@ -3,7 +3,7 @@ const assert=require('node:assert/strict');
 const {attach}=require('../extension/subtitle-editor-view.js');
 const D=require('../extension/subtitle-editor.js');
 function fixture({applyWait=null,draftError=false}={}){
-  const nodes=new Map(),listeners=new Map(),videoListeners=new Map(),frames=new Map(),drafts=[],exports=[];let applied=null,closed=0,rafId=0;
+  const nodes=new Map(),listeners=new Map(),videoListeners=new Map(),frames=new Map(),drafts=[],exports=[];let applied=null,closed=0,rafId=0,plays=0;
   class Element{
     constructor(){this.children=[];this.style={};this.attrs={};this.value='';this.checked=false;this.scrollTop=0;this.classList={toggle(){}};this.dataset={};}
     append(...items){this.children.push(...items);}replaceChildren(...items){this.children=items;}
@@ -12,11 +12,11 @@ function fixture({applyWait=null,draftError=false}={}){
   for(const match of require('../extension/panel-view.js').html.matchAll(/\bid="(se[^"]+)"/g))nodes.set(match[1],new Element());
   const doc={createElement:()=>new Element(),addEventListener:(name,fn)=>listeners.set(name,fn),removeEventListener:name=>listeners.delete(name)};
   const env={setTimeout,clearTimeout,requestAnimationFrame:fn=>{const id=++rafId;frames.set(id,fn);return id;},cancelAnimationFrame:id=>frames.delete(id)};
-  const video={duration:120,currentTime:0,paused:true,muted:true,playbackRate:.75,pause(){const was=this.paused;this.paused=true;if(!was)videoListeners.get('pause')?.();},async play(){this.paused=false;videoListeners.get('play')?.();},addEventListener:(name,fn)=>videoListeners.set(name,fn),removeEventListener:name=>videoListeners.delete(name)};
+  const video={duration:120,currentTime:0,paused:true,muted:true,playbackRate:.75,pause(){const was=this.paused;this.paused=true;if(!was)videoListeners.get('pause')?.();},async play(){plays++;this.paused=false;videoListeners.get('play')?.();},addEventListener:(name,fn)=>videoListeners.set(name,fn),removeEventListener:name=>videoListeners.delete(name)};
   const editor=attach({view:{getElementById:id=>nodes.get(id)},doc,env,domain:D,onApply:async cues=>{applied=cues;if(applyWait)await applyWait;},onDraft:async(id,draft)=>{if(draftError)throw Error("Storage full");drafts.push({id,draft});},onExport:(text,format)=>exports.push({text,format}),onClose:()=>closed++});
   const cues=Array.from({length:1000},(_,i)=>({start:i*.1,end:i*.1+.1,text:`Line ${i}`,key:`stable-${i}`}));
   const $=id=>nodes.get('se'+id);
-  return {editor,video,cues,$,listeners,videoListeners,frames,drafts,exports,get applied(){return applied;},get closed(){return closed;}};
+  return {editor,video,cues,$,listeners,videoListeners,frames,drafts,exports,get applied(){return applied;},get closed(){return closed;},get plays(){return plays;}};
 }
 test('editor lazily mounts bounded lists and releases playback resources on close',async()=>{
   const f=fixture();assert.equal(f.frames.size,0);assert.equal(f.videoListeners.size,0);
@@ -126,4 +126,31 @@ test('cleared rows and marking cursor survive restore, undo restores the cleared
   await f.editor.flush();const draft=f.drafts.at(-1).draft;f.editor.close();await f.editor.flush();f.editor.open({videoId:'restore-holes',video:f.video,cues,draft});assert.match(f.$('MarkSelection').textContent,/第 2 行/);assert.equal(f.$('Lane').children.length,2);
   await f.$('List').children[3].onclick();assert.equal(f.video.currentTime,30);assert.equal(f.video.paused,false);assert.match(f.$('MarkSelection').textContent,/第 2 行/);
   f.$('Srt').onclick();assert.equal(f.exports.length,0);mark(f,20,30);await f.$('Apply').onclick();assert.equal(f.applied[2].start,30);await f.editor.flush();
+});
+
+const wheel=(f,edge,deltaY,extra={})=>{let prevented=false;f.$(edge).onwheel({deltaY,deltaMode:0,timeStamp:100,preventDefault(){prevented=true;},stopPropagation(){},...extra});return prevented;};
+const waitForWheelPreview=()=>new Promise(resolve=>setTimeout(resolve,160));
+test('wheel start adjustment moves by half a second and previews forward inside the cue',async()=>{
+  const f=fixture();f.editor.open({videoId:'wheel-start',video:f.video,cues:[{start:10,end:20,text:'One'}]});
+  assert.equal(wheel(f,'Start',-100),true);assert.equal(f.$('Start').value,'00:00:10.500');await waitForWheelPreview();assert.equal(f.video.currentTime,10.5);assert.equal(f.video.paused,false);
+  f.video.currentTime=13.7;f.videoListeners.get('timeupdate')();assert.equal(f.video.paused,true);assert.equal(f.video.currentTime,13.5);f.$('Undo').onclick();assert.equal(f.$('Start').value,'00:00:10.000');f.editor.close();await f.editor.flush();
+});
+test('wheel end adjustment links the neighbour and auditions the seconds before the new end',async()=>{
+  const f=fixture();f.editor.open({videoId:'wheel-end',video:f.video,cues:[{start:10,end:20,text:'One'},{start:20,end:30,text:'Two'}]});
+  wheel(f,'End',100);assert.equal(f.$('End').value,'00:00:19.500');await waitForWheelPreview();assert.equal(f.video.currentTime,16.5);
+  f.video.currentTime=19.8;f.videoListeners.get('timeupdate')();assert.equal(f.video.paused,true);assert.equal(f.video.currentTime,19.5);await f.editor.flush();assert.equal(f.drafts.at(-1).draft.cues[1].start,19.5);f.editor.close();await f.editor.flush();
+});
+test('rapid wheel events coalesce audio preview and small trackpad deltas accumulate instead of jumping per event',async()=>{
+  const f=fixture();f.editor.open({videoId:'wheel-burst',video:f.video,cues:[{start:10,end:20,text:'One'}]});
+  for(let i=0;i<3;i++)wheel(f,'End',-100);assert.equal(f.$('End').value,'00:00:21.500');assert.equal(f.plays,0);await waitForWheelPreview();assert.equal(f.plays,1);assert.equal(f.video.currentTime,18.5);
+  wheel(f,'Start',10);assert.equal(f.$('Start').value,'00:00:10.000');for(let i=0;i<3;i++)wheel(f,'Start',10);assert.equal(f.$('Start').value,'00:00:09.500');f.editor.close();await waitForWheelPreview();assert.equal(f.plays,1);await f.editor.flush();
+});
+test('invalid wheel adjustments, modifiers and unmarked lyrics never start preview or change valid timing',async()=>{
+  const f=fixture();f.editor.open({videoId:'wheel-invalid',video:f.video,cues:[{start:0,end:1,text:'One'}]});wheel(f,'Start',100);assert.match(f.$('Message').textContent,/时间无效/);assert.equal(f.$('Start').value,'00:00:00.000');
+  assert.equal(wheel(f,'End',-100,{ctrlKey:true}),false);assert.equal(f.$('End').value,'00:00:01.000');await waitForWheelPreview();assert.equal(f.plays,0);
+  f.$('ClearTiming').onclick();assert.equal(wheel(f,'Start',-100),false);f.editor.close();await f.editor.flush();
+});
+test('seeking cancels a queued wheel preview and short cue previews stay within its boundaries',async()=>{
+  const f=fixture();f.editor.open({videoId:'wheel-cancel',video:f.video,cues:[{start:10,end:11,text:'Short'}]});wheel(f,'Start',-100);f.$('Seek').value='50';f.$('Seek').oninput();await waitForWheelPreview();assert.equal(f.video.currentTime,50);assert.equal(f.plays,0);
+  wheel(f,'End',-100);await waitForWheelPreview();assert.equal(f.video.currentTime,10.5);f.video.currentTime=12;f.videoListeners.get('timeupdate')();assert.equal(f.video.paused,true);assert.equal(f.video.currentTime,11.5);f.editor.close();await f.editor.flush();
 });

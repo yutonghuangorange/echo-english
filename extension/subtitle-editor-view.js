@@ -2,7 +2,8 @@
 (function(root){
   function attach({view,doc=root.document,env=root,domain=root.EchoSubtitleEditor,onApply,onDraft=async()=>{},onExport,onClose=()=>{}}){
     const $=id=>view.getElementById('se'+id),dialog=$('Dialog'),D=domain;
-    const rowHeight=58,rows=new Map(),blocks=new Map();
+    const rowHeight=58,edgePreviewSeconds=3,rows=new Map(),blocks=new Map();
+    let edgePreviewTimer=null,wheelGesture=null;
     let cues=[],timingSlots=[],mapping=null,mappingError='',workflow='cues',pendingSlotStart=null,markingIndex=-1,playbackCues=[];
     let selected=0,duration=0,video=null,videoId='',windowStart=0,span=60,history=[],future=[];
     let revision=0,savedRevision=-1,saveTimer=null,pendingSave=Promise.resolve(),raf=0,active=-1,preview=null,mediaState=null,drag=null,listFirst=-1;
@@ -43,7 +44,7 @@
       selected=Math.max(0,Math.min(selected,cues.length-1));stopPreview();changed();draw();message(note);
     }
     function select(index){
-      selected=index;
+      cancelEdgePreview();selected=index;
       const cue=cues[index];if(workflow==='slots' && !D.isTimed(cue) && index<mapping.lineCount && markingIndex!==index){markingIndex=index;pendingSlotStart=null;}if(D.isTimed(cue) && (cue.start<windowStart || cue.start>=windowStart+span))windowStart=Math.max(0,cue.start-span*.15);
       draw();changed();
     }
@@ -117,7 +118,8 @@
       if(box.hidden)return;
       const summary=doc.createElement('div');summary.textContent=`黄色区间缺少 ${mapping.missingLyrics} 行歌词，请补充歌词或删除多余区间。`;box.append(summary);
     }
-    function stopPreview(){preview=null;if(raf)env.cancelAnimationFrame(raf);raf=0;if(video)video.pause?.();$('Play').textContent='▶ 播放';}
+    function cancelEdgePreview(){if(edgePreviewTimer!==null){env.clearTimeout(edgePreviewTimer);edgePreviewTimer=null;}}
+    function stopPreview(){cancelEdgePreview();preview=null;if(raf)env.cancelAnimationFrame(raf);raf=0;if(video)video.pause?.();$('Play').textContent='▶ 播放';}
     function finishPreview(){const end=preview.end;stopPreview();video.currentTime=end;positionPlayhead();}
     function positionPlayhead(){if(!video)return;const time=video.currentTime || 0;$('Clock').textContent=D.time(time);$('Seek').value=String(time);const x=(time-windowStart)/span*100;$('Playhead').hidden=x<0 || x>100;$('Playhead').style.left=`${x}%`;}
     function tick(){
@@ -131,13 +133,33 @@
     }
     function onPlay(){if(!raf && isOpen())raf=env.requestAnimationFrame(tick);}
     function onTime(){if(preview && !preview.loop && video.currentTime>=preview.end){finishPreview();return;}if(!raf)tick();}
+    async function playInterval(start,end,loop=false){
+      cancelEdgePreview();preview={start,end,loop};video.currentTime=start;video.playbackRate=Number($('Speed').value) || 1;
+      positionPlayhead();await video.play();onPlay();
+    }
     async function play(range=false){
-      if(!video)return;
+      if(!video)return;cancelEdgePreview();
       if(!range && !video.paused){stopPreview();return;}
-      if(range && !D.isTimed(cues[selected]))throw Error('这一句还没有时间，请先标记开始和结束。');
-      preview=range?{start:cues[selected].start,end:cues[selected].end,loop:$('Loop').checked}:null;
-      if(range)video.currentTime=preview.start;video.playbackRate=Number($('Speed').value) || 1;
-      await video.play();onPlay();
+      if(range){if(!D.isTimed(cues[selected]))throw Error('这一句还没有时间，请先标记开始和结束。');return playInterval(cues[selected].start,cues[selected].end,$('Loop').checked);}
+      preview=null;video.playbackRate=Number($('Speed').value) || 1;await video.play();onPlay();
+    }
+    function wheelEdge(edge,event){
+      if(!isOpen() || mappingError || !D.isTimed(cues[selected]) || !event.deltaY || Math.abs(event.deltaX || 0)>Math.abs(event.deltaY) || event.ctrlKey || event.metaKey || event.altKey || event.shiftKey)return;
+      event.preventDefault();event.stopPropagation();
+      // A wheel notch is one step; accumulate small touchpad deltas instead of
+      // treating every pixel event as another half second.
+      const sign=Math.sign(event.deltaY),time=event.timeStamp || Date.now(),amount=Math.min(40,Math.abs(event.deltaY)*(event.deltaMode===1?16:event.deltaMode===2?40:1));
+      if(!wheelGesture || wheelGesture.index!==selected || wheelGesture.edge!==edge || wheelGesture.sign!==sign || time-wheelGesture.time>200)wheelGesture={index:selected,edge,sign,amount:0,time};
+      wheelGesture.amount+=amount;wheelGesture.time=time;if(wheelGesture.amount<40)return;wheelGesture.amount-=40;
+      const value=Math.round((cues[selected][edge]-sign*.5)*1000)/1000;
+      const next=D.edge(cues,selected,edge,value,duration,$('Link').checked);
+      commit(next,`${edge==='start'?'起点':'终点'}已调整到 ${D.time(value)}，自动试听${edge==='start'?'开头':'结尾'}最多 3 秒。`);
+      const version=revision,id=videoId,index=selected;
+      edgePreviewTimer=env.setTimeout(()=>{
+        edgePreviewTimer=null;if(!isOpen() || revision!==version || videoId!==id || selected!==index)return;
+        const cue=cues[index],start=edge==='start'?cue.start:Math.max(cue.start,cue.end-edgePreviewSeconds),end=edge==='start'?Math.min(cue.end,cue.start+edgePreviewSeconds):cue.end;
+        safely(()=>playInterval(start,end))();
+      },120);
     }
     function updateEdge(edge,value){commit(D.edge(cues,selected,edge,value,duration,$('Link').checked));}
     function beginDrag(event,index,edge){
@@ -167,7 +189,7 @@
       for(const name of ['play','pause','timeupdate','seeked','ended'])video?.removeEventListener?.(name,name==='play'?onPlay:onTime);
       if(saveTimer!==null || savedRevision!==revision)void saveDraft();if(mediaState && video){video.muted=mediaState.muted;video.playbackRate=mediaState.speed;}
       if(dialog.close)dialog.close();else dialog.open=false;
-      video=null;mediaState=null;cues=[];history=[];future=[];timingSlots=[];mapping=null;pendingSlotStart=null;markingIndex=-1;playbackCues=[];rows.clear();blocks.clear();
+      video=null;mediaState=null;cues=[];history=[];future=[];timingSlots=[];mapping=null;pendingSlotStart=null;markingIndex=-1;playbackCues=[];wheelGesture=null;rows.clear();blocks.clear();
       for(const id of ['List','Lane'])$(id).replaceChildren();$('Paste').value='';$('Text').value='';onClose();
     }
     function open(options){
@@ -233,13 +255,14 @@
     });
     $('Undo').onclick=()=>{if(!history.length)return;future.push(state());restore(history.pop());};
     $('Redo').onclick=()=>{if(!future.length)return;history.push(state());restore(future.pop());};
+    for(const edge of ['start','end'])$(edge==='start'?'Start':'End').addEventListener('wheel',safely(event=>wheelEdge(edge,event)),{passive:false});
     $('Start').onchange=safely(()=>updateEdge('start',D.parseTime($('Start').value)));$('End').onchange=safely(()=>updateEdge('end',D.parseTime($('End').value)));
     $('MarkStart').onclick=safely(()=>updateEdge('start',video.currentTime));$('MarkEnd').onclick=safely(()=>updateEdge('end',video.currentTime));
     for(const edge of ['Start','End'])$('Fixed'+edge).onchange=safely(()=>{const next=D.copy(cues);next[selected][edge.toLowerCase()+'Locked']=$('Fixed'+edge).checked;commit(next);});
     $('TextApply').onclick=safely(()=>commit(D.replaceText(cues,selected,$('Text').value,duration),'文字已更新；换行拆成多句。'));
     $('Merge').onclick=safely(()=>commit(D.merge(cues,selected,selected+1,duration),'已与下一句合并，可撤销。'));
     $('Play').onclick=safely(()=>play());$('PlayRange').onclick=safely(()=>play(true));$('Pause').onclick=stopPreview;
-    $('Seek').oninput=()=>{preview=null;video.currentTime=Number($('Seek').value);positionPlayhead();};
+    $('Seek').oninput=()=>{cancelEdgePreview();preview=null;video.currentTime=Number($('Seek').value);positionPlayhead();};
     $('Speed').onchange=()=>{video.playbackRate=Number($('Speed').value);};
     $('Zoom').oninput=()=>{span=Number($('Zoom').value);drawTimeline();};$('Window').oninput=()=>{windowStart=Number($('Window').value);drawTimeline();};
     $('Follow').onclick=()=>{windowStart=Math.max(0,video.currentTime-span*.2);drawTimeline();};
