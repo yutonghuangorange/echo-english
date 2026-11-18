@@ -164,7 +164,7 @@
     </div>
     <div id="practiceUtilities" class="practice-utilities">        <button id="practiceTools" class="utility-setting" aria-haspopup="dialog"><span id="practiceToolsSummary">练习设置</span><small id="practiceToolsState"></small><span aria-hidden="true">›</span></button>
 
-<button id="backingSettings" class="utility-setting" aria-haspopup="dialog"><span id="backingPreferencesTitle">伴奏</span><small id="backingSummary">当前范围未准备</small><span aria-hidden="true">›</span></button>
+<button id="backingSettings" class="utility-setting" aria-haspopup="dialog"><span id="backingPreferencesTitle">生成伴奏</span><small id="backingSummary">当前范围未准备</small><span aria-hidden="true">›</span></button>
 <button id="practiceSettings" class="utility-setting" aria-haspopup="dialog"><span>录音设置</span><small id="speedSummary"></small><span aria-hidden="true">›</span></button>
 </div><div id="practiceDock" class="practice-dock">
       <div class="dock-heading-row"><div class="dock-heading">播放与录音</div></div><div class="main-actions"><button id="original">▶ 听原声</button><button id="replay" disabled>▷ 回听录音</button><button class="primary" id="record">● 开始配音</button></div>

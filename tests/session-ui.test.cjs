@@ -2091,12 +2091,12 @@ test('main background entry generates each selected clip without requiring prior
   nodes.get('backingSettings').onclick();assert.equal(nodes.get('settings-backing').hidden,false);
   assert.equal(nodes.get('prepareBacking').disabled,false);
   await nodes.get('prepareBacking').onclick();
-  assert.equal(nodes.get('recordingPlayback').value,'backing');assert.match(nodes.get('backingSummary').textContent,/已就绪/);
+  assert.equal(nodes.get('recordingPlayback').value,'backing');assert.match(nodes.get('backingSummary').textContent,/已就绪/);assert.equal(nodes.get('backingPreferencesTitle').textContent,'调整背景音');
   nodes.get('clipCue').value='1';nodes.get('clipCue').onchange();
   assert.match(nodes.get('backingSummary').textContent,/未准备|可选/);
   nodes.get('backingSettings').onclick();await nodes.get('prepareBacking').onclick();
   assert.deepEqual(starts.map(r=>[r.start,r.end]),[[0,5],[5,10]]);
-  assert.match(nodes.get('backingSummary').textContent,/已就绪/);
+  assert.match(nodes.get('backingSummary').textContent,/已就绪/);assert.equal(nodes.get('backingPreferencesTitle').textContent,'调整背景音');
   assert.equal((await storage.listBackings('video')).length,2);(await storage.ready).close();
 });
 
@@ -2107,7 +2107,7 @@ test('unified backing entry exposes preparation and preserves scope across model
     return {audio:'UklGRg==',mime:'audio/wav'};
   }}}}});
   nodes.get('backingSettings').onclick();assert.equal(nodes.get('settings-backing').hidden,false);
-  assert.equal(nodes.get('backingPreferencesTitle').textContent,'背景音');
+  assert.equal(nodes.get('backingPreferencesTitle').textContent,'生成背景音');
   nodes.get('closeSettings').onclick();assert.doesNotMatch(nodes.get('backingPreferencesTitle').textContent,/→|->/);
   nodes.get('backingSettings').onclick();
   assert.equal(nodes.get('settings-backing').hidden,false);assert.equal(nodes.get('settings-backingOptions').hidden,true);assert.equal(nodes.get('settingsTabs').hidden,false);

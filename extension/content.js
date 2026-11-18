@@ -530,7 +530,7 @@
     for(const id of ['generationScope','generationStart','generationEnd','generationFirst','generationLast'])$(id).disabled=busy;
     $('previewBacking').disabled=busy || !generationReady;
     $('songReadiness').textContent=!usesBacking()?(recordingPlayback()==='original'?'录音时播放原曲／原声':isSinging()?'清唱 · 不播放伴奏':'录音时不播放背景音'):ready?`${name}已就绪`:mode==='separating'?`正在准备${name}…`:restoringBacking?`正在查找已有${name}…`:`尚未准备${name}`;
-    $('backingPreferencesTitle').textContent=isSinging()?'伴奏':'背景音';
+    $('backingPreferencesTitle').textContent=`${ready?'调整':'生成'}${name}`;
     $('backingSummary').textContent=mode==='separating'?'正在生成…':ready?'当前范围已就绪':!usesBacking()?'可选 · 未准备':'当前范围未准备';
     $('backingSettings').title=`生成、试听与设置 · ${$('backingSummary').textContent}`;
     $('prepareBacking').disabled=busy || !!generationReady || !!generated.error;
@@ -544,7 +544,7 @@
     else if(error)$('karaokeInfo').textContent=error;
     else if(karaokeIssue)$('karaokeInfo').textContent='';
     else if(ready)$('karaokeInfo').textContent='';
-    else $('karaokeInfo').textContent=serviceState==='online'?'':serviceState==='offline'?'本机分离服务未连接。请查看设置顶部的启动说明，启动后点击“重新检测”。已有音频和录音仍可使用。':`首次使用需准备本机分离服务，点击底部“${name}”查看。`;
+    else $('karaokeInfo').textContent=serviceState==='online'?'':serviceState==='offline'?'本机分离服务未连接。请查看设置顶部的启动说明，启动后点击“重新检测”。已有音频和录音仍可使用。':`首次使用需准备本机分离服务，点击底部“生成${name}”查看。`;
   }
   function clampGain(value) {return Number.isFinite(Number(value))?Math.max(0,Math.min(2,Number(value))):1;}
   function replayMix() {
