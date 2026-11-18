@@ -776,6 +776,8 @@
   function renderSoundEffects(){
     const editable=canEditSound();
     $('vocalReverb').value=vocalReverb.reverb;
+    $('takeReverbSettings').textContent=vocalReverb.reverb==='off'?'混响 · 关闭 →':`混响 · ${vocalReverb.reverb==='ktv'?'KTV':'剧场'} ${Math.round(vocalReverb.amount*100)}% →`;
+    $('takeReverbSettings').disabled=!editable;
     $('vocalReverbAmount').value=vocalReverb.amount;
     $('vocalReverbValue').textContent=`${Math.round(vocalReverb.amount*100)}%`;
     $('vocalReverb').disabled=!editable;
@@ -796,7 +798,7 @@
     $(id).oninput=applySoundEffects;
     $(id).onchange=async()=>{if(!applySoundEffects())return;const owner=videoId,saved=await saveProgress();if(owner!==videoId)return;$('soundEffectsStatus').textContent=saved===false?'保存失败，请检查本地空间。':'已保存到本视频。原始录音保持干声。';};
   }
-  for(const id of ['openVocalSettings','micVocalSettings'])$(id).onclick=()=>{settings.open('sound',id);renderSoundEffects();};
+  for(const id of ['openVocalSettings','micVocalSettings','takeReverbSettings'])$(id).onclick=()=>{settings.open('sound',id);renderSoundEffects();};
   $('liveVocalSettings').onclick=()=>{settings.open('microphone','liveVocalSettings');renderSoundEffects();$('monitorReverb').focus();};
   const vocalEffectControls=['vocalDelay','vocalEarlier','vocalLater','vocalFadeOut','downloadVocalEffects','resetVocalEffects'];
   function renderVocalEffects(){
