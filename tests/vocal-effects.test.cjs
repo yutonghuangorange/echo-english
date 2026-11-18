@@ -23,6 +23,8 @@ test('old takes remain dry and malformed imported values are bounded',async()=>{
   assert.deepEqual(effects.normalize(null),{delayMs:0,reverb:'off',amount:0.25});
   assert.deepEqual(effects.normalize({delayMs:9000,reverb:'unknown',amount:-1}),{delayMs:2000,reverb:'off',amount:0});
   assert.equal(effects.enabled({reverb:'ktv',amount:0}),false);
+  assert.equal(effects.normalize({amount:1.5}).amount,1.5);
+  assert.equal(effects.normalize({amount:3}).amount,2);
 });
 test('positive delays insert silence, negative delays trim the beginning, range length stays fixed',async()=>{
   for(const [delayMs,expected] of [[200,[0.2,0]],[-200,[0,0.2]]]){

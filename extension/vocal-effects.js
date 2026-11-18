@@ -6,7 +6,7 @@
     return {
       delayMs: Math.round(Math.max(-2000, Math.min(2000, number(value?.delayMs, 0)))),
       reverb: Object.hasOwn(presets, value?.reverb) ? value.reverb : 'off',
-      amount: Math.max(0, Math.min(1, number(value?.amount, 0.25)))
+      amount: Math.max(0, Math.min(2, number(value?.amount, 0.25)))
     };
   }
 

@@ -161,7 +161,7 @@
             <p class="hint">人声听起来慢了就向左提前，快了就向右延后。位移按录音实际时间计算。</p>
             <div class="row"><label for="vocalReverb">混响空间</label><select id="vocalReverb"><option value="off">关闭</option><option value="ktv">KTV</option><option value="theatre">剧场</option></select></div>
             <label class="hint" for="vocalReverbAmount">混响强度 · <output id="vocalReverbValue">25%</output></label>
-            <input id="vocalReverbAmount" type="range" min="0" max="1" step="0.05" value="0.25" aria-label="混响强度">
+            <input id="vocalReverbAmount" type="range" min="0" max="2" step="0.05" value="0.25" aria-label="混响强度">
             <div class="row"><button id="previewVocalEffects">▷ 试听调整</button><button id="downloadVocalEffects">下载后期 WAV</button></div><div class="row"><button id="resetVocalEffects" class="text-button">重置此版本后期</button></div>
             <p id="vocalEffectsStatus" class="hint" role="status"></p>
             <p class="hint">播放中可直接调整并听到变化。按版本自动保存，混合及整首导出沿用设置。原始下载可保留原声。移出录音边界的声音及末尾混响会裁切。</p>
