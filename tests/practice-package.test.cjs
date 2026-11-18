@@ -4,7 +4,7 @@ const {IDBFactory}=require('fake-indexeddb');
 const {createStorage}=require('../extension/storage.js');
 const pack=require('../extension/practice-package.js');
 function snapshot(){return {
-  sessions:[{videoId:'video',title:'中文 / 日本語 🎵',start:1,end:4,speed:'1',cues:[{key:'cue',start:1,end:4,text:'Hello 世界'}],assemblyChoices:[{start:1,end:4,choice:'take',enabled:true}],selectedTakeId:'take'}],
+  sessions:[{vocalReverb:{reverb:'theatre',amount:.6},monitorReverb:true,videoId:'video',title:'中文 / 日本語 🎵',start:1,end:4,speed:'1',cues:[{key:'cue',start:1,end:4,text:'Hello 世界'}],assemblyChoices:[{start:1,end:4,choice:'take',enabled:true}],selectedTakeId:'take'}],
   recordings:[{id:'take',videoId:'video',cueKey:'cue',start:1,end:4,speed:1,createdAt:1,effects:{delayMs:-120,reverb:'ktv',amount:0.4},blob:new Blob([new Uint8Array([0,255,17,18])],{type:'audio/webm'}),url:'blob:temporary'}],
   backings:[{key:'background',videoId:'video',start:0,end:30,createdAt:1,blob:new Blob(['音乐'],{type:'audio/flac'})}],
   favorites:[{videoId:'video',title:'收藏',createdAt:2}]

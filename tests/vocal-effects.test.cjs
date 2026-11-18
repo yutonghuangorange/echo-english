@@ -79,3 +79,30 @@ test('live edits preserve the playback clock and reverb changes do not restart v
   timers.values().next().value();assert.equal(player.ended,true);assert.equal(ended,1);
   player.dispose();assert.equal(ctx.state,'closed');assert.equal(timers.size,0);
 });
+
+test('offline processing preserves stem gain until the final mix is encoded',async()=>{
+  const env=environment();
+  env.OfflineAudioContext.prototype.startRendering=async function(){this.output.getChannelData(0).set([2,.25]);return this.output;};
+  const rendered=await effects.process(buffer(),{reverb:'ktv',amount:1},env);
+  assert.equal(rendered.getChannelData(0)[0],2);
+  assert.equal(rendered.getChannelData(0)[1],.25);
+});
+
+test('seeking disconnects the old voice and rebuilds its convolution without restarting the clock',async()=>{
+  const gains=[],convolvers=[];let context;
+  class AudioContext{
+    constructor(){context=this;this.currentTime=0;this.sampleRate=1000;this.destination={};}
+    async decodeAudioData(){return buffer(10000);}
+    createBuffer(...args){return buffer(args[1],args[2],args[0]);}
+    createGain(){const node={gain:{value:1,cancelScheduledValues(){},setTargetAtTime(){},setValueAtTime(){},linearRampToValueAtTime(){}},connect(){},disconnect(){this.disconnected=true;}};gains.push(node);return node;}
+    createConvolver(){const node={connect(){},disconnect(){this.disconnected=true;}};convolvers.push(node);return node;}
+    createBufferSource(){return {connect(){},disconnect(){},start(){},stop(){}};}
+    async resume(){}async suspend(){}async close(){}
+  }
+  const player=await effects.createPlayer({blob:new Blob(),effects:{reverb:'theatre'}},1,{AudioContext,setTimeout(){},clearTimeout(){}});
+  await player.play();const oldSourceGain=gains.at(-1),oldConvolver=convolvers[0];context.currentTime=.5;
+  player.currentTime=5;
+  assert.equal(player.currentTime,5);assert.equal(oldSourceGain.disconnected,true);assert.equal(oldConvolver.disconnected,true);
+  assert.equal(convolvers.length,2);assert.equal(convolvers[0].buffer,convolvers[1].buffer); // IR cached; tail state is fresh.
+  player.dispose();
+});

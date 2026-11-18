@@ -1996,7 +1996,7 @@ test('subtitle editor is initialized on demand, loads drafts and applies stable 
   (await storage.ready).close();
 });
 
-test('post-production UI persists per-version alignment and reverb, restores on reload and resets',async()=>{
+test('alignment is per version, reverb is per video, both restore and alignment resets independently',async()=>{
   const storage=createStorage(new IDBFactory());
   await storage.saveTake({id:'voice',videoId:'video',cueKey:'manual:0:5',start:0,end:5,speed:1,createdAt:1,capture:'vocal',blob:new Blob(['voice'])});
   let {nodes}=await mount(storage);
@@ -2005,12 +2005,14 @@ test('post-production UI persists per-version alignment and reverb, restores on 
   nodes.get('vocalDelay').value='-120';await nodes.get('vocalDelay').onchange();
   nodes.get('vocalReverb').value='ktv';await nodes.get('vocalReverb').onchange();
   nodes.get('vocalReverbAmount').value='0.4';await nodes.get('vocalReverbAmount').onchange();
-  assert.deepEqual((await storage.listTakes('video'))[0].effects,{delayMs:-120,reverb:'ktv',amount:0.4});
+  assert.deepEqual((await storage.listTakes('video'))[0].effects,{delayMs:-120});
   ({nodes}=await mount(storage));nodes.get('tab-recordings').onclick();
   assert.equal(Number(nodes.get('vocalDelay').value),-120);assert.equal(nodes.get('vocalReverb').value,'ktv');
   await nodes.get('vocalEarlier').onclick();assert.equal(Number(nodes.get('vocalDelay').value),-130);
   await nodes.get('resetVocalEffects').onclick();
-  assert.deepEqual((await storage.listTakes('video'))[0].effects,{delayMs:0,reverb:'off',amount:0.25});
+  assert.equal(nodes.get('vocalReverb').value,'ktv');
+  assert.deepEqual((await storage.getSession('video')).vocalReverb,{delayMs:0,reverb:'ktv',amount:0.4});
+  assert.deepEqual((await storage.listTakes('video'))[0].effects,{delayMs:0});
   await storage.deleteTake('voice');assert.equal(await storage.updateTakeEffects('voice',{delayMs:100}),null);
   assert.equal((await storage.listTakes('video')).length,0);
   (await storage.ready).close();
@@ -2048,7 +2050,8 @@ test('editing alignment and reverb during replay updates the same player and sav
   assert.equal(players,1);assert.equal(plays,1);assert.equal(player.currentTime,2);assert.equal(video.currentTime,2);
   assert.equal(nodes.get('panel').dataset.mode,'replay');
   assert.deepEqual(player.effects,{delayMs:-120,reverb:'ktv',amount:0.5});
-  assert.deepEqual((await storage.listTakes('video'))[0].effects,player.effects);
+  assert.deepEqual((await storage.listTakes('video'))[0].effects,{delayMs:-120});
+  assert.deepEqual((await storage.getSession('video')).vocalReverb,{delayMs:0,reverb:'ktv',amount:0.5});
   nodes.get('stop').onclick();await playing;(await storage.ready).close();
 });
 
@@ -2088,5 +2091,47 @@ test('page unload detaches the pending backing poll without cancelling the serve
   await waitUntil(()=>nodes.get('panel').dataset.mode==='separating');
   events.get('pagehide')();await new Promise(resolve=>setTimeout(resolve,40));
   assert.equal(cancels,0);assert.ok(values.has('echo-backing-job:video'));
+  (await storage.ready).close();
+});
+
+test('reverb migrates from the selected legacy version, stays shared across versions and resets for another video',async()=>{
+  const storage=createStorage(new IDBFactory()),location={href:'https://www.youtube.com/watch?v=video',pathname:'/watch'};
+  const video={duration:60,currentTime:0,muted:false,playbackRate:1,pause(){},async play(){},addEventListener(){},removeEventListener(){}};
+  class Audio{constructor(){this.currentTime=0;this.duration=5;}async play(){}pause(){}}
+  for(const [id,createdAt,delayMs,reverb] of [['older',1,-120,'ktv'],['newer',2,80,'theatre']])await storage.saveTake({id,createdAt,videoId:'video',cueKey:'manual:0:5',start:0,end:5,speed:1,capture:'vocal',blob:new Blob(['voice']),effects:{delayMs,reverb,amount:.4}});
+  await storage.saveSession({videoId:'video',selectedTakeId:'older',start:0,end:5,index:-1,cues:[]});
+  const {nodes,events}=await mount(storage,{video,globals:{location,Audio}});
+  assert.equal(nodes.get('vocalReverb').value,'ktv');assert.equal(Number(nodes.get('vocalDelay').value),-120);
+  const selected=nodes.get('versionChoices').children.find(button=>button.attrs['aria-pressed']==='false');
+  const playing=selected.onclick();await waitUntil(()=>Number(nodes.get('vocalDelay').value)===80);
+  assert.equal(nodes.get('vocalReverb').value,'ktv');nodes.get('stop').onclick();await playing;
+  await nodes.get('resetVocalEffects').onclick();assert.equal(nodes.get('vocalReverb').value,'ktv');
+  assert.equal((await storage.listTakes('video')).find(t=>t.id==='older').effects.delayMs,-120);
+  nodes.get('vocalReverb').value='theatre';await nodes.get('vocalReverb').onchange();
+  location.href='https://www.youtube.com/watch?v=other';events.get('yt-navigate-finish')();await waitUntil(()=>!nodes.get('read').disabled);
+  assert.equal(nodes.get('vocalReverb').value,'off');assert.equal(nodes.get('monitorReverb').checked,false);
+  (await storage.ready).close();
+});
+
+test('recording can change headphone reverb live while the saved stream stays dry',async()=>{
+  const storage=createStorage(new IDBFactory()),video=leadInVideo({hold:true}),mic={getTracks:()=>[{stop(){}}]};let configured,liveEffects;
+  class MediaRecorder{
+    static isTypeSupported(){return true;}
+    constructor(stream){assert.equal(stream,mic);this.state='inactive';this.mimeType='audio/webm';}
+    start(){this.state='recording';}stop(){this.state='inactive';this.ondataavailable({data:new Blob(['dry vocal'])});queueMicrotask(()=>this.onstop());}
+  }
+  const microphone={...require('../extension/microphone.js'),async createInput(stream,db,env,options){configured=options;return {stream,db,dispose(){},setMonitoring(){},setMonitorReverb(value){liveEffects=value;}};}};
+  const {nodes}=await mount(storage,{video,globals:{MediaRecorder,EchoMicrophone:microphone,navigator:{mediaDevices:{getUserMedia:async()=>mic}}}});
+  nodes.get('sidetoneEnabled').checked=true;nodes.get('sidetoneEnabled').onchange();
+  const recording=nodes.get('record').onclick();await waitUntil(()=>configured && nodes.get('panel').dataset.mode==='recording');
+  assert.equal(configured.sidetone,true);assert.equal(configured.sidetoneReverb.reverb,undefined);
+  nodes.get('liveVocalSettings').onclick();assert.equal(nodes.get('settings-sound').hidden,false);
+  nodes.get('vocalReverb').value='ktv';await nodes.get('vocalReverb').onchange();
+  nodes.get('monitorReverb').checked=true;await nodes.get('monitorReverb').onchange();
+  assert.equal(liveEffects.reverb,'ktv');assert.equal(liveEffects.delayMs,0);
+  nodes.get('monitorReverb').checked=false;await nodes.get('monitorReverb').onchange();assert.equal(liveEffects.reverb,undefined);
+  nodes.get('closeSettings').onclick();nodes.get('stop').onclick();await recording;
+  assert.equal(await (await storage.listTakes('video'))[0].blob.text(),'dry vocal');
+  const saved=await storage.getSession('video');assert.equal(saved.vocalReverb.reverb,'ktv');assert.equal(saved.monitorReverb,false);
   (await storage.ready).close();
 });

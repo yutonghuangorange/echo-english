@@ -15,8 +15,11 @@
     return effects.delayMs !== 0 || (effects.reverb !== 'off' && effects.amount > 0);
   }
 
+  const impulseCache = new WeakMap();
   // A seeded stereo impulse keeps repeated previews and exports identical.
   function impulse(context, preset) {
+    const cached = impulseCache.get(context);
+    if (cached?.[preset]) return cached[preset];
     const {seconds, preDelay} = presets[preset];
     const length = Math.ceil(seconds * context.sampleRate);
     const buffer = context.createBuffer(2, length, context.sampleRate);
@@ -28,7 +31,42 @@
         data[i] = (seed / 2147483648 - 1) * Math.exp(-7 * i / length);
       }
     }
+    impulseCache.set(context,{...cached,[preset]:buffer});
     return buffer;
+  }
+
+  // Shared by playback, offline export and headphone monitoring. The dry
+  // connection stays direct; convolution is allocated only when requested.
+  function createReverb(context, input, output, value = {}) {
+    let current = normalize(value), convolver = null, wet = null;
+    input.connect(output);
+    function clear() {
+      if (convolver) {input.disconnect(convolver); convolver.disconnect(); wet?.disconnect();}
+      convolver = wet = null;
+    }
+    function set(value, reset = false) {
+      const next = normalize(value);
+      if (reset || next.reverb !== current.reverb || !convolver && next.reverb !== 'off' && next.amount > 0) {
+        let replacement = null, replacementWet = null;
+        if (next.reverb !== 'off' && next.amount > 0) {
+          replacement = context.createConvolver();
+          try {
+            replacement.buffer = impulse(context, next.reverb);
+            replacementWet = context.createGain();replacementWet.gain.value = next.amount;
+          } catch (error) {replacement.disconnect();replacementWet?.disconnect();throw error;}
+        }
+        clear();convolver = replacement;wet = replacementWet;
+        if (convolver) {input.connect(convolver);convolver.connect(wet);wet.connect(output);}
+      }
+      if (wet) {
+        const amount = next.reverb === 'off' ? 0 : next.amount;
+        if (wet.gain.setTargetAtTime) {wet.gain.cancelScheduledValues(context.currentTime);wet.gain.setTargetAtTime(amount,context.currentTime,0.01);}
+        else wet.gain.value = amount;
+      }
+      current = next;
+    }
+    try {set(current, true);} catch (error) {clear();input.disconnect(output);throw error;}
+    return {set, reset: () => set(current, true), dispose() {clear();input.disconnect(output);}};
   }
 
   async function process(buffer, value, env = root) {
@@ -37,28 +75,12 @@
     const context = new env.OfflineAudioContext(2, buffer.length, buffer.sampleRate);
     const source = context.createBufferSource();
     source.buffer = buffer;
-    source.connect(context.destination);
-    if (effects.reverb !== 'off' && effects.amount > 0) {
-      const reverb = context.createConvolver();
-      reverb.buffer = impulse(context, effects.reverb);
-      const wet = context.createGain();
-      wet.gain.value = effects.amount;
-      source.connect(reverb);
-      reverb.connect(wet);
-      wet.connect(context.destination);
-    }
+    createReverb(context, source, context.destination, effects);
     const offset = Math.max(0, -effects.delayMs / 1000);
     if (offset < buffer.duration) source.start(Math.max(0, effects.delayMs / 1000), offset);
     const rendered = await context.startRendering();
-    // Prevent clipping in processed vocal downloads and assembled mixes.
-    let peak = 1;
-    for (let c = 0; c < rendered.numberOfChannels; c++) {
-      for (const sample of rendered.getChannelData(c)) peak = Math.max(peak, Math.abs(sample));
-    }
-    if (peak > 1) for (let c = 0; c < rendered.numberOfChannels; c++) {
-      const data = rendered.getChannelData(c);
-      for (let i = 0; i < data.length; i++) data[i] /= peak;
-    }
+    // Keep the vocal/backing ratio unchanged. Normalize only the final file,
+    // after all stems have been mixed, never individual takes.
     return rendered;
   }
 
@@ -91,11 +113,6 @@
     } finally {await context.close();}
   }
 
-  async function preview(take, env = root) {
-    if (take.capture !== 'vocal' || take.withBacking || !enabled(take.effects)) return take.blob;
-    return wav(await renderTake(take, env));
-  }
-
   // One decoded vocal buffer and a stable clock allow edits during playback.
   // Alignment reschedules only the vocal source; video/accompaniment keep their position.
   async function createPlayer(take, volume = 1, env = root) {
@@ -106,10 +123,11 @@
     let effects = normalize(take.effects), position = 0, startedAt = 0;
     let playing = false, disposed = false, source = null, sourceGain = null, timer = 0, playbackRevision = 0;
     const listeners = new Map();
-    const output = context.createGain(), wet = context.createGain();
+    const output = context.createGain(), vocalBus = context.createGain();
     output.connect(context.destination);
-    wet.connect(output);
-    let reverb = null, reverbPreset = 'off';
+    let reverb;
+    try {reverb = createReverb(context, vocalBus, output, effects);}
+    catch (error) {vocalBus.disconnect();output.disconnect();await context.close();throw error;}
     const clock = () => playing ? Math.min(buffer.duration, position + context.currentTime - startedAt) : position;
     const emit = name => {player['on' + name]?.(); for (const listener of listeners.get(name) || []) listener();};
     const smooth = (param, value) => {
@@ -119,11 +137,12 @@
     function setVolume(value) {
       smooth(output.gain, Number.isFinite(Number(value)) ? Math.max(0, Math.min(2, Number(value))) : 1);
     }
-    function stopSource() {
+    function stopSource(hard = false) {
       env.clearTimeout(timer);
       timer = 0;
       if (source) {
         const old = source, gain = sourceGain;
+        if (hard) gain.disconnect();
         gain.gain.cancelScheduledValues(context.currentTime);
         gain.gain.setTargetAtTime(0, context.currentTime, 0.003);
         old.onended = () => {old.disconnect(); gain.disconnect();};
@@ -131,22 +150,9 @@
         source = sourceGain = null;
       }
     }
-    function configureReverb() {
-      if (effects.reverb !== reverbPreset) {
-        if (reverb) {sourceGain?.disconnect(reverb); reverb.disconnect();}
-        reverb = null;
-        reverbPreset = effects.reverb;
-        if (reverbPreset !== 'off') {
-          reverb = context.createConvolver();
-          reverb.buffer = impulse(context, reverbPreset);
-          reverb.connect(wet);
-          sourceGain?.connect(reverb);
-        }
-      }
-      smooth(wet.gain, effects.reverb === 'off' ? 0 : effects.amount);
-    }
-    function schedule() {
-      stopSource();
+    function schedule(reset = false) {
+      stopSource(reset);
+      if (reset) reverb.reset();
       if (!playing || disposed) return;
       const at = clock(), delay = effects.delayMs / 1000;
       const offset = Math.max(0, at - delay);
@@ -157,8 +163,7 @@
         sourceGain.gain.setValueAtTime(0, context.currentTime);
         sourceGain.gain.linearRampToValueAtTime(1, context.currentTime + 0.01);
         source.connect(sourceGain);
-        sourceGain.connect(output);
-        if (reverb) sourceGain.connect(reverb);
+        sourceGain.connect(vocalBus);
         source.start(context.currentTime + Math.max(0, delay - at), offset);
       }
       timer = env.setTimeout(() => {
@@ -176,7 +181,7 @@
       set currentTime(value) {
         position = Math.max(0, Math.min(buffer.duration, Number(value) || 0));
         startedAt = context.currentTime;
-        schedule();
+        schedule(true);
       },
       get duration() {return buffer.duration;},
       get paused() {return !playing;},
@@ -201,8 +206,8 @@
       setEffects(value) {
         const next = normalize(value), moved = next.delayMs !== effects.delayMs;
         effects = next;
-        configureReverb();
-        if (moved) schedule();
+        reverb.set(effects);
+        if (moved) schedule(true);
       },
       setVolume,
       addEventListener(name, listener) {
@@ -213,16 +218,16 @@
       dispose() {
         if (disposed) return;
         player.pause(); disposed = true;
-        reverb?.disconnect(); wet.disconnect(); output.disconnect();
+        reverb.dispose(); vocalBus.disconnect(); output.disconnect();
         void context.close().catch(() => {});
       }
     };
-    setVolume(volume); configureReverb();
+    setVolume(volume);
     await context.suspend();
     return player;
   }
 
-  const api = {normalize, enabled, impulse, process, wav, renderTake, preview, createPlayer};
+  const api = {normalize, enabled, impulse, createReverb, process, wav, renderTake, createPlayer};
   if (typeof module !== 'undefined') module.exports = api;
   else root.EchoVocalEffects = api;
 })(globalThis);

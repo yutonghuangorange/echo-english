@@ -104,3 +104,24 @@ test('failed experimental sidetone startup requests an explicit return to standa
   await assert.rejects(createInput('microphone',0,f.env,{sidetone:true,sidetoneMode:'minimum'}),/切回标准模式/);
   assert.equal(f.closed,1);
 });
+
+test('experimental reverb is confined to the headphone branch and can change without reacquiring capture',async()=>{
+  let context;const mic={},encodedStream={},speaker={},edges=new Map();
+  function node(){const value={gain:{value:1},connect(to){if(!edges.has(value))edges.set(value,new Set());edges.get(value).add(to);},disconnect(to){if(to)edges.get(value)?.delete(to);else edges.delete(value);}};return value;}
+  class AudioContext{
+    constructor(){context=this;this.sampleRate=1000;this.destination=speaker;this.state='running';}
+    createMediaStreamSource(){return this.source=node();}
+    createMediaStreamDestination(){return this.encoded=Object.assign(node(),{stream:encodedStream});}
+    createGain(){return node();}createConvolver(){return this.convolver=node();}
+    createBuffer(channels,length){return {getChannelData:()=>new Float32Array(length)};}
+    async resume(){}async close(){}
+  }
+  encodedStream.getTracks=()=>[];
+  const input=await createInput(mic,6,{AudioContext},{sidetone:true,sidetoneReverb:{reverb:'ktv',amount:.4}});
+  const reaches=(from,to,visited=new Set())=>{if(from===to)return true;if(visited.has(from))return false;visited.add(from);return [...edges.get(from) || []].some(next=>reaches(next,to,visited));};
+  assert.equal(input.stream,encodedStream);assert(reaches(context.source,context.encoded));assert(reaches(context.convolver,speaker));assert(!reaches(context.convolver,context.encoded));
+  const first=context.convolver;input.setMonitorReverb({reverb:'theatre',amount:.6});
+  assert.notEqual(context.convolver,first);assert(!reaches(first,speaker));assert(!reaches(context.convolver,context.encoded));
+  input.setMonitoring(true);input.setMonitoring(false);input.setMonitorReverb({});
+  assert(!reaches(context.convolver,speaker));assert(reaches(context.source,context.encoded));input.dispose();
+});

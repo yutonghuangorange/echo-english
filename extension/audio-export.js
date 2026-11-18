@@ -57,13 +57,14 @@
     if(end<duration)gaps.push({start:end,end:duration});
     return {segments,gaps,duration};
   }
-  async function render({takes,duration,origin=0,selection=null,backing=null,volume=1,vocalVolume=1,sampleRate=44100,active=()=>true},env=root){
+  async function render({takes,duration,origin=0,selection=null,reverb={},backing=null,volume=1,vocalVolume=1,sampleRate=44100,active=()=>true},env=root){
     const shifted=takes.map(t=>({...t,start:t.start-origin,end:t.end-origin,...(Number.isFinite(t.capturedEnd)?{capturedEnd:t.capturedEnd-origin}:{})}));
     const timeline=selection===null?plan(shifted,duration):selectionPlan(shifted,duration,selection.map(s=>({...s,start:s.start-origin,end:s.end-origin})));
     if(backing && (backing.start>origin+0.001 || backing.end<origin+duration-0.001))throw Error('需要覆盖整个下载范围的伴奏，请先生成整首伴奏。');
     if(!timeline.segments.length)throw Error('此范围内没有已录人声。');
-    const length=Math.ceil(duration*sampleRate),channels=[new Float32Array(length),new Float32Array(length)];
+    const length=Math.ceil(duration*sampleRate),reverbSettings={...effects.normalize(reverb),delayMs:0};
     const context=new env.AudioContext({sampleRate});
+    let vocalBuffer=null,channels;
     const check=()=>{if(!active())throw Error('已取消合成。');};
     const pause=()=>new Promise(resolve=>env.setTimeout(resolve,0));
     async function add(buffer,start,end,offset,gain){
@@ -81,9 +82,16 @@
       }
     }
     try{
+      // Assemble directly into the offline input to avoid copying a full 10-minute stem.
+      vocalBuffer=effects.enabled(reverbSettings)?context.createBuffer(2,length,sampleRate):null;
+      channels=vocalBuffer?[vocalBuffer.getChannelData(0),vocalBuffer.getChannelData(1)]:[new Float32Array(length),new Float32Array(length)];
       for(const take of new Map(timeline.segments.map(s=>[s.take.id,s.take])).values()){
-        check();const decoded=await effects.process(await context.decodeAudioData(await take.blob.arrayBuffer()),take.effects,env);check();
-        for(const segment of timeline.segments.filter(s=>s.take.id===take.id))await add(decoded,segment.start,segment.end,segment.start-take.start+(take.vocalOffset || 0),Math.max(0,Math.min(2,vocalVolume)));
+        check();const decoded=await context.decodeAudioData(await take.blob.arrayBuffer());check();
+        for(const segment of timeline.segments.filter(s=>s.take.id===take.id))await add(decoded,segment.start,segment.end,segment.start-take.start+(take.vocalOffset || 0)-effects.normalize(take.effects).delayMs/1000,Math.max(0,Math.min(2,vocalVolume)));
+      }
+      if (vocalBuffer) {
+        check();const processed=await effects.process(vocalBuffer,reverbSettings,env);check();
+        channels=[processed.getChannelData(0),processed.getChannelData(1)];
       }
       if(backing){
         check();const decoded=await context.decodeAudioData(await backing.blob.arrayBuffer());check();

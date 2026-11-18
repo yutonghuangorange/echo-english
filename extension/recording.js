@@ -1,7 +1,7 @@
 // Own one capture's microphone, gain graph, monitor, meter and encoder.
 // UI state, video timing and persistence belong to the calling coordinator.
 (function(root) {
-  function create({constraints, gainDb, quality, sidetone=false, sidetoneVolume=0.35, sidetoneMode='minimum', active, createMonitor, createMeter, onComplete, onError, microphone = root.EchoMicrophone, env = root}) {
+  function create({constraints, gainDb, quality, sidetone=false, sidetoneVolume=0.35, sidetoneMode='minimum', sidetoneReverb={}, active, createMonitor, createMeter, onComplete, onError, microphone = root.EchoMicrophone, env = root}) {
     const options = microphone.recordingOptions(quality, env.MediaRecorder);
     let mic, micTrack, input, monitor, meter, recorder, info;
     let stopping = false, settled = false, released = false;
@@ -41,7 +41,7 @@
         if (!available()) { stopTracks(acquired); stop(); return false; }
         mic = acquired;micTrack=mic.getAudioTracks?.()[0] || mic.getTracks()[0];
         micTrack?.addEventListener?.('ended',inputEnded);
-        const processed = await microphone.createInput(mic, gainDb,env,{sidetone,sidetoneVolume,sidetoneMode});
+        const processed = await microphone.createInput(mic, gainDb,env,{sidetone,sidetoneVolume,sidetoneMode,sidetoneReverb});
         if (!available()) { processed.dispose(); stop(); return false; }
         input = processed;
         const accompaniment = createMonitor ? await createMonitor() : null;
@@ -72,6 +72,7 @@
       get sidetoneInfo(){return input?.monitoringInfo?.() || null;},
       start() { if (!available()) return false; recorder.start(250);input?.setMonitoring?.(sidetone); return true; },
       startMeter() { if (available() && !meter) meter = createMeter(input.stream); },
+      setSidetoneReverb(value){input?.setMonitorReverb?.(value);},
       setSidetoneVolume(value){input?.setMonitorVolume?.(value);},
       setVolume(value) { monitor?.setVolume?.(value); },
       pause() { monitor?.pause(); if (recorder?.state === 'recording') { recorder.pause();input?.setMonitoring?.(false); meter?.setPaused(true); } },

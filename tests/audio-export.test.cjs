@@ -103,3 +103,33 @@ test('subtitle export filenames use the shared safe video title with explicit SR
   const {filename}=require('../extension/audio-export.js');
   for(const extension of ['srt','vtt'])assert.equal(filename({title:'My / Song',kind:'subtitles',extension}),`My Song_字幕.${extension}`);
 });
+
+test('per-take alignment shifts samples directly without allocating offline contexts or inheriting old per-take reverb',async()=>{
+  const data=Float32Array.from([.1,.2,.3,.4]);
+  class AudioContext{async decodeAudioData(){return {sampleRate:4,numberOfChannels:1,getChannelData:()=>data};}async close(){}}
+  for(const [delayMs,expected] of [[250,[0,.1,.2,.3]],[-250,[.2,.3,.4,0]]]){
+    const result=await render({takes:[voice('a',0,1,1,{effects:{delayMs,reverb:'theatre',amount:2}})],duration:1,sampleRate:4},{AudioContext,setTimeout:queueMicrotask});
+    const view=new DataView(await result.blob.arrayBuffer());
+    for(let i=0;i<4;i++)assert(Math.abs(view.getInt16(44+i*4,true)/32767-expected[i])<.0001);
+  }
+});
+
+test('shared reverb processes the assembled vocal once before accompaniment is mixed',async()=>{
+  let renders=0,processed;
+  const buffer=(channels,length,sampleRate)=>{const data=Array.from({length:channels},()=>new Float32Array(length));return {numberOfChannels:channels,length,sampleRate,duration:length/sampleRate,getChannelData:c=>data[c]};};
+  class AudioContext{
+    createBuffer(...args){return buffer(...args);}
+    async decodeAudioData(bytes){const result=buffer(1,1,1);result.getChannelData(0)[0]=new TextDecoder().decode(bytes)==='a'?.1:new TextDecoder().decode(bytes)==='b'?.2:.05;return result;}
+    async close(){}
+  }
+  class OfflineAudioContext{
+    constructor(channels,length,rate){this.sampleRate=rate;this.destination={};this.output=buffer(channels,length,rate);}
+    createBuffer(...args){return buffer(...args);}
+    createBufferSource(){const source={connect(){},start(){processed=source.buffer;}};return source;}
+    createConvolver(){return {connect(){}};}createGain(){return {gain:{},connect(){}};}
+    async startRendering(){renders++;for(let c=0;c<2;c++)this.output.getChannelData(c).set(processed.getChannelData(c).map(n=>n*2));return this.output;}
+  }
+  const result=await render({takes:[voice('a',0,1),voice('b',1,2)],duration:2,sampleRate:1,reverb:{reverb:'ktv',amount:1},backing:{start:0,end:2,blob:new Blob(['music'])}}, {AudioContext,OfflineAudioContext,setTimeout:queueMicrotask});
+  assert.equal(renders,1);assert.deepEqual(Array.from(processed.getChannelData(0)).map(n=>n.toFixed(2)),['0.10','0.20']);
+  const view=new DataView(await result.blob.arrayBuffer());assert(Math.abs(view.getInt16(44,true)/32767-.25)<.0001);assert(Math.abs(view.getInt16(48,true)/32767-.4)<.0001);
+});
