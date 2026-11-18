@@ -55,7 +55,8 @@
     .field-heading{display:flex;align-items:center;justify-content:space-between;gap:8px;margin:12px 0 6px;color:#b6c8d6;font-size:12px}.field-heading label{flex:1}.field-heading button{flex-shrink:0}.field-note{margin:6px 0 12px;line-height:1.6}
     .backing-actions{display:grid;grid-template-columns:minmax(0,1fr) auto;gap:8px;margin:14px 0}.backing-actions button{font-size:12px}.backing-actions #prepareBacking{background:#29473f;border-color:#527f70;color:#c9f5e8}.backing-actions #prepareBacking:hover:not(:disabled){background:#355d50}
     .monitor-control{border-top:1px solid #2b3946;padding-top:2px;margin-top:14px}.monitor-control input{display:block;width:100%;margin:10px 0}.monitor-control .hint{font-size:11px}.service-tools{border-top:1px solid #2b3946;padding-top:4px;margin-top:14px}.service-tools .utility-row{margin:6px 0}.service-tools code{overflow-wrap:anywhere}
-    .recording-downloads{display:flex;flex-wrap:wrap;gap:8px;margin:12px 0 0}.recording-downloads #download{width:auto;flex:1;min-width:120px;font-size:12px;padding:8px 10px}.recording-downloads button{flex:1;font-size:12px;padding:8px 10px}.selected-recording #mixDownloadHint{font-size:11px;margin:7px 0 0}
+    .recording-heading-title{display:flex;align-items:center;gap:8px}.recording-secondary-actions{display:flex;align-items:center;justify-content:space-between;gap:12px;margin-top:12px;padding-top:12px;border-top:1px solid #30434f}.recording-secondary-actions #openRecordingAdjust{border-color:transparent;color:#adc6ce}.version-toolbar:has(.version-choices[hidden]){display:none}.version-toolbar{margin-top:10px}.selected-recording #recordingText{font-size:16px;line-height:1.65;margin:10px 0 16px}.recording-list-title{font-size:13px;display:block;margin-bottom:4px}.recording-assembly{display:flex;flex-wrap:wrap;align-items:center;justify-content:space-between;gap:10px;padding:14px 0 18px;margin:0 0 16px;border-bottom:1px solid #30414e}.recording-assembly>div{flex:1;min-width:160px}.recording-assembly h3{margin:0 0 6px;font-size:14px}.recording-assembly .hint{margin:0;font-size:11px}.recording-assembly #assemblyWarning{width:100%;color:#ebc8a6}.recording-dialog-actions{display:flex;align-items:center;gap:12px}.recording-dialog-info{margin:0;padding:0 20px 12px;color:#90a4b6;font-size:12px}.recording-adjustment-group h3{font-size:14px;margin:0 0 16px}.recording-adjustment-group>input[type="range"]{width:100%}.recording-delete{display:flex;flex-wrap:wrap;align-items:center;justify-content:space-between;gap:8px;margin-top:20px;padding-top:12px;border-top:1px solid #30414e}.recording-export-option{padding:16px;border:1px solid #30414e;border-radius:10px;margin:0 0 12px;background:#192734}.recording-export-option>a,.recording-export-option>button{display:block;width:100%;text-align:left;font-size:14px;background:transparent;border:0;padding:0;color:#b3eedb;text-decoration:none;cursor:pointer}#recording-downloads #download{margin:0;padding:0;background:transparent;border:0;border-radius:0;text-align:left;font-size:14px}.recording-export-option>a:focus-visible{outline:2px solid #b3eedb;outline-offset:4px}.recording-export-option:has(>button[hidden]){display:none}.recording-export-option .hint{margin:8px 0 0;font-size:12px}.library-dialog #recordingDialogStop{margin-top:8px}
+
     .fold-content>p.hint{line-height:1.6}.fold-content>label:has(input[type="checkbox"]){display:flex;align-items:center;gap:7px}.fold-content>label:has(input[type="checkbox"])+p{margin:5px 0 14px}
     @media(max-height:600px){header{padding:12px 18px 8px}.pages{--page-padding:12px;padding:var(--page-padding) 18px}.practice-dock{padding:8px 18px}.cue-card{padding:12px}.caption{font-size:19px;padding:8px 0;min-height:44px}footer{padding-top:8px;padding-bottom:8px}}
     @media(prefers-reduced-motion:reduce){.caption-context{transition:none}}
@@ -148,37 +149,16 @@
         <details class="fold"><summary>寻找更多视频</summary><div class="fold-content"><div class="row"><input id="query" placeholder="对白 / 动漫 / 歌曲 / 歌词" aria-label="视频搜索"><button id="search">搜索</button></div><div class="hint">在 YouTube 打开搜索结果，优先选择有目标语言字幕或歌词的视频。</div></div></details>
       </section>
       <section id="page-recordings" role="tabpanel" aria-labelledby="tab-recordings" hidden>
-        <div class="recording-heading"><h2 class="page-title">我的录音</h2><small id="historyCount">0 段</small><button id="openVocalSettings" class="compact">声音效果</button><button id="playAll" class="compact" disabled>▶ 连播最新版本</button></div>
+        <div class="recording-heading"><div class="recording-heading-title"><h2 class="page-title">我的录音</h2><small id="historyCount">0 段</small></div><button id="openVocalSettings" class="compact">声音效果</button></div>
         <div id="recordingEmpty" class="empty"><strong>从第一句开始</strong>录好以后，配音与演唱都会保存在这里。<br><button id="backToPractice">去练一句 →</button></div>
         <div id="recordingContent" class="selected-recording" hidden>
           <div class="recording-heading"><div class="eyebrow">当前录音</div><button id="reuseSongRange" class="text-button" hidden>练习此段 →</button></div><div id="historyInfo"></div><div id="recordingText"></div>
-          <div class="row"><button id="reviewReplay">▷ 回放录音</button><button id="compare">⇄ 对比原声</button></div>
-          <div class="version-toolbar"><div id="versionChoices" class="version-choices" role="group" aria-label="当前片段的录音版本"></div><button id="deleteTake" class="text-button danger" disabled>删除此版</button></div>
-          <details class="fold" id="vocalEffects" hidden><summary>此版本 · 人声对齐与淡出</summary><div class="fold-content">
-            <label class="hint" for="vocalDelay">人声位移（毫秒） · <output id="vocalDelayValue">0 ms</output></label>
-            <input id="vocalDelay" type="range" min="-2000" max="2000" step="10" value="0" aria-label="人声位移，负数提前，正数延后">
-            <div class="row"><button id="vocalEarlier">提前 10 ms</button><button id="vocalLater">延后 10 ms</button></div>
-            <p class="hint">人声听起来慢了就向左提前，快了就向右延后。位移按录音实际时间计算。</p>
-            <div class="row"><button id="takeReverbSettings" class="text-button" aria-label="打开混响设置">混响设置 →</button></div>
-            <label class="hint" for="vocalFadeOut">结尾淡出 · <output id="vocalFadeOutValue">关闭</output></label>
-            <input id="vocalFadeOut" type="range" min="0" max="5" step="0.5" value="0" aria-label="结尾淡出时长，人声和伴奏一起淡出">
-            <div class="row"><button id="resetVocalEffects" class="text-button">重置此版本对齐与淡出</button></div>
-            <p id="vocalEffectsStatus" class="hint" role="status"></p>
-            <p class="hint">对齐仅保存到此录音版本。混响在「声音效果」中统一设置；回听和处理后下载沿用设置。原始人声下载不受影响。移出边界的声音会裁切。</p>
-          </div></details>
-          <div class="recording-downloads"><a id="download">↓ 下载所选录音</a><button id="downloadVocalEffects">↓ 处理后人声 WAV</button><button id="takeMixDownload" hidden>人声＋伴奏</button></div><p class="hint" id="mixDownloadHint">混合下载采用底部的回听音量比例，原始录音保持不变。</p>
-        <details class="fold" id="recordingDetails"><summary>音量波形与录音详情</summary><div class="fold-content">
-          <p class="hint" id="recordingTechnical" style="white-space:pre-line;overflow-wrap:anywhere"></p>
-          <div id="analysis" hidden><canvas id="waveform" width="660" height="180" role="img" aria-label="录音音量波形，橙色表示低音量停顿"></canvas><div id="analysisText" class="analysis-text" role="status"></div><small>波形显示音量和停顿，不代表发音准确度。</small></div>
-          <small>每个练习片段保留最近 3 次；导入的录音额外保留，可手动删除。演唱与配音分别保存。连播使用各片段最新版本。</small>
-        </div></details>
+          <div class="row"><button id="reviewReplay" class="primary">▷ 回放录音</button><button id="compare">⇄ 对比原声</button></div>
+          <div class="version-toolbar"><div id="versionChoices" class="version-choices" role="group" aria-label="当前片段的录音版本"></div></div>
+          <div class="recording-secondary-actions"><button id="openRecordingAdjust" class="text-button">调整与详情</button><button id="openRecordingDownload" class="compact">↓ 下载</button></div>
         </div>
-        <details class="fold" id="songAssembly" hidden><summary>分段合成整首</summary><div class="fold-content">
-          <p class="hint" id="assemblyInfo"></p><p class="hint" id="assemblyWarning" hidden></p>
-          <p class="hint">按视频时间轴合成。可试听、选版本或排除某段；未选人声的位置保留空白。暂支持 1× 录唱。</p>
-          <button id="assembleSong">选择片段并合成 →</button>
-        </div></details>
-        <div id="historyBrowser"><div class="recording-heading"><small>按时间排列 · 点选即播放</small><small id="recordingSummary"></small></div>
+        <section id="songAssembly" class="recording-assembly" hidden><div><h3>合成整首</h3><p class="hint" id="assemblyInfo"></p></div><button id="assembleSong" class="compact">选择片段</button><p class="hint" id="assemblyWarning" hidden></p></section>
+        <div id="historyBrowser"><div class="recording-heading"><div><strong class="recording-list-title">全部片段</strong><small id="recordingSummary"></small></div><button id="playAll" class="compact" disabled>▶ 连播最新版本</button></div>
         <input id="recordingSearch" class="recording-search" placeholder="搜索台词、编号或时间" aria-label="查找录音">
         <div id="historyList" class="recording-timeline" aria-label="已录句子"></div></div>
         <div class="history-actions"><button id="undoDelete" hidden>撤销删除</button></div>
@@ -240,6 +220,34 @@
           <div class="row"><label><small>起点</small><input id="start" aria-label="片段起点（秒）" type="number" min="0" step="0.1" value="0"></label><label><small>终点</small><input id="end" aria-label="片段终点（秒）" type="number" min="0" step="0.1" value="5"></label></div>
           <div class="row micro"><button id="startEarlier">起点 −0.2s</button><button id="startLater">起点 +0.2s</button><button id="endEarlier">终点 −0.2s</button><button id="endLater">终点 +0.2s</button></div>
           <div class="row"><button id="markStart">此刻设为起点</button><button id="markEnd">此刻设为终点</button></div><p class="hint">单位为秒，每段最长 10 分钟。修改自动保存。</p></div><div class="library-foot"><p id="clipDialogStatus" role="status"></p><button id="doneClipDialog" class="primary">完成</button></div></dialog>
+  <dialog id="recordingDialog" class="library-dialog" aria-labelledby="recordingDialogTitle"><header><h2 id="recordingDialogTitle">当前录音</h2><div class="recording-dialog-actions"><button id="recordingDialogPreview" class="compact">▷ 试听</button><button id="closeRecordingDialog" class="close" aria-label="关闭录音操作">×</button></div></header>
+    <p id="recordingDialogInfo" class="recording-dialog-info"></p>
+    <nav class="library-tabs" role="tablist" aria-label="录音操作"><button id="recordingAdjustTab" role="tab" aria-controls="recording-adjustments" aria-selected="true">调整与详情</button><button id="recordingDownloadTab" role="tab" aria-controls="recording-downloads" aria-selected="false" tabindex="-1">下载</button></nav>
+    <div class="library-body"><section id="recording-adjustments" role="tabpanel" aria-labelledby="recordingAdjustTab">
+<section id="vocalEffects" class="recording-adjustment-group" hidden><h3>人声对齐与淡出</h3>
+            <label class="hint" for="vocalDelay">人声位移（毫秒） · <output id="vocalDelayValue">0 ms</output></label>
+            <input id="vocalDelay" type="range" min="-2000" max="2000" step="10" value="0" aria-label="人声位移，负数提前，正数延后">
+            <div class="row"><button id="vocalEarlier">提前 10 ms</button><button id="vocalLater">延后 10 ms</button></div>
+            <p class="hint">人声听起来慢了就向左提前，快了就向右延后。位移按录音实际时间计算。</p>
+            <div class="row"><button id="takeReverbSettings" class="text-button" aria-label="打开混响设置">混响设置 →</button></div>
+            <label class="hint" for="vocalFadeOut">结尾淡出 · <output id="vocalFadeOutValue">关闭</output></label>
+            <input id="vocalFadeOut" type="range" min="0" max="5" step="0.5" value="0" aria-label="结尾淡出时长，人声和伴奏一起淡出">
+            <div class="row"><button id="resetVocalEffects" class="text-button">重置此版本对齐与淡出</button></div>
+            <p id="vocalEffectsStatus" class="hint" role="status"></p>
+            <p class="hint">对齐仅保存到此录音版本。混响在「声音效果」中统一设置；回听和处理后下载沿用设置。原始人声下载不受影响。移出边界的声音会裁切。</p>
+          </section>
+<details class="fold" id="recordingDetails"><summary>音量波形与录音详情</summary><div class="fold-content">
+          <p class="hint" id="recordingTechnical" style="white-space:pre-line;overflow-wrap:anywhere"></p>
+          <div id="analysis" hidden><canvas id="waveform" width="660" height="180" role="img" aria-label="录音音量波形，橙色表示低音量停顿"></canvas><div id="analysisText" class="analysis-text" role="status"></div><small>波形显示音量和停顿，不代表发音准确度。</small></div>
+          <small>每个练习片段保留最近 3 次；导入的录音额外保留，可手动删除。演唱与配音分别保存。连播使用各片段最新版本。</small>
+        </div></details>
+      <div class="recording-delete"><span class="hint">仅删除当前版本，可撤销。</span><button id="deleteTake" class="text-button danger" disabled>删除当前版本</button></div>
+    </section><section id="recording-downloads" role="tabpanel" aria-labelledby="recordingDownloadTab" hidden>
+      <div class="recording-export-option"><a id="download">↓ 原始人声</a><p class="hint">保留录制时的文件，不添加对齐、淡出或混响。</p></div>
+      <div class="recording-export-option"><button id="downloadVocalEffects">↓ 处理后人声 · WAV</button><p class="hint">包含此版本的对齐、淡出与本视频的统一混响。</p></div>
+      <div class="recording-export-option"><button id="takeMixDownload" hidden>人声＋伴奏</button><p class="hint" id="mixDownloadHint"></p></div>
+    </section></div><div class="library-foot"><p>设置自动保存，原始录音保持不变。</p><button id="recordingDialogStop" class="compact" hidden>停止播放</button></div>
+  </dialog>
   <dialog id="settingsDialog" class="library-dialog" aria-labelledby="settingsTitle"><header><h2 id="settingsTitle">设置</h2><button id="closeSettings" class="close" aria-label="关闭设置">×</button></header>
     <nav id="settingsTabs" class="library-tabs" role="tablist" aria-label="设置分类"><button id="settingsPracticeTab" role="tab" aria-controls="settings-practice" aria-selected="false" tabindex="-1">准备与自动练习</button><button id="settingsMicTab" role="tab" aria-controls="settings-microphone" aria-selected="true">麦克风与录音</button><button id="settingsCaptionsTab" role="tab" aria-controls="settings-captions" aria-selected="false" tabindex="-1">语言与字幕</button><button id="settingsBackingTab" role="tab" aria-controls="settings-backing" aria-selected="false" tabindex="-1">伴奏与背景音</button><button id="settingsSoundTab" role="tab" aria-controls="settings-sound" aria-selected="false" tabindex="-1">声音效果</button></nav>
     <div class="settings-body" id="settingsBody"><section id="settings-sound" role="tabpanel" aria-labelledby="settingsSoundTab" class="fold-content" hidden>

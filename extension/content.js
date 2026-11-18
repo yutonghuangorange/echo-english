@@ -659,6 +659,11 @@
     $('next').disabled=busy || index<0 || index>=cues.length-1;
     updateBackingControls();
     $('stop').disabled = !busy || mode==='saving'; $('stop').hidden = !busy;
+    $('recordingDialogPreview').disabled=!take || !['idle','replay'].includes(mode);
+    $('recordingDialogPreview').textContent=mode==='replay'?'■ 停止试听':'▷ 试听';
+    $('recordingDialogStop').hidden=!busy || mode==='replay';$('recordingDialogStop').disabled=mode==='saving';
+    $('recordingDialogStop').textContent=mode==='exporting'?'取消导出':'停止播放';
+    for(const id of ['openRecordingAdjust','openRecordingDownload'])$(id).disabled=!take || !['idle','replay'].includes(mode);
     $('settingsStop').hidden=!busy;$('settingsStop').disabled=mode==='saving';
     $('stop').textContent=mode==='lead-in'?'■ 取消准备':mode==='recording'?'■ 结束录音':mode==='saving'?'保存中…':'■ 停止';
     $('reviewReplay').disabled = busy || !take;
@@ -675,7 +680,7 @@
     root.querySelectorAll('.cue').forEach(b => b.disabled = busy);
     renderMixControls();
     if(busy && focused?.disabled && !$('stop').disabled){
-      returnFocus ||= focused;(settings.isOpen()?$('settingsStop'):$('stop')).focus();
+      returnFocus ||= focused;($('recordingDialog').open?$(mode==='replay'?'recordingDialogPreview':'recordingDialogStop'):settings.isOpen()?$('settingsStop'):$('stop')).focus();
     } else if(!busy && returnFocus){
       const target=returnFocus;returnFocus=null;
       if(currentPage==='practice' && (!focused || ['stop','settingsStop'].includes(focused.id)) && !target.disabled)target.focus();
@@ -773,6 +778,44 @@
     if (token === generation) { cancelPlayback(); restoreVideo(); }
   }
   const canEditSound=()=>['idle','replay','recording'].includes(mode);
+  let recordingDialogReturn='openRecordingAdjust';
+  function selectRecordingDialog(section,focus=false){
+    const download=section==='download';
+    $('recording-adjustments').hidden=download;$('recording-downloads').hidden=!download;
+    $('recordingDialogTitle').textContent=download?'下载录音':'调整与详情';
+    for(const [id,selected] of [['recordingAdjustTab',!download],['recordingDownloadTab',download]]){
+      $(id).setAttribute('aria-selected',String(selected));$(id).tabIndex=selected?0:-1;
+    }
+    if(download)analysisRequest++;
+    else if($('recordingDetails').open)void analyzeTake(take);
+    if(focus)$(download?'recordingDownloadTab':'recordingAdjustTab').focus();
+  }
+  function openRecordingDialog(section){
+    if(!take || !['idle','replay'].includes(mode))return;
+    recordingDialogReturn=section==='download'?'openRecordingDownload':'openRecordingAdjust';
+    $('recordingDialogInfo').textContent=$('historyInfo').textContent;
+    const dialog=$('recordingDialog');
+    if(!dialog.open){if(dialog.showModal)dialog.showModal();else dialog.open=true;}
+    selectRecordingDialog(section,true);controls();
+  }
+  function closeRecordingDialog(){
+    const dialog=$('recordingDialog');if(!dialog.open)return;
+    if(dialog.close)dialog.close();else dialog.open=false;
+    analysisRequest++;$(recordingDialogReturn).focus();
+  }
+  $('openRecordingAdjust').onclick=()=>openRecordingDialog('adjust');
+  $('openRecordingDownload').onclick=()=>openRecordingDialog('download');
+  $('closeRecordingDialog').onclick=closeRecordingDialog;
+  $('recordingDialog').oncancel=event=>{event.preventDefault();closeRecordingDialog();};
+  for(const [id,section] of [['recordingAdjustTab','adjust'],['recordingDownloadTab','download']]){
+    $(id).onclick=()=>selectRecordingDialog(section);
+    $(id).onkeydown=event=>{
+      if(!['ArrowLeft','ArrowRight','Home','End'].includes(event.key))return;
+      event.preventDefault();selectRecordingDialog(event.key==='Home'?'adjust':event.key==='End'?'download':section==='adjust'?'download':'adjust',true);
+    };
+  }
+  $('recordingDialogStop').onclick=()=>stop();
+  $('recordingDialogPreview').onclick=()=>take && playRecording(take);
   function renderSoundEffects(){
     const editable=canEditSound();
     $('vocalReverb').value=vocalReverb.reverb;
@@ -798,7 +841,7 @@
     $(id).oninput=applySoundEffects;
     $(id).onchange=async()=>{if(!applySoundEffects())return;const owner=videoId,saved=await saveProgress();if(owner!==videoId)return;$('soundEffectsStatus').textContent=saved===false?'保存失败，请检查本地空间。':'已保存到本视频。原始录音保持干声。';};
   }
-  for(const id of ['openVocalSettings','micVocalSettings','takeReverbSettings'])$(id).onclick=()=>{settings.open('sound',id);renderSoundEffects();};
+  for(const id of ['openVocalSettings','micVocalSettings','takeReverbSettings'])$(id).onclick=()=>{if(id==='takeReverbSettings')closeRecordingDialog();settings.open('sound',id==='takeReverbSettings'?'openRecordingAdjust':id);renderSoundEffects();};
   $('liveVocalSettings').onclick=()=>{settings.open('microphone','liveVocalSettings');renderSoundEffects();$('monitorReverb').focus();};
   const vocalEffectControls=['vocalDelay','vocalEarlier','vocalLater','vocalFadeOut','downloadVocalEffects','resetVocalEffects'];
   function renderVocalEffects(){
@@ -862,6 +905,7 @@
   });
   function setTake(value) {
     if(value && take?.id===value.id){controls();return;}
+    closeRecordingDialog();
     $('vocalEffectsStatus').textContent='';
     if (take?.url) URL.revokeObjectURL(take.url);
     take = value ? { ...value, url: URL.createObjectURL(value.blob) } : null;
@@ -880,7 +924,6 @@
     controls();
     analysisRequest++;
     $('analysis').hidden=!take;
-    if($('recordingDetails').open)void analyzeTake(take);
   }
   function currentCueKey() { return selectionState().value?.key || null; }
   function currentVideoTitle(){
@@ -1341,7 +1384,7 @@
     deletedTake=value; $('undoDelete').hidden=false; mode='idle';
     await refreshHistory(selectedId); saveProgress(); status('已删除一个录音版本，可点击「撤销删除」恢复。');
   }
-  $('deleteTake').onclick=guarded(()=>deleteRecording(take));
+  $('deleteTake').onclick=guarded(()=>{closeRecordingDialog();return deleteRecording(take);});
   $('undoDelete').onclick=guarded(async()=>{
     if(!deletedTake || mode!=='idle') return;
     const value=deletedTake,id=videoId;mode='saving';controls();
@@ -1576,7 +1619,7 @@
     finally { if (context) await context.close().catch(()=>{}); }
   }
   $('recordingDetails').ontoggle=()=>{
-    if($('recordingDetails').open)void analyzeTake(take);
+    if($('recordingDialog').open && $('recordingDetails').open)void analyzeTake(take);
     else analysisRequest++;
   };
   function closeWord() { wordRequest++; selectedWord = null; $('wordcard').hidden = true; window.speechSynthesis?.cancel(); }
@@ -1766,14 +1809,14 @@
   }
   $('loop').onclick = guarded(async () => {
     const r = selectedRange(), token = ++generation, count = Number($('loopCount').value);
-    settings.close();closeWord(); mode = 'loop'; controls();
+    settings.close();closeRecordingDialog();closeWord(); mode = 'loop'; controls();
     await EchoPractice.runLoop({count, active:()=>token === generation,
       listen: async round => { status(`单句循环 · 第 ${round} 次${count ? ' / '+count : ''}`); await original(r,token); },
       gap:()=>pauseBetween(600,token)});
     if (token === generation) { finish(); status('循环播放完成。'); }
   });
   $('autoPractice').onclick = guarded(async () => {
-    selectedRange();settings.close(); const token = ++generation, autoNext = $('practiceScope').value==='clip' && $('autoNext').checked, seconds = Number($('prepSeconds').value);
+    selectedRange();settings.close();closeRecordingDialog(); const token = ++generation, autoNext = $('practiceScope').value==='clip' && $('autoNext').checked, seconds = Number($('prepSeconds').value);
     closeWord(); mode = 'practice'; controls(); status('首次练习：正在检查麦克风权限…');
     // Obtain permission before the listening/preparation stages so its dialog
     // cannot consume the learner's preparation time. Release immediately.
@@ -1789,7 +1832,7 @@
     });
     if (token === generation) { finish(); status('自动跟读完成。可以重练或下载这次录音。'); }
   });
-  $('close').onclick = () => { closeClipDialog();settings.close();tools.close();library.close(true);closeWord(); stop(); host.style.display = 'none'; };
+  $('close').onclick = () => { closeClipDialog();settings.close();closeRecordingDialog();tools.close();library.close(true);closeWord(); stop(); host.style.display = 'none'; };
   root.addEventListener('keydown',event=>{
     if(event.key!=='Escape')return;
     event.preventDefault();event.stopPropagation();
@@ -1797,8 +1840,9 @@
     if(tools.isOpen()){tools.close();return;}
     if(assembly.isOpen()){assembly.close();return;}
     if(models.isOpen()){models.close();return;}
+    if($('recordingDialog').open){closeRecordingDialog();return;}
     if(clipDialog.open){closeClipDialog();return;}
-    if(settings.isOpen()){settings.close();return;}
+    if(settings.isOpen()){settings.close();closeRecordingDialog();return;}
     if(library.isOpen()){library.escape();return;}
     if(!$('wordcard').hidden)closeWord();
     else if(mode!=='idle')stop();
@@ -1806,7 +1850,7 @@
   });
   // Modified shortcuts leave YouTube's unmodified playback keys untouched.
   document.addEventListener('keydown',event=>{
-    if(host.style.display==='none' || subtitleEditor?.isOpen() || assembly.isOpen() || models.isOpen() || library.isOpen() || tools.isOpen() || settings.isOpen() || clipDialog.open)return;
+    if(host.style.display==='none' || subtitleEditor?.isOpen() || assembly.isOpen() || models.isOpen() || library.isOpen() || tools.isOpen() || settings.isOpen() || $('recordingDialog').open || clipDialog.open)return;
     if(event.key==='Escape' && mode!=='idle'){event.preventDefault();event.stopPropagation();stop();return;}
     const action=EchoPracticeTools.shortcut(event);if(!action)return;
     if(action==='help'){if(mode!=='idle')return;event.preventDefault();event.stopPropagation();tools.open('help');return;}
@@ -1877,7 +1921,7 @@
     if(mode!=='idle')return;
     captionSource=$('captionSource').value;
     const selected=captionTracks.find(t=>t.id===captionSource);captionSourceName=selected?captionTrackLabel(selected):'';
-    saveProgress();settings.close();void $('read').onclick();
+    saveProgress();settings.close();closeRecordingDialog();void $('read').onclick();
   };
   $('read').onclick = guarded(async () => {
     if(mode!=='idle')return;
@@ -1921,9 +1965,9 @@
     }finally{if(token===generation){mode='idle';controls();}}
   });
   $('search').onclick = () => { window.open(`https://www.youtube.com/results?search_query=${encodeURIComponent($('query').value || ({'zh':'中文 歌词','ja':'日本語 字幕 歌詞','ko':'한국어 자막 가사','en':'english conversation subtitles'}[contentLanguage()] || 'subtitles lyrics'))}`, '_blank', 'noopener'); };
-  chrome.runtime.onMessage.addListener(message => { if (message.type === 'echo-toggle') { const open = host.style.display === 'none'; host.style.display = open ? 'block' : 'none'; if (!open) {closeClipDialog();settings.close();tools.close();library.close(true);stop();} } });
+  chrome.runtime.onMessage.addListener(message => { if (message.type === 'echo-toggle') { const open = host.style.display === 'none'; host.style.display = open ? 'block' : 'none'; if (!open) {closeClipDialog();settings.close();closeRecordingDialog();tools.close();library.close(true);stop();} } });
   function resetVideo(id) {
-    closeClipDialog();settings.close();tools.close();tools.resetSetup();setupUndo=null;favorite=false;favoriteRequest++;clipRangeAdjusted=false;
+    closeClipDialog();settings.close();closeRecordingDialog();tools.close();tools.resetSetup();setupUndo=null;favorite=false;favoriteRequest++;clipRangeAdjusted=false;
     library.close(true);
     stop();
     recordingSession=null;
@@ -1968,7 +2012,7 @@
     if (id) void loadVideo(id);
     else restoring = false;
   });
-  window.addEventListener('pagehide',()=>{practiceLayoutObserver?.disconnect();inputDeviceRequest++;globalThis.navigator?.mediaDevices?.removeEventListener?.('devicechange',onInputDevicesChanged);saveProgress();closeClipDialog();settings.close();tools.close();library.close(true);activeKaraokeJob=null;stop();detachCaptionVideo();});
+  window.addEventListener('pagehide',()=>{practiceLayoutObserver?.disconnect();inputDeviceRequest++;globalThis.navigator?.mediaDevices?.removeEventListener?.('devicechange',onInputDevicesChanged);saveProgress();closeClipDialog();settings.close();closeRecordingDialog();tools.close();library.close(true);activeKaraokeJob=null;stop();detachCaptionVideo();});
   // Restore once; changing activities must not reset the user's expanded sections.
   const foldPreferenceKey='echo-folds-v1';
   let foldPreferences={};
