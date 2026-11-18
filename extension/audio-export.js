@@ -21,7 +21,7 @@
     }
     const voices=[...latest.values()];
     if(!voices.length)throw Error('还没有可合成的独立人声。旧版混合录音无法单独提取人声，请重新录唱。');
-    const ranges=voices.map(t=>({take:t,start:Math.max(0,t.start),end:Math.min(duration,Number.isFinite(t.capturedEnd)?t.capturedEnd:t.end)})).filter(t=>t.end>t.start);
+    const ranges=voices.map(t=>({take:t,start:Math.max(0,t.start),end:Math.min(duration,t.end,Number.isFinite(t.capturedEnd)?t.capturedEnd:t.end)})).filter(t=>t.end>t.start);
     const points=[...new Set([0,duration,...ranges.flatMap(t=>[t.start,t.end]).filter(t=>t>=0 && t<=duration)])].sort((a,b)=>a-b);
     const segments=[],gaps=[];
     for(let i=0;i<points.length-1;i++){
@@ -62,12 +62,16 @@
     const timeline=selection===null?plan(shifted,duration):selectionPlan(shifted,duration,selection.map(s=>({...s,start:s.start-origin,end:s.end-origin})));
     if(backing && (backing.start>origin+0.001 || backing.end<origin+duration-0.001))throw Error('需要覆盖整个下载范围的伴奏，请先生成整首伴奏。');
     if(!timeline.segments.length)throw Error('此范围内没有已录人声。');
+    const last=timeline.segments.at(-1);
+    // A take's fade belongs to its vocal stem. Only a fade at the actual export
+    // endpoint may also fade the backing; an unrecorded outro must remain audible.
+    const finalFade=Math.abs(last.end-duration)<0.0001?effects.normalize(last.take.effects).fadeOutSeconds:0;
     const length=Math.ceil(duration*sampleRate),reverbSettings={...effects.normalize(reverb),delayMs:0};
     const context=new env.AudioContext({sampleRate});
     let vocalBuffer=null,channels;
     const check=()=>{if(!active())throw Error('已取消合成。');};
     const pause=()=>new Promise(resolve=>env.setTimeout(resolve,0));
-    async function add(buffer,start,end,offset,gain){
+    async function add(buffer,start,end,offset,gain,fadeEnd=0,fadeSeconds=0){
       const from=Math.round(start*sampleRate),to=Math.min(length,Math.round(end*sampleRate));
       for(let block=from;block<to;block+=262144){
         check();const stop=Math.min(to,block+262144);
@@ -75,7 +79,8 @@
           const data=buffer.getChannelData(Math.min(c,buffer.numberOfChannels-1));
           for(let i=block;i<stop;i++){
             const position=(offset+(i-from)/sampleRate)*buffer.sampleRate,index=Math.floor(position),fraction=position-index;
-            if(index>=0 && index<data.length)channels[c][i]+=((data[index] || 0)*(1-fraction)+(data[Math.min(index+1,data.length-1)] || 0)*fraction)*gain;
+            const envelope=fadeSeconds>0?effects.fadeGain(i/sampleRate,fadeEnd,fadeSeconds):1;
+            if(index>=0 && index<data.length)channels[c][i]+=((data[index] || 0)*(1-fraction)+(data[Math.min(index+1,data.length-1)] || 0)*fraction)*gain*envelope;
           }
         }
         await pause();
@@ -87,7 +92,9 @@
       channels=vocalBuffer?[vocalBuffer.getChannelData(0),vocalBuffer.getChannelData(1)]:[new Float32Array(length),new Float32Array(length)];
       for(const take of new Map(timeline.segments.map(s=>[s.take.id,s.take])).values()){
         check();const decoded=await context.decodeAudioData(await take.blob.arrayBuffer());check();
-        for(const segment of timeline.segments.filter(s=>s.take.id===take.id))await add(decoded,segment.start,segment.end,segment.start-take.start+(take.vocalOffset || 0)-effects.normalize(take.effects).delayMs/1000,Math.max(0,Math.min(2,vocalVolume)));
+        const settings=effects.normalize(take.effects),fadeEnd=Math.min(take.end,take.capturedEnd ?? take.end);
+        const fadeSeconds=finalFade>0 && take.id===last.take.id?0:settings.fadeOutSeconds;
+        for(const segment of timeline.segments.filter(s=>s.take.id===take.id))await add(decoded,segment.start,segment.end,segment.start-take.start+(take.vocalOffset || 0)-settings.delayMs/1000,Math.max(0,Math.min(2,vocalVolume)),fadeEnd,fadeSeconds);
       }
       if (vocalBuffer) {
         check();const processed=await effects.process(vocalBuffer,reverbSettings,env);check();
@@ -98,9 +105,8 @@
         await add(decoded,0,duration,origin-backing.start,Math.max(0,Math.min(2,volume)));
       }
       check();
-      const last=timeline.segments.at(-1),fadeSeconds=effects.normalize(last.take.effects).fadeOutSeconds;
-      if(fadeSeconds>0)for(let i=0;i<length;i++){
-        const gain=effects.fadeGain(i/sampleRate,last.end,fadeSeconds);
+      if(finalFade>0)for(let i=0;i<length;i++){
+        const gain=effects.fadeGain(i/sampleRate,duration,finalFade);
         channels[0][i]*=gain;channels[1][i]*=gain;
       }
       let peak=1;for(let i=0;i<length;i++)peak=Math.max(peak,Math.abs(channels[0][i]),Math.abs(channels[1][i]));

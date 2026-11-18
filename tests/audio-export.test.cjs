@@ -146,3 +146,19 @@ test('early-stop export fades vocals and backing together at the captured endpoi
   const view=new DataView(await result.blob.arrayBuffer());
   for(const [frame,expected] of [[0,0.4],[4,0.4],[6,0.2],[7,0.1]])assert.ok(Math.abs(view.getInt16(44+frame*4,true)/32767-expected)<0.001);
 });
+
+test('a per-take fade leaves the unrecorded outro and later takes audible',async()=>{
+  class AudioContext{
+    async decodeAudioData(){return {length:12,duration:6,sampleRate:2,numberOfChannels:1,getChannelData:()=>new Float32Array(12).fill(.2)};}
+    async close(){}
+  }
+  const takes=[voice('a',0,4,1,{capturedEnd:2,effects:{fadeOutSeconds:1}}),voice('b',2,4,2,{effects:{fadeOutSeconds:1}})];
+  const result=await render({takes,duration:6,sampleRate:2,backing:{start:0,end:6,blob:new Blob(['backing'])}}, {AudioContext,setTimeout:queueMicrotask});
+  const view=new DataView(await result.blob.arrayBuffer());
+  for(const [frame,expected] of [[0,.4],[3,.3],[4,.4],[7,.3],[8,.2],[11,.2]])assert.ok(Math.abs(view.getInt16(44+frame*4,true)/32767-expected)<.001,`frame ${frame}`);
+});
+
+test('automatic export planning never extends a recording beyond its selected endpoint',()=>{
+  const result=plan([voice('a',0,2,1,{capturedEnd:5})],6);
+  assert.equal(result.segments[0].end,2);assert.deepEqual(result.gaps,[{start:2,end:6}]);
+});

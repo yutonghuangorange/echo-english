@@ -21,6 +21,7 @@ from models import ModelManager, DEFAULT_MODEL, BANDIT_MODEL, model_id, INSTALL_
 
 PORT = 8765
 MAX_SECONDS = 600
+MAX_JOBS = 8
 AUDIO_CHUNK_BYTES = 1024 * 1024
 ACTIVE_STATES = ("queued", "downloading", "converting", "separating", "encoding") + INSTALL_STATES
 
@@ -92,7 +93,11 @@ def validate_clip(data):
     start, end = data.get("start"), data.get("end")
     if not isinstance(video, str) or not re.fullmatch(r"[A-Za-z0-9_-]{11}", video):
         raise ValueError("无效的 YouTube 视频编号。")
-    if any(isinstance(v, bool) or not isinstance(v, (int, float)) or not math.isfinite(v) for v in (start, end)):
+    try:
+        finite = all(not isinstance(v, bool) and isinstance(v, (int, float)) and math.isfinite(v) for v in (start, end))
+    except OverflowError:
+        finite = False
+    if not finite:
         raise ValueError("片段时间必须为有限数字。")
     if start < 0 or end <= start or end - start > MAX_SECONDS or end > 86400:
         raise ValueError("请选择不超过 10 分钟的片段。")
@@ -100,7 +105,10 @@ def validate_clip(data):
     if quality not in ("standard", "lossless"):
         raise ValueError("不支持的音质选项。")
     model = model_id(data.get("model", DEFAULT_MODEL))
-    return {"videoId": video, "start": round(start, 3), "end": round(end, 3),
+    start, end = round(start, 3), round(end, 3)
+    if end <= start:
+        raise ValueError("片段时间精度为毫秒，终点必须晚于起点。")
+    return {"videoId": video, "start": start, "end": end,
             **({"model": model} if model != DEFAULT_MODEL else {}),
             **({"quality": quality} if quality != "standard" else {})}
 
@@ -145,7 +153,12 @@ class Jobs:
                                   directory=directory, audio=audio, cancel=threading.Event()))
             except (OSError, ValueError, TypeError, KeyError):
                 continue
-        for job in sorted(found, key=lambda j: j["createdAt"])[-8:]:
+        ordered = sorted(found, key=lambda j: j["createdAt"])
+        # Only completed, validated Echo jobs are eligible for rolling eviction.
+        # Unknown directories and incomplete/error logs remain untouched.
+        for old in ordered[:-MAX_JOBS]:
+            shutil.rmtree(old["directory"], ignore_errors=True)
+        for job in ordered[-MAX_JOBS:]:
             self.jobs[job["id"]] = job
 
     @staticmethod
@@ -185,7 +198,7 @@ class Jobs:
             if any(j["state"] in ACTIVE_STATES for j in self.jobs.values()):
                 raise RuntimeError("已有一个伴奏正在生成，请完成或停止后重试。")
             # Keep at most eight recent jobs and their files.
-            while len(self.jobs) >= 8:
+            while len(self.jobs) >= MAX_JOBS:
                 old = self.jobs.pop(next(iter(self.jobs)))
                 shutil.rmtree(old["directory"], ignore_errors=True)
             job_id = uuid.uuid4().hex
@@ -435,7 +448,7 @@ def handler(jobs):
                 return self.reply(409, {"error": "伴奏尚未生成。"})
             try:
                 with job["audio"].open("rb") as source:
-                    size = job["audio"].stat().st_size
+                    size = os.fstat(source.fileno()).st_size
                     start, end = 0, size - 1
                     requested = self.headers.get("Range")
                     if requested:

@@ -42,6 +42,7 @@
         "panel-view.js",
         "transport.js",
         "playback.js",
+        "playback-controls.js",
         "practice-tools.js",
         "settings-dialog.js",
         "subtitle-editor.js",

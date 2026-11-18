@@ -91,12 +91,31 @@ class Tests(unittest.TestCase):
         self.assertEqual(jobs.jobs, {})
         self.assertTrue((directory / "accompaniment.mp3").exists())
 
+    def test_restart_enforces_the_cache_limit_on_disk_without_deleting_unknown_files(self):
+        import json
+        cache = Path(self.temp.name)
+        for index in range(10):
+            directory = cache / f"{index:032x}"
+            directory.mkdir()
+            (directory / "metadata.json").write_text(json.dumps(dict(CLIP, version=1, state="ready", createdAt=index)))
+            (directory / "accompaniment.mp3").write_bytes(b"audio")
+        unknown = cache / ("f" * 32)
+        unknown.mkdir()
+        (unknown / "worker.log").write_text("incomplete job, preserve diagnostics")
+        jobs = Jobs(cache)
+        self.assertEqual(len(jobs.jobs), 8)
+        self.assertFalse((cache / f"{0:032x}").exists())
+        self.assertFalse((cache / f"{1:032x}").exists())
+        self.assertTrue((unknown / "worker.log").exists())
+        self.assertEqual(len(Jobs(cache).jobs), 8)
+
     def test_validation_rejects_arbitrary_urls_and_unbounded_clips(self):
         self.assertEqual(validate_clip(CLIP), CLIP)
         self.assertEqual(validate_clip(dict(CLIP, end=180))["end"], 180)
         self.assertEqual(validate_clip(dict(CLIP, end=600))["end"], 600)
         for patch in ({"videoId": "https://evil.test"}, {"start": -1}, {"end": 601}, {"start": True},
-                      {"end": float("nan")}, {"end": float("inf")}, {"end": "5"}, {"end": 0}):
+                      {"end": float("nan")}, {"end": float("inf")}, {"end": "5"}, {"end": 0},
+                      {"start": 1.0001, "end": 1.0002}, {"end": 10 ** 400}):
             with self.assertRaises(ValueError):
                 validate_clip(dict(CLIP, **patch))
 

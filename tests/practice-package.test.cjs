@@ -30,6 +30,21 @@ test('truncated audio, appended garbage, unsupported versions, duplicate IDs and
   const text=new TextEncoder().encode(JSON.stringify({format:'echo',version:2,data:{}})),size=new Uint8Array(4);new DataView(size.buffer).setUint32(0,text.length,true);
   await assert.rejects(pack.decode(new Blob(['ECHOPACK1\n',size,text])),/格式/);
 });
+
+test('legacy numeric-string recording speeds normalize for playback and assembly',async()=>{
+  const source=snapshot();source.recordings[0].speed='1';
+  const restored=await pack.decode(pack.encode(source));assert.equal(restored.recordings[0].speed,1);
+  assert.doesNotThrow(()=>require('../extension/audio-export.js').plan([{...restored.recordings[0],capture:'vocal'}],4));
+});
+
+test('invalid capture timing and null package headers are rejected with a readable format error',async()=>{
+  for(const values of [{vocalOffset:-1},{vocalOffset:NaN},{capturedEnd:5},{capturedEnd:0},{speed:true}]){
+    const source=snapshot();Object.assign(source.recordings[0],values);
+    assert.throws(()=>pack.encode(source),/格式/);
+  }
+  const size=new Uint8Array(4);new DataView(size.buffer).setUint32(0,4,true);
+  await assert.rejects(pack.decode(new Blob(['ECHOPACK1\n',size,'null'])),/格式/);
+});
 test('migration merges atomically and repeatedly without replacing current progress or media; optional progress overwrite is explicit',async()=>{
   const source=createStorage(new IDBFactory()),dest=createStorage(new IDBFactory()),data=snapshot();
   await source.saveSession(data.sessions[0]);await source.saveTake(data.recordings[0]);await source.saveBacking(data.backings[0]);await source.setFavorite(data.favorites[0]);
