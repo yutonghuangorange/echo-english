@@ -269,7 +269,7 @@
 
           <p id="soundEffectsStatus" class="hint" role="status"></p>
         </section><section id="settings-practice" role="tabpanel" aria-labelledby="settingsPracticeTab" class="fold-content" hidden>
-          <div class="settings-group"><h3>练习速度</h3><div class="row"><label class="hint" for="speed">默认速度</label><select id="speed" aria-label="练习速度">${speedOptions}</select></div><p class="hint">用于听原声、伴奏试听与新录音。已有录音按录制时的速度回放；更改不会改变已有录音。</p></div>
+          <div class="settings-group"><h3>试听速度</h3><div class="row"><label class="hint" for="speed">试听速度</label><select id="speed" aria-label="试听速度">${speedOptions}</select></div><p class="hint">仅用于听原曲／原声与伴奏试听。前置准备和正式录音固定 1× 原速；已有录音按录制时的速度回放。</p></div>
           <div class="settings-group"><h3>录音时的参考音</h3><div class="row"><label class="hint" for="recordingPlayback">录音时播放</label><select id="recordingPlayback" aria-describedby="recordingPlaybackHint"><option id="recordingOriginalOption" value="original">原曲（含原唱）</option><option id="recordingBackingOption" value="backing">伴奏（去掉原唱）</option><option value="silent">不播放（清唱／静音配音）</option></select></div><p id="recordingPlaybackHint" class="hint"></p></div>
           <div class="settings-group"><h3>开始前的准备</h3><div class="row"><label class="hint" for="leadInMode">前置播放</label><select id="leadInMode" aria-describedby="leadInHint"><option value="none">关闭</option><option value="seconds">前 N 秒</option><option id="previousLeadIn" value="previous">上一句</option></select></div>
           <div id="leadInSecondsRow" class="row" hidden><label class="hint" for="leadInSeconds">前置时长（秒）</label><input id="leadInSeconds" type="number" min="0" max="30" step="1" value="3" aria-describedby="leadInHint"></div><p class="hint" id="leadInHint">先播放片段前的原声作准备，不录入准备段。</p>

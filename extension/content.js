@@ -630,7 +630,7 @@
     const recorded=range && videoHistory.some(t=>(t.kind==='song')===singing && Math.abs(t.start-range.start)<0.01 && Math.abs(t.end-range.end)<0.01 && t.speed===range.speed);
     $('record').textContent=singing?(recorded?'● 再录一次':whole?'● 开始整首录唱':paragraph?'● 开始段落录唱':'● 开始片段录唱')
       :whole?'● 开始整段配音':paragraph?'● 开始段落配音':'● 开始配音';
-    $('record').title='使用当前范围和速度录音，保留之前的版本。';
+    $('record').title='使用当前范围以 1× 原速录音，保留之前的版本。';
     $('original').textContent=singing?'▶ 听原曲':'▶ 听原声';
     $('replay').textContent=singing?'▷ 回听最近演唱':'▷ 回听录音';
     $('loop').textContent=whole?(singing?'↻ 循环听整首':'↻ 循环听整段'):'↻ 循环听选段';
@@ -1276,7 +1276,7 @@
     const value=take;recordingPlaybackPreferences[activity]=$('recordingPlayback').value;activity=value.kind==='song'?'sing':'speech';scopePreferences[activity]='clip';renderActivity();
     $('start').value=value.start;$('end').value=value.end;$('speed').value=String(value.speed);index=-1;updateCaption();
     updateSummaries();controls();saveProgress();showPage('practice');
-    status('已使用此版的范围和速度，可以重新练习。');if(hasBackingTools()){void checkKaraokeService();void restoreServerBacking();}
+    status('已使用此版的范围和试听速度；重新录音固定使用 1× 原速。');if(hasBackingTools()){void checkKaraokeService();void restoreServerBacking();}
   };
   function downloadAudio(blob,name){
     const url=URL.createObjectURL(blob),link=document.createElement('a');
@@ -1486,7 +1486,7 @@
   }
   async function record({token = ++generation, keepBusy = false} = {}) {
     closeWord();
-    const v=video(),selection=EchoSelection.resolve(selectionInput(v.duration));
+    const v=video(),selection=EchoSelection.resolve({...selectionInput(v.duration),speed:1});
     const r=selection.range,id=videoId,singingTake=isSinging();
     const source=recordingPlayback(),outputBacking=source==='silent'?null:backingFor(r);
     const ready=source==='backing'?outputBacking:null;

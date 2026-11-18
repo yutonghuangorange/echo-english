@@ -1268,8 +1268,8 @@ function leadInVideo({hold=false}={}){
 }
 for(const withBacking of [false,true])for(const leadMode of ['seconds','previous'])test(`recording ${leadMode} lead-in ${withBacking?'with backing':'without backing'} plays context without recording it and preserves the saved range`,async()=>{
   const storage=createStorage(new IDBFactory()),video=leadInVideo(),starts=[];
-  video.volume=.7;
-  await storage.saveSession({videoId:'video',activity:withBacking?'sing':'speech',scopes:{sing:'clip',speech:'clip'},useBacking:withBacking,backingPreferences:{sing:withBacking,speech:false},start:10,end:11,speed:'1',cues:[{start:5,end:8,text:'Previous'},{start:10,end:11,text:'Selected'}],leadInMode:leadMode,leadInSeconds:3});
+  video.volume=.7;const rates=[],play=video.play;video.play=async function(){rates.push(this.playbackRate);return play.call(this);};
+  await storage.saveSession({videoId:'video',activity:withBacking?'sing':'speech',scopes:{sing:'clip',speech:'clip'},useBacking:withBacking,backingPreferences:{sing:withBacking,speech:false},start:10,end:11,speed:'0.5',cues:[{start:5,end:8,text:'Previous'},{start:10,end:11,text:'Selected'}],leadInMode:leadMode,leadInSeconds:3});
   if(withBacking)await storage.saveBacking({key:'music',videoId:'video',start:0,end:60,createdAt:1,blob:new Blob(['music'])});
   const mic={getTracks:()=>[{stop(){}}]};
   class MediaRecorder{
@@ -1281,7 +1281,7 @@ for(const withBacking of [false,true])for(const leadMode of ['seconds','previous
   const {nodes}=await mount(storage,{video,globals:{MediaRecorder,navigator:{mediaDevices:{async getUserMedia(){return mic;}}},
     EchoKaraoke:{...require('../extension/karaoke.js'),async createMonitor(options){
       assert.equal(withBacking,true);assert.equal(video.plays.length,0);
-      assert.equal(options.initialPosition,10);assert.equal(options.fadeInSeconds,.04);
+      assert.equal(options.speed,1);assert.equal(options.initialPosition,10);assert.equal(options.fadeInSeconds,.04);
       return {async sync(position){assert.equal(position,10);assert.equal(starts.length,1);},pause(){},dispose(){},setVolume(){}};
     }},
     requestAnimationFrame:fn=>setTimeout(fn,1),cancelAnimationFrame:clearTimeout}});
@@ -1289,7 +1289,7 @@ for(const withBacking of [false,true])for(const leadMode of ['seconds','previous
   await nodes.get('record').onclick();
   assert.deepEqual(video.plays,[{at:leadMode==='previous'?5:7,muted:false},{at:10,muted:true}]);assert.deepEqual(starts,[10]);
   assert.deepEqual(video.seeks,[leadMode==='previous'?5:7]);
-  const [take]=await storage.listTakes('video');assert.equal(take.start,10);assert.equal(take.end,11);
+  const [take]=await storage.listTakes('video');assert.equal(take.start,10);assert.equal(take.end,11);assert.equal(take.speed,1);assert.deepEqual(rates,[1,1]);assert.equal(nodes.get('speed').value,'0.5');
   assert.equal(await take.blob.text(),'only-target-vocal');assert.equal(video.muted,true);assert.equal(video.playbackRate,1.25);
   assert.equal(video.volume,.7);
   nodes.get('leadInSeconds').value='5';nodes.get('leadInSeconds').onchange();
