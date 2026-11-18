@@ -2126,8 +2126,11 @@ test('recording can change headphone reverb live while the saved stream stays dr
   nodes.get('sidetoneEnabled').checked=true;nodes.get('sidetoneEnabled').onchange();
   const recording=nodes.get('record').onclick();await waitUntil(()=>configured && nodes.get('panel').dataset.mode==='recording');
   assert.equal(configured.sidetone,true);assert.equal(configured.sidetoneReverb.reverb,undefined);
-  nodes.get('liveVocalSettings').onclick();assert.equal(nodes.get('settings-sound').hidden,false);
+  nodes.get('liveVocalSettings').onclick();assert.equal(nodes.get('settings-microphone').hidden,false);
+  assert.equal(nodes.get('monitorReverb').disabled,false);
+  nodes.get('micVocalSettings').onclick();assert.equal(nodes.get('settings-sound').hidden,false);
   nodes.get('vocalReverb').value='ktv';await nodes.get('vocalReverb').onchange();
+  nodes.get('settingsMicTab').onclick();assert.equal(nodes.get('settings-microphone').hidden,false);
   nodes.get('monitorReverb').checked=true;await nodes.get('monitorReverb').onchange();
   assert.equal(liveEffects.reverb,'ktv');assert.equal(liveEffects.delayMs,0);
   nodes.get('monitorReverb').checked=false;await nodes.get('monitorReverb').onchange();assert.equal(liveEffects.reverb,undefined);

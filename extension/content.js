@@ -72,6 +72,7 @@
   function renderMicrophoneSettings(){
     const losslessSupported=EchoMicrophone.supportsLossless(globalThis.MediaRecorder);
     $('sidetoneEnabled').checked=sidetoneEnabled;
+    renderSoundEffects();
     const processing=[echoPreferences[activity]?'回声消除':'',gainPreferences[activity]?'自动增益':''].filter(Boolean);
     const warn=sidetoneEnabled && processing.length>0;
     $('sidetoneProcessingNotice').hidden=!warn;
@@ -780,8 +781,8 @@
     $('vocalReverb').disabled=!editable;
     $('vocalReverbAmount').disabled=!editable || vocalReverb.reverb==='off';
     $('monitorReverb').checked=monitorReverb;
-    $('monitorReverb').disabled=!editable;
-    $('monitorReverbHint').textContent=!sidetoneEnabled?'先在「麦克风与录音」开启耳返。此开关只影响耳机监听，保存的人声仍为干声。':vocalReverb.reverb==='off'?'请先选择上方混响空间。原始人声不会写入混响。':'仅耳机监听，默认关闭，不写入录音。直接人声保留低延迟通路，混响尾音另行叠加。';
+    $('monitorReverb').disabled=!editable || !sidetoneEnabled;
+    $('monitorReverbHint').textContent=!sidetoneEnabled?'先开启上方耳返，再选择是否添加混响。保存的人声仍为干声。':vocalReverb.reverb==='off'?'点击「调整混响空间与强度」选择效果。仅影响耳机监听，保存的人声仍为干声。':'仅耳机监听，默认关闭，不写入录音。直接人声保留低延迟通路，混响尾音另行叠加。';
   }
   function applySoundEffects(){
     if(!canEditSound()){renderSoundEffects();return false;}
@@ -795,7 +796,8 @@
     $(id).oninput=applySoundEffects;
     $(id).onchange=async()=>{if(!applySoundEffects())return;const owner=videoId,saved=await saveProgress();if(owner!==videoId)return;$('soundEffectsStatus').textContent=saved===false?'保存失败，请检查本地空间。':'已保存到本视频。原始录音保持干声。';};
   }
-  for(const id of ['openVocalSettings','micVocalSettings','liveVocalSettings'])$(id).onclick=()=>{settings.open('sound',id);renderSoundEffects();};
+  for(const id of ['openVocalSettings','micVocalSettings'])$(id).onclick=()=>{settings.open('sound',id);renderSoundEffects();};
+  $('liveVocalSettings').onclick=()=>{settings.open('microphone','liveVocalSettings');renderSoundEffects();$('monitorReverb').focus();};
   const vocalEffectControls=['vocalDelay','vocalEarlier','vocalLater','vocalFadeOut','downloadVocalEffects','resetVocalEffects'];
   function renderVocalEffects(){
     const available=take?.capture==='vocal' && !take.withBacking;
