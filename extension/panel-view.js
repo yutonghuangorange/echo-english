@@ -57,7 +57,6 @@
     .monitor-control{border-top:1px solid #2b3946;padding-top:2px;margin-top:14px}.monitor-control input{display:block;width:100%;margin:10px 0}.monitor-control .hint{font-size:11px}.service-tools{border-top:1px solid #2b3946;padding-top:4px;margin-top:14px}.service-tools .utility-row{margin:6px 0}.service-tools code{overflow-wrap:anywhere}
     .recording-search-row{display:flex;align-items:center;gap:8px;margin:10px 0}.recording-search-row .recording-search{flex:1;min-width:0;margin:0}.recording-search-row #playAll{flex-shrink:0}.recording-heading-title{display:flex;align-items:center;gap:8px}.recording-secondary-actions{display:flex;align-items:center;justify-content:space-between;gap:12px;margin-top:12px;padding-top:12px;border-top:1px solid #30434f}.recording-secondary-actions #openRecordingAdjust{border-color:transparent;color:#adc6ce}.version-toolbar:has(.version-choices[hidden]){display:none}.version-toolbar{margin-top:10px}.selected-recording #recordingText{font-size:16px;line-height:1.65;margin:10px 0 16px}.recording-list-title{font-size:13px;display:block;margin-bottom:4px}.recording-header-actions{display:flex;align-items:center;gap:8px;flex-shrink:0}#recordingDialog>.library-foot{flex-shrink:0;background:#172631}#recordingDialogPreview{display:block;width:100%;min-height:44px;font-size:14px;margin:0 0 8px}.recording-dialog-info{margin:0;padding:0 20px 12px;color:#90a4b6;font-size:12px}.recording-adjustment-group h3{font-size:14px;margin:0 0 16px}.recording-adjustment-group>input[type="range"]{width:100%}.recording-delete{display:flex;flex-wrap:wrap;align-items:center;justify-content:space-between;gap:8px;margin-top:20px;padding-top:12px;border-top:1px solid #30414e}.recording-export-option{padding:16px;border:1px solid #30414e;border-radius:10px;margin:0 0 12px;background:#192734}.recording-export-option>a,.recording-export-option>button{display:block;width:100%;text-align:left;font-size:14px;background:transparent;border:0;padding:0;color:#b3eedb;text-decoration:none;cursor:pointer}#recording-downloads #download{margin:0;padding:0;background:transparent;border:0;border-radius:0;text-align:left;font-size:14px}.recording-export-option>a:focus-visible{outline:2px solid #b3eedb;outline-offset:4px}.recording-export-option:has(>button[hidden]){display:none}.recording-export-option .hint{margin:8px 0 0;font-size:12px}.library-dialog #recordingDialogStop{margin-top:8px}
     .recording-dock{flex-shrink:0;background:#231f31;border-top:1px solid #635474}#recordingDock .selected-recording{margin:0;padding:10px 20px;border:0;border-radius:0;background:transparent}#recordingDock #historyInfo{font-size:13px;line-height:1.5;margin:0;color:#c1b8d0;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}#recordingDock #recordingText{display:none}#recordingDock .version-toolbar{margin:0 0 8px}#recordingDock .version-choice{font-size:13px;padding:3px 8px}#recordingDock .row{margin:8px 0 0}#recordingDock .recording-secondary-actions{margin-top:8px;padding-top:8px;border-color:#494056}#recordingDock .recording-secondary-actions button{font-size:13px;padding:5px 9px}#recordingDock .recording-secondary-actions #reuseSongRange{margin-right:auto}#recordingDock .recording-secondary-actions #openRecordingAdjust{color:#c8bdd8}.recording-timeline .history-row::before{content:'○'}.recording-timeline .history-row[aria-pressed="true"]::before{content:'●';color:#b3eedb}
-    .recording-effects-section{padding:16px;margin:16px 0;border:1px solid #30414e;border-radius:12px;background:#192734}.recording-effects-section .recording-adjustment-group>label{display:block;margin:14px 0 6px}.recording-effects-section #previewVocalEffects{min-height:40px}.recording-effects-section .hint{font-size:12px;line-height:1.6}
     #recordingDialog{font-size:14px;line-height:1.6}#recordingDialog h2{font-size:18px;line-height:1.4}#recordingDialog h3,#recordingDialog summary{font-size:14px;line-height:1.5;font-weight:600}#recordingDialog button,#recordingDialog .library-tabs button,#recordingDialog .text-button{font-size:14px;line-height:1.5}#recordingDialog .hint,#recordingDialog small,#recordingDialog .recording-dialog-info,#recordingDialog .library-foot p{font-size:13px;line-height:1.6}#recordingDialog .fold>summary::after{font-size:13px}#recordingDialog .recording-adjustment-group>label.hint{display:block;font-size:14px;line-height:1.5;color:#c9d8e2;margin:16px 0 8px}#recordingDialog output{font-size:inherit}#recordingDialog .recording-adjustment-group>.hint{margin:10px 0 16px}#recordingDialog .recording-adjustment-group>.row{margin:10px 0}#recordingDialog .recording-adjustment-group>.row>.text-button{min-height:36px}#recordingDialog .recording-delete .hint{font-size:13px}#recordingDialog .recording-delete button{padding:7px 12px}#recordingDialog .recording-export-option .hint{font-size:13px}#recordingDialog .library-tabs,#recordingDialog header{flex-shrink:0}
 
 
@@ -157,29 +156,6 @@
         <div id="recordingEmpty" class="empty"><strong>从第一句开始</strong>录好以后，配音与演唱都会保存在这里。<br><button id="backToPractice">去练一句 →</button></div>
 
 
-<section id="recording-adjustments" class="recording-effects-section" aria-label="人声对齐与效果">
-<section id="vocalEffects" class="recording-adjustment-group" hidden><h3>人声对齐与效果</h3>
-            <label class="hint" for="vocalDelay">人声位移（毫秒） · <output id="vocalDelayValue">0 ms</output></label>
-            <input id="vocalDelay" type="range" min="-2000" max="2000" step="10" value="0" aria-label="人声位移，负数提前，正数延后">
-            <div class="row"><button id="vocalEarlier">提前 10 ms</button><button id="vocalLater">延后 10 ms</button></div>
-            <p class="hint">人声听起来慢了就向左提前，快了就向右延后。位移按录音实际时间计算。</p>
-            <div class="row"><label for="inlineVocalReverb">混响空间</label><select id="inlineVocalReverb" aria-label="录音混响空间"><option value="off">关闭</option><option value="ktv">KTV</option><option value="theatre">剧场</option></select></div>
-            <label class="hint" for="inlineVocalReverbAmount">混响强度 · <output id="inlineVocalReverbValue">25%</output></label>
-            <input id="inlineVocalReverbAmount" type="range" min="0" max="2" step="0.05" value="0.25" aria-label="录音混响强度">
-            <label class="hint" for="vocalFadeOut">结尾淡出 · <output id="vocalFadeOutValue">关闭</output></label>
-            <input id="vocalFadeOut" type="range" min="0" max="5" step="0.5" value="0" aria-label="结尾淡出时长，人声和伴奏一起淡出">
-            <div class="row"><button id="previewVocalEffects" class="primary">▶ 试听调整效果</button><button id="resetVocalEffects" class="text-button">重置此版本对齐与淡出</button></div>
-            <p id="vocalEffectsStatus" class="hint" role="status"></p>
-            <p class="hint">对齐与淡出仅影响此版本，超出录音边界的声音会裁切。混响沿用本视频设置；原始文件保持不变。</p>
-          </section>
-<details class="fold" id="recordingDetails"><summary>音量波形与录音详情</summary><div class="fold-content">
-          <p class="hint" id="recordingTechnical" style="white-space:pre-line;overflow-wrap:anywhere"></p>
-          <div id="analysis" hidden><canvas id="waveform" width="660" height="180" role="img" aria-label="录音音量波形，橙色表示低音量停顿"></canvas><div id="analysisText" class="analysis-text" role="status"></div><small>波形显示音量和停顿，不代表发音准确度。</small></div>
-          <small>每个练习片段保留最近 3 次；导入的录音额外保留，可手动删除。演唱与配音分别保存。连播使用各片段最新版本。</small>
-        </div></details>
-      <div class="recording-delete"><span class="hint">仅删除当前版本，可撤销。</span><button id="deleteTake" class="text-button danger" disabled>删除当前版本</button></div>
-    </section>
-
         <div id="historyBrowser"><div class="recording-search-row"><input id="recordingSearch" class="recording-search" placeholder="搜索台词、编号或时间" aria-label="查找录音"><button id="playAll" class="compact" disabled>▶ 连播</button></div>
         <div id="historyList" class="recording-timeline" aria-label="已录句子"></div></div>
 
@@ -198,7 +174,7 @@
           <div id="historyInfo"></div><div id="recordingText"></div>
           <div class="version-toolbar"><div id="versionChoices" class="version-choices" role="group" aria-label="当前片段的录音版本"></div></div>
           <div class="row"><button id="reviewReplay" class="primary">▷ 回放录音</button><button id="compare">⇄ 对比原声</button></div>
-          <div class="recording-secondary-actions"><button id="reuseSongRange" class="text-button" hidden>练习此段</button><button id="openRecordingDownload" class="compact">↓ 下载</button></div>
+          <div class="recording-secondary-actions"><button id="reuseSongRange" class="text-button" hidden>练习此段</button><button id="openRecordingAdjust" class="text-button">调整与详情</button><button id="openRecordingDownload" class="compact">↓ 下载</button></div>
         </div>
     </section>
     <div id="liveMeter" class="live-meter" hidden><div class="meter-heading"><span>麦克风 · 实时音量</span><output id="liveMeterValue">正在检测…</output></div><canvas id="liveMeterCanvas" width="640" height="64" aria-hidden="true"></canvas><div class="meter-track" role="meter" aria-label="麦克风实时音量，单位 dBFS" aria-valuemin="-60" aria-valuemax="0" aria-valuenow="-60"><div id="liveMeterBar" class="meter-fill"></div></div><label id="backingLiveControls" class="mix-row" hidden><span id="backingLiveLabel">伴奏</span><input id="backingLiveVolume" type="range" min="0" max="2" step="0.05" value="1" aria-label="录音中伴奏监听音量"><output id="backingLiveValue" for="backingLiveVolume">100%</output></label><label id="sidetoneLiveControls" class="mix-row" hidden><span>耳返</span><input id="sidetoneLiveVolume" type="range" min="0" max="1" step="0.05" value="0.35" aria-label="录音中耳返音量"><output id="sidetoneLiveValue">35%</output></label><button id="liveVocalSettings" class="text-button">耳返混响（实验）</button><p id="sidetoneLatency" class="hint" style="font-size:10px;margin:4px 0;line-height:1.5" hidden></p></div>
@@ -252,7 +228,27 @@
           <div class="row"><button id="markStart">此刻设为起点</button><button id="markEnd">此刻设为终点</button></div><p class="hint">单位为秒，每段最长 10 分钟。修改自动保存。</p></div><div class="library-foot"><p id="clipDialogStatus" role="status"></p><button id="doneClipDialog" class="primary">完成</button></div></dialog>
   <dialog id="recordingDialog" class="library-dialog" aria-labelledby="recordingDialogTitle"><header><h2 id="recordingDialogTitle">当前录音</h2><button id="closeRecordingDialog" class="close" aria-label="关闭录音操作">×</button></header>
     <p id="recordingDialogInfo" class="recording-dialog-info"></p>
-    <div class="library-body"><section id="recording-downloads">
+    <nav class="library-tabs" role="tablist" aria-label="录音操作"><button id="recordingAdjustTab" role="tab" aria-controls="recording-adjustments" aria-selected="true">调整与详情</button><button id="recordingDownloadTab" role="tab" aria-controls="recording-downloads" aria-selected="false" tabindex="-1">下载</button></nav>
+    <div class="library-body"><section id="recording-adjustments" role="tabpanel" aria-labelledby="recordingAdjustTab">
+<section id="vocalEffects" class="recording-adjustment-group" hidden><h3>人声对齐与淡出</h3>
+            <label class="hint" for="vocalDelay">人声位移（毫秒） · <output id="vocalDelayValue">0 ms</output></label>
+            <input id="vocalDelay" type="range" min="-2000" max="2000" step="10" value="0" aria-label="人声位移，负数提前，正数延后">
+            <div class="row"><button id="vocalEarlier">提前 10 ms</button><button id="vocalLater">延后 10 ms</button></div>
+            <p class="hint">人声听起来慢了就向左提前，快了就向右延后。位移按录音实际时间计算。</p>
+            <div class="row"><button id="takeReverbSettings" class="text-button" aria-label="打开混响设置">混响设置 →</button></div>
+            <label class="hint" for="vocalFadeOut">结尾淡出 · <output id="vocalFadeOutValue">关闭</output></label>
+            <input id="vocalFadeOut" type="range" min="0" max="5" step="0.5" value="0" aria-label="结尾淡出时长，人声和伴奏一起淡出">
+            <div class="row"><button id="resetVocalEffects" class="text-button">重置此版本对齐与淡出</button></div>
+            <p id="vocalEffectsStatus" class="hint" role="status"></p>
+            <p class="hint">对齐与淡出仅影响此版本，超出录音边界的声音会裁切。混响沿用本视频设置；原始文件保持不变。</p>
+          </section>
+<details class="fold" id="recordingDetails"><summary>音量波形与录音详情</summary><div class="fold-content">
+          <p class="hint" id="recordingTechnical" style="white-space:pre-line;overflow-wrap:anywhere"></p>
+          <div id="analysis" hidden><canvas id="waveform" width="660" height="180" role="img" aria-label="录音音量波形，橙色表示低音量停顿"></canvas><div id="analysisText" class="analysis-text" role="status"></div><small>波形显示音量和停顿，不代表发音准确度。</small></div>
+          <small>每个练习片段保留最近 3 次；导入的录音额外保留，可手动删除。演唱与配音分别保存。连播使用各片段最新版本。</small>
+        </div></details>
+      <div class="recording-delete"><span class="hint">仅删除当前版本，可撤销。</span><button id="deleteTake" class="text-button danger" disabled>删除当前版本</button></div>
+    </section><section id="recording-downloads" role="tabpanel" aria-labelledby="recordingDownloadTab" hidden>
       <div class="recording-export-option"><a id="download">↓ 原始人声</a><p class="hint">保留录制时的文件，不添加对齐、淡出或混响。</p></div>
       <div class="recording-export-option"><button id="downloadVocalEffects">↓ 处理后人声 · WAV</button><p class="hint">包含此版本的对齐、淡出与本视频的统一混响。</p></div>
       <div class="recording-export-option"><button id="takeMixDownload" hidden>人声＋伴奏</button><p class="hint" id="mixDownloadHint"></p></div>

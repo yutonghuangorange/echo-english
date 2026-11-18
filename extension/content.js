@@ -664,13 +664,10 @@
     $('recordingDialogPreview').setAttribute('aria-pressed',String(mode==='replay'));
     $('recordingDialogStop').hidden=!busy || mode==='replay';$('recordingDialogStop').disabled=mode==='saving';
     $('recordingDialogStop').textContent=mode==='exporting'?'取消导出':'停止播放';
-    for(const id of ['openRecordingDownload'])$(id).disabled=!take || !['idle','replay'].includes(mode);
+    for(const id of ['openRecordingAdjust','openRecordingDownload'])$(id).disabled=!take || !['idle','replay'].includes(mode);
     $('settingsStop').hidden=!busy;$('settingsStop').disabled=mode==='saving';
     $('stop').textContent=mode==='lead-in'?'■ 取消准备':mode==='recording'?'■ 结束录音':mode==='saving'?'保存中…':'■ 停止';
     $('reviewReplay').disabled = busy || !take;
-    $('previewVocalEffects').disabled=!take || !['idle','replay'].includes(mode);
-    $('previewVocalEffects').textContent=mode==='replay'?'■ 停止试听':'▶ 试听调整效果';
-    $('recording-adjustments').hidden=!take;
     $('playAll').disabled = busy || !videoHistory.length;
     $('replay').disabled = busy || !(isSinging()?songTake:take);
     $('compare').disabled = busy || !take;
@@ -782,33 +779,49 @@
     if (token === generation) { cancelPlayback(); restoreVideo(); }
   }
   const canEditSound=()=>['idle','replay','recording'].includes(mode);
-  function openRecordingDialog(){
+  let recordingDialogReturn='openRecordingAdjust';
+  function selectRecordingDialog(section,focus=false){
+    const download=section==='download';
+    $('recording-adjustments').hidden=download;$('recording-downloads').hidden=!download;
+    $('recordingDialogTitle').textContent=download?'下载录音':'调整与详情';
+    for(const [id,selected] of [['recordingAdjustTab',!download],['recordingDownloadTab',download]]){
+      $(id).setAttribute('aria-selected',String(selected));$(id).tabIndex=selected?0:-1;
+    }
+    if(download)analysisRequest++;
+    else if($('recordingDetails').open)void analyzeTake(take);
+    if(focus)$(download?'recordingDownloadTab':'recordingAdjustTab').focus();
+  }
+  function openRecordingDialog(section){
     if(!take || !['idle','replay'].includes(mode))return;
+    recordingDialogReturn=section==='download'?'openRecordingDownload':'openRecordingAdjust';
     $('recordingDialogInfo').textContent=$('historyInfo').textContent;
-    $('recordingDialogTitle').textContent='下载录音';
     const dialog=$('recordingDialog');
     if(!dialog.open){if(dialog.showModal)dialog.showModal();else dialog.open=true;}
-    controls();
+    selectRecordingDialog(section,true);controls();
   }
   function closeRecordingDialog(){
     const dialog=$('recordingDialog');if(!dialog.open)return;
     if(dialog.close)dialog.close();else dialog.open=false;
-    $('openRecordingDownload').focus();
+    analysisRequest++;$(recordingDialogReturn).focus();
   }
-  $('openRecordingDownload').onclick=openRecordingDialog;
+  $('openRecordingAdjust').onclick=()=>openRecordingDialog('adjust');
+  $('openRecordingDownload').onclick=()=>openRecordingDialog('download');
   $('closeRecordingDialog').onclick=closeRecordingDialog;
   $('recordingDialog').oncancel=event=>{event.preventDefault();closeRecordingDialog();};
-  $('previewVocalEffects').onclick=()=>take && playRecording(take);
+  for(const [id,section] of [['recordingAdjustTab','adjust'],['recordingDownloadTab','download']]){
+    $(id).onclick=()=>selectRecordingDialog(section);
+    $(id).onkeydown=event=>{
+      if(!['ArrowLeft','ArrowRight','Home','End'].includes(event.key))return;
+      event.preventDefault();selectRecordingDialog(event.key==='Home'?'adjust':event.key==='End'?'download':section==='adjust'?'download':'adjust',true);
+    };
+  }
   $('recordingDialogStop').onclick=()=>stop();
   $('recordingDialogPreview').onclick=()=>take && playRecording(take);
   function renderSoundEffects(){
     const editable=canEditSound();
     $('vocalReverb').value=vocalReverb.reverb;
-    $('inlineVocalReverb').value=vocalReverb.reverb;
-    $('inlineVocalReverb').disabled=!editable;
-    $('inlineVocalReverbAmount').value=vocalReverb.amount;
-    $('inlineVocalReverbAmount').disabled=!editable || vocalReverb.reverb==='off';
-    $('inlineVocalReverbValue').textContent=`${Math.round(vocalReverb.amount*100)}%`;
+    $('takeReverbSettings').textContent=vocalReverb.reverb==='off'?'混响 · 关闭 →':`混响 · ${vocalReverb.reverb==='ktv'?'KTV':'剧场'} ${Math.round(vocalReverb.amount*100)}% →`;
+    $('takeReverbSettings').disabled=!editable;
     $('vocalReverbAmount').value=vocalReverb.amount;
     $('vocalReverbValue').textContent=`${Math.round(vocalReverb.amount*100)}%`;
     $('vocalReverb').disabled=!editable;
@@ -829,11 +842,7 @@
     $(id).oninput=applySoundEffects;
     $(id).onchange=async()=>{if(!applySoundEffects())return;const owner=videoId,saved=await saveProgress();if(owner!==videoId)return;$('soundEffectsStatus').textContent=saved===false?'保存失败，请检查本地空间。':'已保存到本视频。原始录音保持干声。';};
   }
-  for(const [inline,shared] of [['inlineVocalReverb','vocalReverb'],['inlineVocalReverbAmount','vocalReverbAmount']]){
-    $(inline).oninput=()=>{$(shared).value=$(inline).value;applySoundEffects();};
-    $(inline).onchange=()=>{$(shared).value=$(inline).value;return $(shared).onchange();};
-  }
-  for(const id of ['openVocalSettings','micVocalSettings'])$(id).onclick=()=>{closeRecordingDialog();settings.open('sound',id);renderSoundEffects();};
+  for(const id of ['openVocalSettings','micVocalSettings','takeReverbSettings'])$(id).onclick=()=>{if(id==='takeReverbSettings')closeRecordingDialog();settings.open('sound',id==='takeReverbSettings'?'openRecordingAdjust':id);renderSoundEffects();};
   $('liveVocalSettings').onclick=()=>{settings.open('microphone','liveVocalSettings');renderSoundEffects();$('monitorReverb').focus();};
   const vocalEffectControls=['vocalDelay','vocalEarlier','vocalLater','vocalFadeOut','downloadVocalEffects','resetVocalEffects'];
   function renderVocalEffects(){
@@ -1616,7 +1625,7 @@
     finally { if (context) await context.close().catch(()=>{}); }
   }
   $('recordingDetails').ontoggle=()=>{
-    if($('recordingDetails').open)void analyzeTake(take);
+    if($('recordingDialog').open && $('recordingDetails').open)void analyzeTake(take);
     else analysisRequest++;
   };
   function closeWord() { wordRequest++; selectedWord = null; $('wordcard').hidden = true; window.speechSynthesis?.cancel(); }
