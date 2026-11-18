@@ -177,3 +177,22 @@ test('overlap fix hides on the last cue or gaps and rejects collapsing a cue wit
   await f.$('List').children[2].onclick();assert.equal(f.$('Overlap').hidden,true);f.editor.close();await f.editor.flush();
   f.editor.open({videoId:'gap',video:f.video,cues:[{start:0,end:2,text:'A'},{start:3,end:5,text:'B'}]});assert.equal(f.$('Overlap').hidden,true);f.editor.close();await f.editor.flush();
 });
+
+test('batch overlap repair counts all overlaps, is one undo step and saves only corrected ends',async()=>{
+  const f=fixture(),cues=[{start:0,end:6,text:'A',key:'a'},{start:4,end:9,text:'B',key:'b'},{start:8,end:12,text:'C',key:'c'}];
+  f.editor.open({videoId:'batch-overlap',video:f.video,cues});assert.match(f.$('TrimAllOverlaps').textContent,/2/);
+  f.$('TrimAllOverlaps').onclick();assert.equal(f.$('TrimAllOverlaps').disabled,true);assert.match(f.$('Message').textContent,/已修复 2/);
+  f.$('Undo').onclick();assert.match(f.$('Message').textContent,/已撤销/);assert.equal(f.$('End').value,D.time(6));assert.match(f.$('TrimAllOverlaps').textContent,/2/);assert.equal(f.$('Undo').disabled,true);
+  f.$('Redo').onclick();await f.$('Apply').onclick();assert.deepEqual(f.applied.map(c=>[c.start,c.end,c.key]),[[0,4,'a'],[4,8,'b'],[8,12,'c']]);await f.editor.flush();
+});
+test('batch repair reports skipped locked or zero-length cues without adding no-op undo history',async()=>{
+  const f=fixture();f.editor.open({videoId:'batch-locked',video:f.video,cues:[{start:0,end:3,text:'A',endLocked:true},{start:1,end:4,text:'B'},{start:1,end:5,text:'C'}]});
+  f.$('TrimAllOverlaps').onclick();assert.match(f.$('Message').textContent,/已修复 0/);assert.match(f.$('Message').textContent,/第 1、2/);assert.equal(f.$('Undo').disabled,true);
+  assert.equal(f.$('End').value,D.time(3));f.editor.close();await f.editor.flush();
+});
+test('batch repair updates marked lyric slots without filling unmarked holes',async()=>{
+  const f=fixture();f.editor.open({videoId:'batch-slots',video:f.video,cues:[]});paste(f,'A\nB\nC');mark(f,0,5);mark(f,3,7);
+  f.$('TrimAllOverlaps').onclick();assert.equal(f.$('Apply').disabled,true);await f.editor.flush();
+  const slots=f.drafts.at(-1).draft.timingSlots;assert.equal(slots[0].end,3);assert.equal(slots[1].start,3);assert.equal(D.isTimed(slots[2]),false);
+  f.editor.close();await f.editor.flush();
+});

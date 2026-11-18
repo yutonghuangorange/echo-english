@@ -89,6 +89,10 @@
       const marking=workflow==='slots',cue=cues[selected],has=D.isTimed(cue),lineCount=marking?mapping.lineCount:cues.length;
       $('Workflow').value=workflow;$('Count').textContent=marking?`${mapping.timedCount} 个区间 / ${lineCount} 行歌词`:`${cues.length} 句字幕`;
       $('Undo').disabled=!history.length;$('Redo').disabled=!future.length;
+      const overlapCount=cues.reduce((count,cue,i)=>count+(D.isTimed(cue) && D.isTimed(cues[i+1]) && cue.end>cues[i+1].start?1:0),0);
+      $('TrimAllOverlaps').disabled=!overlapCount || !!mappingError;
+      $('TrimAllOverlaps').textContent=overlapCount?`修复全部重叠（${overlapCount}）`:'修复全部重叠';
+
       $('MarkBar').hidden=!marking;$('PasteDetails').hidden=!marking;$('WorkflowHint').hidden=marking;
       $('WorkflowHint').textContent=marking?'粘贴歌词 → 播放歌曲 → 点击开始、结束，依次自动填入每一行。点击已标时歌词或区间试听。':'点击歌词或时间区间试听；拖动区间两端微调，或在右侧输入精确时间。';
       const next=markingIndex>=0?cues[markingIndex]:null;
@@ -257,10 +261,17 @@
       if(workflow==='slots'){remember();timingSlots.splice(selected,1);syncMapping();stopPreview();changed();draw();message('已删除时间区间，后续歌词按顺序重新填入。可撤销。');}
       else{const next=D.copy(cues);next.splice(selected,1);commit(next,'已删除这句字幕，可撤销。');}
     });
-    $('Undo').onclick=()=>{if(!history.length)return;future.push(state());restore(history.pop());};
-    $('Redo').onclick=()=>{if(!future.length)return;history.push(state());restore(future.pop());};
+    $('Undo').onclick=()=>{if(!history.length)return;future.push(state());restore(history.pop());message('已撤销上一步修改。');};
+    $('Redo').onclick=()=>{if(!future.length)return;history.push(state());restore(future.pop());message('已重做上一步修改。');};
     for(const edge of ['start','end'])$(edge==='start'?'Start':'End').addEventListener('wheel',safely(event=>wheelEdge(edge,event)),{passive:false});
     $('Start').onchange=safely(()=>updateEdge('start',D.parseTime($('Start').value)));$('End').onchange=safely(()=>updateEdge('end',D.parseTime($('End').value)));
+    $('TrimAllOverlaps').onclick=safely(()=>{
+      if(mappingError)throw Error(mappingError);
+      const result=D.trimOverlaps(cues,duration);
+      const skipped=result.skipped.length?`；第 ${result.skipped.slice(0,8).map(i=>i+1).join('、')}${result.skipped.length>8?' 等':''} 句因固定终点或起点过近未修改，请逐句检查。`:'';
+      const note=`已修复 ${result.fixed} 处重叠${skipped || '，可整批撤销。'}`;
+      if(result.fixed)commit(result.cues,note);else message(note);
+    });
     $('TrimOverlap').onclick=safely(()=>{
       const cue=cues[selected],next=cues[selected+1];
       if(!D.isTimed(cue) || !D.isTimed(next) || cue.end<=next.start)return;

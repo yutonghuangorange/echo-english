@@ -68,6 +68,17 @@
     }
     cue[which]=value;cue.estimated=false;validate(cues.filter(isTimed),duration);return cues;
   }
+  function trimOverlaps(source,duration){
+    const cues=copy(source),skipped=[];let fixed=0;
+    for(let i=0;i<cues.length-1;i++){
+      const cue=cues[i],next=cues[i+1];
+      if(!isTimed(cue) || !isTimed(next) || cue.end<=next.start)continue;
+      if(cue.endLocked || next.start-cue.start<MIN-0.000001){skipped.push(i);continue;}
+      cue.end=next.start;cue.estimated=false;fixed++;
+    }
+    const timed=cues.filter(isTimed);if(timed.length)validate(timed,duration);
+    return {cues,fixed,skipped};
+  }
   function merge(source,first,last,duration,key=newKey){
     if(first<0 || last<=first || last>=source.length)throw Error('请选择至少两句连续歌词合并。');
     const cues=copy(source),items=cues.slice(first,last+1);
@@ -102,6 +113,6 @@
   }
   function activeIndex(cues,time){let low=0,high=cues.length-1,result=-1;while(low<=high){const mid=(low+high)>>1;if(cues[mid].start<=time){result=mid;low=mid+1;}else high=mid-1;}return result>=0 && time<cues[result].end?result:-1;}
   function windowIndices(cues,start,end){const result=[];for(let i=0;i<cues.length;i++)if(isTimed(cues[i]) && cues[i].start<end && cues[i].end>start)result.push(i);return result;}
-  const api={MIN,MAX_CUES,MAX_TEXT,copy,isTimed,validate,fromCues,lyricLines,captureSlot,setSlot,nextUnmarked,alignSlots,edge,merge,replaceText,parseTime,time,serialize,activeIndex,windowIndices};
+  const api={MIN,MAX_CUES,MAX_TEXT,copy,isTimed,validate,fromCues,lyricLines,captureSlot,setSlot,nextUnmarked,alignSlots,edge,trimOverlaps,merge,replaceText,parseTime,time,serialize,activeIndex,windowIndices};
   if(typeof module!=='undefined')module.exports=api;else root.EchoSubtitleEditor=api;
 })(globalThis);

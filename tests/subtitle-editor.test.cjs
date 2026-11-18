@@ -49,3 +49,16 @@ test('cleared trailing rows do not prevent saving a shortened lyric list and sub
   const slots=[{key:'one',start:0,end:10},{key:'two',start:null,end:null}];
   const result=D.alignSlots(slots,'two\u2028lines',60);assert.equal(result.balanced,true);assert.equal(result.rows.length,1);assert.equal(result.rows[0].text,'two\nlines');assert.equal(result.rows[0].key,'one');
 });
+
+test('batch overlap repair preserves starts, identities, gaps and locks and skips unsafe intervals',()=>{
+  const source=[{start:0,end:5,text:'A',key:'a'},{start:3,end:7,text:'B',key:'b',startLocked:true},{start:6,end:8,text:'C'},
+    {start:9,end:12,text:'D',endLocked:true},{start:10,end:14,text:'E'},{start:10,end:16,text:'F'},
+    {start:null,end:null,text:'Not timed'},{start:20,end:22,text:'G'}];
+  const original=D.copy(source),result=D.trimOverlaps(source,30);
+  assert.equal(result.fixed,2);assert.deepEqual(result.skipped,[3,4]);
+  assert.deepEqual(result.cues.map(c=>c.start),source.map(c=>c.start));
+  assert.deepEqual(result.cues.map(c=>c.end),[3,6,8,12,14,16,null,22]);
+  assert.equal(result.cues[0].key,'a');assert.equal(result.cues[1].startLocked,true);assert.equal(result.cues[3].endLocked,true);
+  assert.deepEqual(source,original);assert.equal(D.trimOverlaps(result.cues,30).fixed,0);
+  assert.equal(D.trimOverlaps([],30).fixed,0);
+});
