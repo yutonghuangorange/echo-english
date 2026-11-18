@@ -1,4 +1,5 @@
 (function(root){
+  const effects = typeof module !== 'undefined' ? require('./vocal-effects.js') : root.EchoVocalEffects;
   function filename({title,videoId,start,end,kind='recording',assembled=false,extension='webm'}){
     const clean=value=>String(value || '').normalize('NFC').replace(/[<>:"/\\|?*\u0000-\u001f\u007f]/g,' ').replace(/\s+/g,' ').replace(/^[. ]+|[. ]+$/g,'');
     let name=clean(title) || clean(`YouTube-${videoId || '录音'}`);
@@ -81,7 +82,7 @@
     }
     try{
       for(const take of new Map(timeline.segments.map(s=>[s.take.id,s.take])).values()){
-        check();const decoded=await context.decodeAudioData(await take.blob.arrayBuffer());check();
+        check();const decoded=await effects.process(await context.decodeAudioData(await take.blob.arrayBuffer()),take.effects,env);check();
         for(const segment of timeline.segments.filter(s=>s.take.id===take.id))await add(decoded,segment.start,segment.end,segment.start-take.start+(take.vocalOffset || 0),Math.max(0,Math.min(2,vocalVolume)));
       }
       if(backing){

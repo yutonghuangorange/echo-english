@@ -4,7 +4,7 @@
   const MAGIC='ECHOPACK1\n',HEADER_LIMIT=16*1024*1024,RECORD_LIMIT=50000;
   const fields={
     sessions:'videoId title clipRangeAdjusted qualityPreferences modelPreferences scopes speechScope karaokeScope assemblyChoices loopCount prepSeconds autoNext leadInMode leadInSeconds activity paragraphFirst paragraphLast useBacking backingPreferences captionSource captionSourceName loadedCaptionSource replayVocalVolume replayBackingVolume replayWithBacking backingVolume contentLanguage captionLayout cues index start end speed showChinese hideText followCaptions selectedTakeId updatedAt',
-    recordings:'id videoId cueKey label start end speed createdAt capture kind autoGainControl inputGainDb recordingInfo vocalOffset capturedEnd backingKey backingModel backingQuality withBacking',
+    recordings:'id videoId cueKey label start end speed createdAt capture kind autoGainControl inputGainDb recordingInfo effects vocalOffset capturedEnd backingKey backingModel backingQuality withBacking',
     backings:'key videoId model quality start end createdAt',
     favorites:'videoId title createdAt'
   };

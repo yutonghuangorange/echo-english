@@ -27,6 +27,7 @@
         "live-meter.js",
         "microphone.js",
         "recording.js",
+        "vocal-effects.js",
         "audio-export.js",
         "assembly.js",
         "karaoke.js",

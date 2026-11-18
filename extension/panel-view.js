@@ -154,6 +154,18 @@
           <div class="recording-heading"><div class="eyebrow">当前录音</div><button id="reuseSongRange" class="text-button" hidden>练习此段 →</button></div><div id="historyInfo"></div><div id="recordingText"></div>
           <div class="row"><button id="reviewReplay">▷ 回放录音</button><button id="compare">⇄ 对比原声</button></div>
           <div class="version-toolbar"><div id="versionChoices" class="version-choices" role="group" aria-label="当前片段的录音版本"></div><button id="deleteTake" class="text-button danger" disabled>删除此版</button></div>
+          <details class="fold" id="vocalEffects" hidden><summary>人声对齐与混响</summary><div class="fold-content">
+            <label class="hint" for="vocalDelay">人声位移（毫秒） · <output id="vocalDelayValue">0 ms</output></label>
+            <input id="vocalDelay" type="range" min="-2000" max="2000" step="10" value="0" aria-label="人声位移，负数提前，正数延后">
+            <div class="row"><button id="vocalEarlier">提前 10 ms</button><button id="vocalLater">延后 10 ms</button></div>
+            <p class="hint">人声听起来慢了就向左提前，快了就向右延后。位移按录音实际时间计算。</p>
+            <div class="row"><label for="vocalReverb">混响空间</label><select id="vocalReverb"><option value="off">关闭</option><option value="ktv">KTV</option><option value="theatre">剧场</option></select></div>
+            <label class="hint" for="vocalReverbAmount">混响强度 · <output id="vocalReverbValue">25%</output></label>
+            <input id="vocalReverbAmount" type="range" min="0" max="1" step="0.05" value="0.25" aria-label="混响强度">
+            <div class="row"><button id="previewVocalEffects">▷ 试听调整</button><button id="downloadVocalEffects">下载后期 WAV</button></div><div class="row"><button id="resetVocalEffects" class="text-button">重置此版本后期</button></div>
+            <p id="vocalEffectsStatus" class="hint" role="status"></p>
+            <p class="hint">按版本自动保存，回听、混合及整首导出沿用设置。原始下载可保留原声。移出录音边界的声音及末尾混响会裁切。</p>
+          </div></details>
           <div class="recording-downloads"><a id="download">↓ 下载所选录音</a><button id="takeMixDownload" hidden>人声＋伴奏</button></div><p class="hint" id="mixDownloadHint">混合下载采用底部的回听音量比例，原始录音保持不变。</p>
         <details class="fold" id="recordingDetails"><summary>音量波形与录音详情</summary><div class="fold-content">
           <p class="hint" id="recordingTechnical" style="white-space:pre-line;overflow-wrap:anywhere"></p>

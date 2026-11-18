@@ -602,7 +602,7 @@
     $('autoPractice').textContent=paragraph?'▶ 自动练当前段落':whole?(singing?'▶ 自动练整首':'▶ 自动练整段'):singing?'▶ 自动练当前片段':'▶ 自动跟读';
   }
   function controls() {
-    $('panel').dataset.mode=mode;renderPracticeActions();
+    $('panel').dataset.mode=mode;renderPracticeActions();renderVocalEffects();
     const busy = mode !== 'idle';
     $('openLibrary').disabled=busy;
     updateLeadInSettings();
@@ -767,8 +767,58 @@
     });
     if (token === generation) { cancelPlayback(); restoreVideo(); }
   }
+  const vocalEffectControls=['vocalDelay','vocalEarlier','vocalLater','vocalReverb','vocalReverbAmount','previewVocalEffects','downloadVocalEffects','resetVocalEffects'];
+  function renderVocalEffects(){
+    const available=take?.capture==='vocal' && !take.withBacking;
+    $('vocalEffects').hidden=!available;
+    const effects=EchoVocalEffects.normalize(take?.effects);
+    $('vocalDelay').value=effects.delayMs;
+    $('vocalDelayValue').textContent=`${effects.delayMs>0?'+':''}${effects.delayMs} ms`;
+    $('vocalReverb').value=effects.reverb;
+    $('vocalReverbAmount').value=effects.amount;
+    $('vocalReverbValue').textContent=`${Math.round(effects.amount*100)}%`;
+    for(const id of vocalEffectControls)$(id).disabled=!available || mode!=='idle';
+    $('vocalReverbAmount').disabled ||= effects.reverb==='off';
+  }
+  async function saveVocalEffects(reset=false){
+    if(mode!=='idle' || take?.capture!=='vocal' || take.withBacking)return;
+    const id=take.id,owner=videoId,token=++generation;
+    const effects=EchoVocalEffects.normalize(reset?{}:{delayMs:$('vocalDelay').value,reverb:$('vocalReverb').value,amount:$('vocalReverbAmount').value});
+    mode='saving';controls();
+    try{
+      const updated=await storage.updateTakeEffects(id,effects);
+      if(owner!==videoId || token!==generation)return;
+      if(!updated)throw Error('录音已不存在，请重新选择。');
+      videoHistory=videoHistory.map(value=>value.id===id?updated:value);
+      if(songTake?.id===id)songTake={...songTake,effects};
+      if(take?.id===id)take={...take,effects};
+      $('vocalEffectsStatus').textContent='已保存到此录音版本。点击试听调整可回听。';
+    }catch(error){if(owner===videoId && token===generation)$('vocalEffectsStatus').textContent=`保存失败：${error.message}`;}
+    finally{if(owner===videoId && token===generation){mode='idle';controls();}}
+  }
+  for(const id of ['vocalDelay','vocalReverb','vocalReverbAmount'])$(id).onchange=()=>saveVocalEffects();
+  $('vocalDelay').oninput=()=>{$('vocalDelayValue').textContent=`${Number($('vocalDelay').value)>0?'+':''}${$('vocalDelay').value} ms`;};
+  $('vocalReverbAmount').oninput=()=>{$('vocalReverbValue').textContent=`${Math.round(Number($('vocalReverbAmount').value)*100)}%`;};
+  for(const [id,delta] of [['vocalEarlier',-10],['vocalLater',10]])$(id).onclick=()=>{
+    if(mode!=='idle')return;
+    $('vocalDelay').value=EchoVocalEffects.normalize({delayMs:Number($('vocalDelay').value)+delta}).delayMs;
+    return saveVocalEffects();
+  };
+  $('resetVocalEffects').onclick=()=>saveVocalEffects(true);
+  $('previewVocalEffects').onclick=()=>take && playRecording(take);
+  $('downloadVocalEffects').onclick=guarded(async()=>{
+    if(mode!=='idle' || !take)return;
+    const selected=take,token=++generation,id=videoId;
+    mode='exporting';controls();status('正在处理后期人声…');
+    try{
+      const decoded=await EchoVocalEffects.renderTake(selected);
+      if(token!==generation || id!==videoId)return;
+      downloadAudio(EchoVocalEffects.wav(decoded),EchoAudioExport.filename({title:currentVideoTitle(),videoId:id,start:selected.start,end:selected.end,kind:'vocals',extension:'wav'}));
+    }finally{if(token===generation){mode='idle';controls();}}
+  });
   function setTake(value) {
     if(value && take?.id===value.id){controls();return;}
+    $('vocalEffectsStatus').textContent='';
     if (take?.url) URL.revokeObjectURL(take.url);
     take = value ? { ...value, url: URL.createObjectURL(value.blob) } : null;
     $('download').style.display = take ? 'block' : 'none';
@@ -1320,7 +1370,10 @@
     const t = take, v = video(); saveVideo(v); v.muted = true; v.playbackRate = t.speed;
     await seek(v, t.start, token);
     if (token !== generation) return;
-    audio = new Audio(t.url);
+    const previewBlob=await EchoVocalEffects.preview(t);
+    if(token!==generation)return;
+    const previewUrl=previewBlob===t.blob?null:URL.createObjectURL(previewBlob);
+    audio = new Audio(previewUrl || t.url);
     const a = audio;
     let accompaniment=null, voiceOutput=null;
     replayTake=t;replayBackingReady=false;replayVoiceMax=2;
@@ -1400,6 +1453,7 @@
       }
       await playbackDone;
     } finally {
+      if(previewUrl)URL.revokeObjectURL(previewUrl);
       v.removeEventListener('waiting', onWaiting);v.removeEventListener('playing', onPlaying);
       accompaniment?.dispose();if(replayMonitor===accompaniment)replayMonitor=null;
       voiceOutput?.dispose();if(replayVoiceOutput===voiceOutput)replayVoiceOutput=null;

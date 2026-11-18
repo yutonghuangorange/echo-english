@@ -73,6 +73,16 @@
           };
         });
       },
+      updateTakeEffects(id, effects) {
+        return transaction(['recordings'],'readwrite',(tx,set)=>{
+          const store=tx.objectStore('recordings');
+          store.get(id).onsuccess=event=>{
+            const take=event.target.result;
+            if(!take || take.capture!=='vocal' || take.withBacking){set(null);return;}
+            const updated={...take,effects};store.put(updated);set(updated);
+          };
+        });
+      },
       deleteTake(id) { return transaction(['recordings'],'readwrite',tx=>tx.objectStore('recordings').delete(id)); },
       setFavorite(value) { return transaction(['favorites'],'readwrite',tx=>tx.objectStore('favorites').put(value)); },
       deleteFavorite(videoId) { return transaction(['favorites'],'readwrite',tx=>tx.objectStore('favorites').delete(videoId)); },
