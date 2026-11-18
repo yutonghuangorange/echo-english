@@ -7,19 +7,37 @@
   }
 
   function create({container, slider, label, time, onError, env = root}) {
-    let frame = 0, revision = 0;
+    let frame = 0, revision = 0, active = false, idleView = null;
+
+    function renderIdle() {
+      container.hidden = !idleView;
+      slider.disabled = true;
+      slider.oninput = null;
+      slider.value = 0;
+      slider.title = '开始回放后可拖动跳转';
+      slider.setAttribute('aria-label', '回放进度');
+      slider.setAttribute('aria-valuetext', idleView?.time || '');
+      label.textContent = idleView?.label || '';
+      time.textContent = idleView?.time || '';
+    }
+
+    // Changing pages must not restart an active media clock or invalidate its seek handler.
+    function setIdleView(value) {
+      idleView = value;
+      if (!active) renderIdle();
+    }
 
     function hide() {
       ++revision;
       env.cancelAnimationFrame(frame);
       frame = 0;
-      container.hidden = true;
-      slider.disabled = true;
-      slider.oninput = null;
+      active = false;
+      renderIdle();
     }
 
     function show({label: text, position, duration, seekTo = null}) {
       hide();
+      active = true;
       const current = revision;
       container.hidden = false;
       label.textContent = text;
@@ -50,7 +68,7 @@
     }
 
     hide();
-    return {show, hide};
+    return {show, hide, setIdleView};
   }
   const api = {create, formatTime};
   if (typeof module !== 'undefined') module.exports = api;
