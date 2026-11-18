@@ -1212,17 +1212,19 @@ test('manual input gain reaches the saved vocal recording and meter, then releas
 });
 
 function leadInVideo({hold=false}={}){
-  const events=new Map(),plays=[];let time=0;
-  return {duration:60,muted:true,playbackRate:1.25,plays,pause(){},
-    get currentTime(){return time;},set currentTime(value){time=value;queueMicrotask(()=>{for(const fn of events.get('seeked') || [])fn();});},
+  const events=new Map(),plays=[],seeks=[];let time=0;
+  return {duration:60,muted:true,playbackRate:1.25,plays,seeks,pause(){},
+    get currentTime(){return time;},set currentTime(value){time=value;seeks.push(value);queueMicrotask(()=>{for(const fn of events.get('seeked') || [])fn();});},
     addEventListener(name,fn){if(!events.has(name))events.set(name,new Set());events.get(name).add(fn);},
     removeEventListener(name,fn){events.get(name)?.delete(fn);},
     async play(){plays.push({at:time,muted:this.muted});if(!hold)time=plays.length===1?10:11;}
   };
 }
-for(const leadMode of ['seconds','previous'])test(`recording ${leadMode} lead-in plays context without recording it and preserves the saved range`,async()=>{
+for(const withBacking of [false,true])for(const leadMode of ['seconds','previous'])test(`recording ${leadMode} lead-in ${withBacking?'with backing':'without backing'} plays context without recording it and preserves the saved range`,async()=>{
   const storage=createStorage(new IDBFactory()),video=leadInVideo(),starts=[];
-  await storage.saveSession({videoId:'video',start:10,end:11,speed:'1',cues:[{start:5,end:8,text:'Previous'},{start:10,end:11,text:'Selected'}],leadInMode:leadMode,leadInSeconds:3});
+  video.volume=.7;
+  await storage.saveSession({videoId:'video',activity:withBacking?'sing':'speech',scopes:{sing:'clip',speech:'clip'},useBacking:withBacking,backingPreferences:{sing:withBacking,speech:false},start:10,end:11,speed:'1',cues:[{start:5,end:8,text:'Previous'},{start:10,end:11,text:'Selected'}],leadInMode:leadMode,leadInSeconds:3});
+  if(withBacking)await storage.saveBacking({key:'music',videoId:'video',start:0,end:60,createdAt:1,blob:new Blob(['music'])});
   const mic={getTracks:()=>[{stop(){}}]};
   class MediaRecorder{
     static isTypeSupported(){return true;}
@@ -1231,12 +1233,19 @@ for(const leadMode of ['seconds','previous'])test(`recording ${leadMode} lead-in
     stop(){this.state='inactive';this.ondataavailable({data:new Blob(['only-target-vocal'])});queueMicrotask(()=>this.onstop());}
   }
   const {nodes}=await mount(storage,{video,globals:{MediaRecorder,navigator:{mediaDevices:{async getUserMedia(){return mic;}}},
+    EchoKaraoke:{...require('../extension/karaoke.js'),async createMonitor(options){
+      assert.equal(withBacking,true);assert.equal(video.plays.length,0);
+      assert.equal(options.initialPosition,10);assert.equal(options.fadeInSeconds,.04);
+      return {async sync(position){assert.equal(position,10);assert.equal(starts.length,1);},pause(){},dispose(){},setVolume(){}};
+    }},
     requestAnimationFrame:fn=>setTimeout(fn,1),cancelAnimationFrame:clearTimeout}});
   assert.equal(nodes.get('leadInSeconds').value,3);
   await nodes.get('record').onclick();
   assert.deepEqual(video.plays,[{at:leadMode==='previous'?5:7,muted:false},{at:10,muted:true}]);assert.deepEqual(starts,[10]);
+  assert.deepEqual(video.seeks,[leadMode==='previous'?5:7]);
   const [take]=await storage.listTakes('video');assert.equal(take.start,10);assert.equal(take.end,11);
   assert.equal(await take.blob.text(),'only-target-vocal');assert.equal(video.muted,true);assert.equal(video.playbackRate,1.25);
+  assert.equal(video.volume,.7);
   nodes.get('leadInSeconds').value='5';nodes.get('leadInSeconds').onchange();
   await new Promise(r=>setTimeout(r,5));assert.equal((await storage.getSession('video')).leadInSeconds,5);
   (await storage.ready).close();
@@ -2368,7 +2377,8 @@ test('lead-in progress stays visible through a delayed seek and recording playba
   const pending=nodes.get('record').onclick();await waitUntil(()=>nodes.get('transportLabel').textContent==='准备录音 · 前置原声');
   const visibility=[];let hidden=nodes.get('transport').hidden;
   Object.defineProperty(nodes.get('transport'),'hidden',{get:()=>hidden,set:value=>{hidden=value;visibility.push(value);}});
-  holdSeek=true;position=10;emit('timeupdate');await waitUntil(()=>!!releaseSeek);
+  // A genuinely overshot boundary must still seek back before capture.
+  holdSeek=true;position=10.2;emit('timeupdate');await waitUntil(()=>!!releaseSeek);
   assert.equal(hidden,false);assert.equal(nodes.get('liveMeter').hidden,false);assert.equal(starts,0);
   releaseSeek();await waitUntil(()=>!!releasePlay);
   assert.equal(starts,1);assert.equal(nodes.get('panel').dataset.mode,'recording');

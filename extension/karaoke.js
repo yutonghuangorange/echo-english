@@ -65,7 +65,21 @@
       return {setVolume:value=>setGain(gain,value),dispose:()=>{if(disposed)return;disposed=true;void context.close().catch(()=>{});}};
     }catch(error){await context.close().catch(()=>{});throw error;}
   }
-  async function createMonitor({blob,video,start,speed,volume=1}, env=root) {
+  // A short envelope changes monitoring only; microphone capture stays dry.
+  function fadeOriginalOut(video,end,speed,env=root) {
+    const volume=video.volume;
+    if(!Number.isFinite(volume))return ()=>{};
+    let frame=0,disposed=false;
+    function tick(){
+      if(disposed)return;
+      const remaining=(end-video.currentTime)/speed;
+      video.volume=volume*Math.max(0,Math.min(1,remaining/0.06));
+      frame=env.requestAnimationFrame(tick);
+    }
+    tick();
+    return ()=>{disposed=true;env.cancelAnimationFrame(frame);video.volume=volume;};
+  }
+  async function createMonitor({blob,video,start,speed,volume=1,initialPosition,fadeInSeconds=0}, env=root) {
     const context=new env.AudioContext();
     let url,music,loadTimer=0,disposed=false;
     const clearLoading=()=>{env.clearTimeout(loadTimer);loadTimer=0;if(music)music.oncanplay=music.onerror=null;};
@@ -78,15 +92,29 @@
       url=env.URL.createObjectURL(blob);music=new env.Audio(url);
       music.preload='auto';music.playbackRate=speed;music.preservesPitch=true;
       const backing=context.createMediaElementSource(music), gain=context.createGain();setGain(gain,volume);
-      backing.connect(gain);gain.connect(context.destination);
+      backing.connect(gain);
+      const fade=fadeInSeconds>0?context.createGain():null;
+      if(fade){fade.gain.value=0;gain.connect(fade);fade.connect(context.destination);}else gain.connect(context.destination);
+      let fading=!!fade;
       const ready=new Promise((resolve,reject)=>{
         loadTimer=env.setTimeout(()=>{clearLoading();reject(Error('伴奏加载超时，请重新生成。'));},10000);
         music.oncanplay=()=>{clearLoading();resolve();};
         music.onerror=()=>{clearLoading();reject(Error('伴奏无法解码，请重新生成。'));};
       });
       music.load();await Promise.all([ready,context.resume()]);
+      if(Number.isFinite(initialPosition))music.currentTime=Math.max(0,initialPosition-start);
       return {setVolume:value=>setGain(gain,value),
-        async sync(position=video.currentTime){if(disposed)return;music.currentTime=Math.max(0,position-start);await music.play();},
+        async sync(position=video.currentTime){
+          if(disposed)return;
+          const target=Math.max(0,position-start);
+          if(!Number.isFinite(music.currentTime) || Math.abs(music.currentTime-target)>0.01)music.currentTime=target;
+          await music.play();
+          if(disposed)return;
+          if(fading){
+            fading=false;const now=context.currentTime;
+            fade.gain.setValueAtTime(0,now);fade.gain.linearRampToValueAtTime(1,now+Math.min(0.15,fadeInSeconds));
+          }
+        },
         async resume(){if(!disposed)await music.play();},
         position:()=>start+music.currentTime,
         pause(){music.pause();},dispose:cleanup};
@@ -136,6 +164,6 @@
       }
     };
   }
-  const api={generationRange,DEFAULT_MODEL,modelOf,qualityOf,fetchAudio,key,covers,canReplayBacking,backingForTake,progressText,blobFromBase64,createMonitor,createAudioOutput,createBackingOutput:createAudioOutput,followRecording};
+  const api={generationRange,DEFAULT_MODEL,modelOf,qualityOf,fetchAudio,key,covers,canReplayBacking,backingForTake,progressText,blobFromBase64,fadeOriginalOut,createMonitor,createAudioOutput,createBackingOutput:createAudioOutput,followRecording};
   if(typeof module!=='undefined')module.exports=api;else root.EchoKaraoke=api;
 })(globalThis);

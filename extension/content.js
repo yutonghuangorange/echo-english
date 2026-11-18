@@ -799,10 +799,11 @@
     if(token!==generation)return false;
     const update=()=>status(`准备录音 · ${Math.max(0,Math.ceil((r.start-v.currentTime)/r.speed))} 秒后开始`);
     update();v.addEventListener('timeupdate',update);
-    let completed=false;
+    let completed=false,restoreVolume=()=>{};
     try{
       await v.play();
       if(token!==generation)return false;
+      if(recordingSession?.monitor)restoreVolume=EchoKaraoke.fadeOriginalOut(v,r.start,r.speed,globalThis);
       await new Promise((resolve,reject)=>{
         playback.onCancel(resolve);
         showVideoTransport('准备录音 · 前置原声',v,{start,end:r.start,speed:r.speed});
@@ -811,6 +812,7 @@
       });
       completed=true;
     }finally{
+      restoreVolume();
       v.removeEventListener('timeupdate',update);
       if(token===generation){playback.cancel();if(!completed)transport.hide();}
     }
@@ -1509,7 +1511,7 @@
     };
     const session=EchoRecording.create({constraints,quality:recordingQuality,sidetone:sidetoneEnabled,sidetoneVolume,sidetoneMode,sidetoneReverb:monitoringEffects(),gainDb:gainPreferences[gainKey]?0:manualGainPreferences[gainKey],active,
       microphone:EchoMicrophone,env:globalThis,
-      createMonitor:ready?()=>EchoKaraoke.createMonitor({blob:ready.blob,video:v,start:ready.start,speed:r.speed,volume:Number($('backingVolume').value)}):null,
+      createMonitor:ready?()=>EchoKaraoke.createMonitor({blob:ready.blob,video:v,start:ready.start,speed:r.speed,volume:Number($('backingVolume').value),initialPosition:r.start,fadeInSeconds:leadInStart(r)<r.start?0.04:0}):null,
       createMeter:input=>EchoLiveMeter.start({stream:input,container:$('liveMeter'),canvas:$('liveMeterCanvas'),value:$('liveMeterValue'),bar:$('liveMeterBar')}),
       onError:error=>{if(recordingSession===session && id===videoId){stop();status(error.message);}},
       onComplete:async result=>{
@@ -1531,10 +1533,13 @@
     if(!active())return false;
     saveVideo(v);v.playbackRate=r.speed;
     if(leadInStart(r)<r.start)session.startMeter();
-    const hadLeadIn=await playRecordingLeadIn(v,r,token);
+    await playRecordingLeadIn(v,r,token);
     if(!active())return false;
     v.muted=true;
-    await seek(v,r.start,token,hadLeadIn);
+    // The lead-in normally pauses at this position already. Re-seeking even
+    // there can flush YouTube's buffer and interrupt the beat at the handoff.
+    // The shared seek still corrects overshoots beyond its 30 ms tolerance.
+    await seek(v,r.start,token);
     if(!active())return false;
     // Every mode starts capture before playback; startup latency must not
     // consume the selected range. The offset records any microphone pre-roll.

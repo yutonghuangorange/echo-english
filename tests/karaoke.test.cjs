@@ -102,6 +102,45 @@ test('whole-song backing covers shorter phrases but never another video or an un
   assert.equal(covers({...backing,start:20},'song',{start:10,end:30}),false);
 });
 
+test('lead-in fade follows media time at practice speed and restores the original volume on cancellation',()=>{
+  const {fadeOriginalOut}=require('../extension/karaoke.js'),frames=new Map();let id=0;
+  const env={requestAnimationFrame(fn){frames.set(++id,fn);return id;},cancelAnimationFrame(id){frames.delete(id);}};
+  const video={currentTime:9,volume:.7};
+  const restore=fadeOriginalOut(video,10,.5,env);
+  const tick=()=>{const [key,fn]=frames.entries().next().value;frames.delete(key);fn();};
+  assert.equal(video.volume,.7);
+  video.currentTime=9.985;tick();assert.ok(Math.abs(video.volume-.35)<.001);
+  video.currentTime=10;tick();assert.equal(video.volume,0);
+  const stale=frames.values().next().value;restore();assert.equal(video.volume,.7);assert.equal(frames.size,0);
+  stale();assert.equal(video.volume,.7);
+});
+
+test('monitor prepositions before playback and fades only the first handoff without changing the vocal stream',async()=>{
+  const gains=[],events=[],seeks=[];let music;
+  class Context{
+    destination={};currentTime=12;
+    createMediaElementSource(){return {connect(){}};}
+    createMediaStreamDestination(){assert.fail('no mixed recording');}
+    createGain(){const node={connect(){},gain:{value:1,setValueAtTime(value,time){events.push(['set',value,time]);},linearRampToValueAtTime(value,time){events.push(['ramp',value,time]);}}};gains.push(node);return node;}
+    async resume(){}async close(){}
+  }
+  class Audio{
+    constructor(){music=this;this.time=0;}
+    get currentTime(){return this.time;}set currentTime(value){this.time=value;seeks.push(value);}
+    load(){queueMicrotask(()=>this.oncanplay?.());}async play(){events.push('play');}pause(){}removeAttribute(){}
+  }
+  const env={AudioContext:Context,Audio,URL:{createObjectURL:()=> 'blob:music',revokeObjectURL(){}},setTimeout,clearTimeout};
+  const monitor=await createMonitor({blob:new Blob(),video:{currentTime:20},start:10,speed:1,initialPosition:20,fadeInSeconds:.04,volume:1.4},env);
+  assert.deepEqual(seeks,[10]);assert.equal(gains[0].gain.value,1.4);assert.equal(gains[1].gain.value,0);
+  assert.equal(events.length,0);
+  await monitor.sync(20);assert.deepEqual(seeks,[10]);
+  assert.deepEqual(events,['play',['set',0,12],['ramp',1,12.04]]);
+  monitor.setVolume(.6);assert.equal(gains[0].gain.value,.6);
+  monitor.pause();await monitor.sync(21);assert.equal(music.currentTime,11);
+  assert.equal(events.filter(event=>Array.isArray(event) && event[0]==='ramp').length,1);
+  monitor.dispose();
+});
+
 test('accompaniment preview supports live gain above HTML audio volume without changing the element volume',async()=>{
   let gain,closed=0;const music={volume:1};
   const source={connect(){}};
