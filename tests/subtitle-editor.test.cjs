@@ -33,7 +33,19 @@ test('active lookup handles gaps and timeline window does not render offscreen r
 test('recorded slots map lyrics in order without inventing timestamps for excess lyrics',()=>{
   let slots=D.captureSlot([],10,20,120,key);slots=D.captureSlot(slots,30,40,120,key);
   const exact=D.alignSlots(slots,'Line one\nLine two',120);assert.equal(exact.balanced,true);assert.equal(exact.rows[0].start,10);assert.equal(exact.rows[0].end,20);assert.equal(exact.rows[1].start,30);
-  const extra=D.alignSlots(slots,'One\nTwo\nThree',120);assert.equal(extra.balanced,false);assert.deepEqual(extra.extraLyrics,[{text:'Three',group:0,line:3}]);assert.equal(extra.rows.length,2);
+  const extra=D.alignSlots(slots,'One\nTwo\nThree',120);assert.equal(extra.balanced,false);assert.deepEqual(extra.extraLyrics,[{text:'Three',group:0,line:3}]);assert.equal(extra.rows.length,3);assert.equal(extra.rows[2].start,null);
   const missing=D.alignSlots(slots,'Only one',120);assert.equal(missing.missingLyrics,1);assert.equal(missing.rows[1].unmatched,true);assert.equal(missing.rows[1].start,30);
-  assert.equal(D.alignSlots([],'No timing yet',120).rows.length,0);assert.throws(()=>D.captureSlot(slots,45,44,120,key));assert.throws(()=>D.captureSlot([],NaN,20,120,key));
+  assert.equal(D.alignSlots([],'No timing yet',120).rows[0].start,null);assert.throws(()=>D.captureSlot(slots,45,44,120,key));assert.throws(()=>D.captureSlot([],NaN,20,120,key));
+});
+test('setSlot fills a specific lyric hole without sorting or shifting other assignments',()=>{
+  const slots=[{key:'one',start:0,end:10},{key:'two',start:null,end:null},{key:'three',start:20,end:30}];
+  assert.equal(D.nextUnmarked(slots,4,2),3);assert.equal(D.nextUnmarked(slots,3,2),1);
+  const next=D.setSlot(slots,1,11,19,60,key);assert.equal(next[1].key,'two');assert.deepEqual(next[2],slots[2]);assert.equal(slots[1].start,null);assert.equal(D.nextUnmarked(next,3),-1);
+  assert.throws(()=>D.setSlot(slots,1,25,29,60,key),/起点不能越过/);assert.throws(()=>D.setSlot(slots,1,NaN,19,60,key));
+  const aligned=D.alignSlots(slots,'One\nTwo\nThree',60);assert.deepEqual(aligned.extraLyrics,[{text:'Two',group:0,line:2}]);assert.equal(aligned.rows[2].text,'Three');assert.equal(aligned.rows[2].start,20);assert.deepEqual(D.windowIndices(aligned.rows,0,30),[0,2]);
+});
+
+test('cleared trailing rows do not prevent saving a shortened lyric list and subtitle line breaks stay inside their row',()=>{
+  const slots=[{key:'one',start:0,end:10},{key:'two',start:null,end:null}];
+  const result=D.alignSlots(slots,'two\u2028lines',60);assert.equal(result.balanced,true);assert.equal(result.rows.length,1);assert.equal(result.rows[0].text,'two\nlines');assert.equal(result.rows[0].key,'one');
 });

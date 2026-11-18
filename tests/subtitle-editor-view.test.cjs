@@ -58,11 +58,11 @@ test('mismatch in either direction blocks export and retains real timestamps, de
   paste(f,'Only one');assert.match(f.$('MappingIssues').children[0].textContent,/缺少 1 行/);f.$('DeleteSlot').onclick();assert.equal(f.$('Apply').disabled,false);f.$('Undo').onclick();assert.equal(f.$('Apply').disabled,true);
   paste(f,'One\nTwo');await f.$('Apply').onclick();assert.equal(f.applied[0].start,10);assert.equal(f.applied[1].end,40);await f.editor.flush();
 });
-test('pending start survives draft restore, can be cancelled, and never enables premature save',async()=>{
-  const f=fixture();f.editor.open({videoId:'pending',video:f.video,cues:[]});paste(f,'One');mark(f,5,10);f.video.currentTime=20;f.$('SectionMarkStart').onclick();
+test('pending start survives draft restore and can be cancelled back to inherited start',async()=>{
+  const f=fixture();f.editor.open({videoId:'pending',video:f.video,cues:[]});paste(f,'One\nTwo');mark(f,5,10);f.video.currentTime=20;f.$('SectionMarkStart').onclick();
   await f.$('Apply').onclick();assert.equal(f.applied,null);await f.editor.flush();const draft=f.drafts.at(-1).draft;f.editor.close();await f.editor.flush();
   f.editor.open({videoId:'pending',video:f.video,cues:[],draft});assert.match(f.$('PendingMark').textContent,/00:00:20/);assert.equal(f.$('Apply').disabled,true);
-  f.$('CancelMark').onclick();assert.equal(f.$('Apply').disabled,false);f.$('Undo').onclick();assert.equal(f.$('Apply').disabled,true);f.editor.close();await f.editor.flush();
+  f.$('CancelMark').onclick();assert.match(f.$('PendingMark').textContent,/默认开始 00:00:10/);f.$('Undo').onclick();assert.match(f.$('PendingMark').textContent,/开始 00:00:20/);f.editor.close();await f.editor.flush();
 });
 test('invalid end is rejected without losing pending start, retry and undo preserve data',async()=>{
   const f=fixture();f.editor.open({videoId:'retry',video:f.video,cues:[]});paste(f,'One');mark(f,10,5);assert.equal(f.$('SectionMarkEnd').disabled,false);assert.match(f.$('Message').textContent,/时间无效/);
@@ -104,9 +104,26 @@ test('previous end is the next default start, manual start overrides it and the 
 });
 test('default start is restored from draft, follows boundary adjustment and manual cancellation returns to it',async()=>{
   const f=fixture();f.editor.open({videoId:'default-draft',video:f.video,cues:[]});paste(f,'One\nTwo');mark(f,10,20);
-  f.$('End').value='22';f.$('End').onchange();assert.match(f.$('PendingMark').textContent,/默认开始 00:00:22.000/);
+  f.$('Lane').children[0].children.find(c=>c.className==='se-edge end').onclick();f.$('End').value='22';f.$('End').onchange();assert.match(f.$('PendingMark').textContent,/默认开始 00:00:22.000/);
   await f.editor.flush();const draft=f.drafts.at(-1).draft;f.editor.close();await f.editor.flush();f.editor.open({videoId:'default-draft',video:f.video,cues:[],draft});assert.match(f.$('PendingMark').textContent,/默认开始 00:00:22.000/);
   f.video.currentTime=25;f.$('SectionMarkStart').onclick();f.$('CancelMark').onclick();assert.match(f.$('PendingMark').textContent,/默认开始 00:00:22.000/);
   f.video.currentTime=30;f.$('SectionMarkEnd').onclick();f.$('Undo').onclick();assert.match(f.$('PendingMark').textContent,/默认开始 00:00:22.000/);f.$('Redo').onclick();assert.equal(f.$('Apply').disabled,false);
   await f.$('Apply').onclick();assert.equal(f.applied[1].start,22);await f.editor.flush();
+});
+test('clear a middle lyric keeps later timestamps and keys, remark advances past marked rows to the next hole',async()=>{
+  const f=fixture(),cues=Array.from({length:5},(_,i)=>({start:10+i*10,end:20+i*10,text:`Line ${i+1}`,key:`row-${i}`}));
+  f.editor.open({videoId:'holes',video:f.video,cues});
+  await f.$('List').children[2].onclick();f.$('ClearTiming').onclick();assert.equal(f.$('Workflow').value,'slots');assert.match(f.$('MarkSelection').textContent,/第 2 行/);
+  await f.editor.flush();let draft=f.drafts.at(-1).draft;assert.equal(draft.cues[1].start,null);assert.equal(draft.cues[2].start,30);assert.equal(draft.cues[2].text,'Line 3');assert.equal(draft.cues[2].key,'row-2');
+  await f.$('List').children[4].onclick();f.$('ClearTiming').onclick();
+  await f.$('List').children[2].onclick();mark(f,21,29);assert.match(f.$('MarkSelection').textContent,/第 4 行/);assert.equal(f.video.currentTime,40);assert.match(f.$('PendingMark').textContent,/默认开始 00:00:40/);
+  await f.editor.flush();draft=f.drafts.at(-1).draft;assert.equal(draft.cues[1].key,'row-1');assert.equal(draft.cues[2].start,30);assert.equal(draft.cues[3].start,null);assert.equal(draft.cues[4].start,50);
+  f.video.currentTime=49;f.$('SectionMarkEnd').onclick();assert.equal(f.$('Apply').disabled,false);await f.$('Apply').onclick();assert.deepEqual(f.applied.map(c=>[c.start,c.end]),[[10,20],[21,29],[30,40],[40,49],[50,60]]);await f.editor.flush();
+});
+test('cleared rows and marking cursor survive restore, undo restores the cleared interval and playback skips holes',async()=>{
+  const f=fixture(),cues=[{start:10,end:20,text:'One'},{start:20,end:30,text:'Two'},{start:30,end:40,text:'Three'}];
+  f.editor.open({videoId:'restore-holes',video:f.video,cues});await f.$('List').children[2].onclick();f.$('ClearTiming').onclick();f.$('Undo').onclick();assert.equal(f.$('Workflow').value,'cues');assert.equal(f.$('Apply').disabled,false);f.$('Redo').onclick();assert.equal(f.$('Apply').disabled,true);
+  await f.editor.flush();const draft=f.drafts.at(-1).draft;f.editor.close();await f.editor.flush();f.editor.open({videoId:'restore-holes',video:f.video,cues,draft});assert.match(f.$('MarkSelection').textContent,/第 2 行/);assert.equal(f.$('Lane').children.length,2);
+  await f.$('List').children[3].onclick();assert.equal(f.video.currentTime,30);assert.equal(f.video.paused,false);assert.match(f.$('MarkSelection').textContent,/第 2 行/);
+  f.$('Srt').onclick();assert.equal(f.exports.length,0);mark(f,20,30);await f.$('Apply').onclick();assert.equal(f.applied[2].start,30);await f.editor.flush();
 });

@@ -3,14 +3,14 @@
   function attach({view,doc=root.document,env=root,domain=root.EchoSubtitleEditor,onApply,onDraft=async()=>{},onExport,onClose=()=>{}}){
     const $=id=>view.getElementById('se'+id),dialog=$('Dialog'),D=domain;
     const rowHeight=58,rows=new Map(),blocks=new Map();
-    let cues=[],timingSlots=[],mapping=null,mappingError='',workflow='cues',pendingSlotStart=null;
+    let cues=[],timingSlots=[],mapping=null,mappingError='',workflow='cues',pendingSlotStart=null,markingIndex=-1,playbackCues=[];
     let selected=0,duration=0,video=null,videoId='',windowStart=0,span=60,history=[],future=[];
     let revision=0,savedRevision=-1,saveTimer=null,pendingSave=Promise.resolve(),raf=0,active=-1,preview=null,mediaState=null,drag=null,listFirst=-1;
     const isOpen=()=>!!dialog.open;
     const slotsFrom=values=>values.map(({text,group,unmatched,...slot})=>slot);
     function message(text){$('Message').textContent=text;}
     function safely(work){return (...args)=>{try{const result=work(...args);return result?.catch?result.catch(e=>message(e.message)):result;}catch(e){message(e.message);}};}
-    function state(){return {cues:D.copy(cues),paste:$('Paste').value || '',selected,windowStart,span,workflow,timingSlots:D.copy(timingSlots),pendingSlotStart};}
+    function state(){return {cues:D.copy(cues),paste:$('Paste').value || '',selected,windowStart,span,workflow,timingSlots:D.copy(timingSlots),pendingSlotStart,markingIndex};}
     function saveDraft(){
       if(saveTimer!==null){env.clearTimeout(saveTimer);saveTimer=null;}
       const value=state(),id=videoId,version=revision;
@@ -20,11 +20,11 @@
     function remember(){history.push(state());if(history.length>60)history.shift();future=[];}
     function syncMapping(){
       let next;try{next=D.alignSlots(timingSlots,$('Paste').value || '',duration);mappingError='';}catch(error){mappingError=error.message;throw error;}
-      mapping=next;cues=next.rows;
+      mapping=next;cues=next.rows;if(markingIndex<0 || markingIndex>=next.lineCount || D.isTimed(cues[markingIndex]))markingIndex=D.nextUnmarked(cues,next.lineCount);
       selected=Math.max(0,Math.min(selected,Math.max(cues.length,next.lineCount)-1));
     }
     // An inherited start is derived from completed intervals, never an unfinished mark.
-    function slotStart(){return pendingSlotStart ?? (workflow==='slots' && mapping?.extraLyrics.length && timingSlots.length?timingSlots.at(-1).end:null);}
+    function slotStart(){return pendingSlotStart ?? (workflow==='slots' && markingIndex>0 && D.isTimed(cues[markingIndex-1])?cues[markingIndex-1].end:null);}
     function ready(){
       if(workflow==='slots'){
         syncMapping();
@@ -33,23 +33,23 @@
       D.validate(cues,duration);
     }
     function restore(value){
-      cues=D.copy(value.cues);selected=value.selected;workflow=value.workflow;timingSlots=D.copy(value.timingSlots);pendingSlotStart=value.pendingSlotStart;
+      cues=D.copy(value.cues);selected=value.selected;workflow=value.workflow;timingSlots=D.copy(value.timingSlots);pendingSlotStart=value.pendingSlotStart;markingIndex=value.markingIndex ?? -1;
       $('Paste').value=value.paste || '';if(workflow==='slots'){try{syncMapping();}catch{}}else{mapping=null;mappingError='';}
       stopPreview();changed();draw();
     }
     function commit(next,note='已调整时间。点击歌词或区间试听。'){
-      if(next.length)D.validate(next,duration);remember();cues=next;
+      if(next.some(D.isTimed))D.validate(next.filter(D.isTimed),duration);remember();cues=next;
       if(workflow==='slots'){timingSlots=slotsFrom(next);syncMapping();}
       selected=Math.max(0,Math.min(selected,cues.length-1));stopPreview();changed();draw();message(note);
     }
     function select(index){
       selected=index;
-      const cue=cues[index];if(cue && (cue.start<windowStart || cue.start>=windowStart+span))windowStart=Math.max(0,cue.start-span*.15);
+      const cue=cues[index];if(workflow==='slots' && !D.isTimed(cue) && index<mapping.lineCount && markingIndex!==index){markingIndex=index;pendingSlotStart=null;}if(D.isTimed(cue) && (cue.start<windowStart || cue.start>=windowStart+span))windowStart=Math.max(0,cue.start-span*.15);
       draw();changed();
     }
     async function audition(index){
       select(index);
-      if(!cues[index]){message('这句还没有时间。继续播放，在听到下一行时点击“标记开始”。');return;}
+      if(!D.isTimed(cues[index])){message('这句还没有时间。继续播放，在听到下一行时点击“标记开始”。');return;}
       await play(true);
     }
     function drawList(force=false){
@@ -57,12 +57,12 @@
       if(!force && first===listFirst)return;listFirst=first;list.replaceChildren();rows.clear();
       const before=doc.createElement('div');before.style.height=`${first*rowHeight}px`;list.append(before);
       for(let i=first;i<end;i++){
-        const cue=cues[i],line=cue || mapping.extraLyrics[i-cues.length];
+        const cue=cues[i],line=cue,timed=D.isTimed(cue);
         const button=doc.createElement('button');button.type='button';button.className='se-cue';button.style.height=`${rowHeight}px`;
-        button.setAttribute('aria-label',`第 ${i+1} 句 ${line.text}${cue?'，点击播放':'，等待标时'}`);button.setAttribute('aria-pressed',String(i===selected));
+        button.setAttribute('aria-label',`第 ${i+1} 句 ${line.text}${timed?'，点击播放':'，等待标时'}`);button.setAttribute('aria-pressed',String(i===selected));
         const title=doc.createElement('span');title.textContent=`${i+1}. ${line.text}`;
-        const meta=doc.createElement('small');meta.textContent=cue?`${D.time(cue.start)}–${D.time(cue.end)} · 点击试听`:'等待标记开始／结束';
-        button.append(title,meta);button.onclick=safely(()=>audition(i));button.classList.toggle('playing',i===active);button.classList.toggle('unmatched',!!cue?.unmatched);button.classList.toggle('untimed',!cue);list.append(button);rows.set(i,button);
+        const meta=doc.createElement('small');meta.textContent=timed?`${D.time(cue.start)}–${D.time(cue.end)} · 点击试听`:'等待标记开始／结束';
+        button.append(title,meta);button.onclick=safely(()=>audition(i));button.classList.toggle('playing',timed && i===active);button.classList.toggle('unmatched',!!cue?.unmatched);button.classList.toggle('untimed',!timed);list.append(button);rows.set(i,button);
       }
       const after=doc.createElement('div');after.style.height=`${Math.max(0,count-end)*rowHeight}px`;list.append(after);
     }
@@ -84,16 +84,17 @@
       positionPlayhead();
     }
     function draw(){
-      const marking=workflow==='slots',cue=cues[selected],has=!!cue,lineCount=marking?mapping.lineCount:cues.length;
-      $('Workflow').value=workflow;$('Count').textContent=marking?`${timingSlots.length} 个区间 / ${lineCount} 行歌词`:`${cues.length} 句字幕`;
+      playbackCues=cues.flatMap((c,index)=>D.isTimed(c)?[{...c,index}]:[]);
+      const marking=workflow==='slots',cue=cues[selected],has=D.isTimed(cue),lineCount=marking?mapping.lineCount:cues.length;
+      $('Workflow').value=workflow;$('Count').textContent=marking?`${mapping.timedCount} 个区间 / ${lineCount} 行歌词`:`${cues.length} 句字幕`;
       $('Undo').disabled=!history.length;$('Redo').disabled=!future.length;
       $('MarkBar').hidden=!marking;$('PasteDetails').hidden=!marking;$('WorkflowHint').hidden=marking;
       $('WorkflowHint').textContent=marking?'粘贴歌词 → 播放歌曲 → 点击开始、结束，依次自动填入每一行。点击已标时歌词或区间试听。':'点击歌词或时间区间试听；拖动区间两端微调，或在右侧输入精确时间。';
-      const next=mapping?.extraLyrics[0];
-      $('MarkSelection').textContent=marking?(!lineCount?'先粘贴歌词，每行一句。':next?`第 ${timingSlots.length+1} 行：${next.text}`:'歌词已全部填入，可继续增加区间或试听检查。'):'';
+      const next=markingIndex>=0?cues[markingIndex]:null;
+      $('MarkSelection').textContent=marking?(!lineCount?'先粘贴歌词，每行一句。':next?`第 ${markingIndex+1} 行：${next.text}`:'歌词已全部标时，可试听检查，或清空某句时间重标。'):'';
       const start=slotStart(),inherited=start!==null && pendingSlotStart===null;
       $('SectionMarkStart').textContent=inherited?'标记开始（覆盖默认）':pendingSlotStart===null?'标记开始':'重新标记开始';
-      $('SectionMarkStart').disabled=!lineCount || !!mappingError;
+      $('SectionMarkStart').disabled=!lineCount || markingIndex<0 || !!mappingError;
       $('SectionMarkEnd').disabled=start===null || !!mappingError;
       $('CancelMark').hidden=pendingSlotStart===null;
       $('PendingMark').textContent=inherited?`默认开始 ${D.time(start)}（上一句终点）· 直接点击“标记结束”，或点击“标记开始”覆盖。`:start===null?'听到这一行开始时点击“标记开始”。':`开始 ${D.time(start)} · 听到结束时点击“标记结束”，自动填入。`;
@@ -107,7 +108,7 @@
       if(cue){$('Start').value=D.time(cue.start);$('End').value=D.time(cue.end);$('Text').value=cue.text;$('FixedStart').checked=!!cue.startLocked;$('FixedEnd').checked=!!cue.endLocked;}
       $('TextTools').hidden=marking;
       $('Merge').disabled=!has || selected>=cues.length-1;
-      $('DeleteSlot').disabled=!has || !!mappingError;
+      $('DeleteSlot').hidden=marking && !cue?.unmatched;$('DeleteSlot').disabled=!has || !!mappingError;$('ClearTiming').disabled=!has || !!mappingError;
       drawMappingIssues();drawList(true);drawTimeline();
     }
     function drawMappingIssues(){
@@ -122,7 +123,7 @@
     function tick(){
       raf=0;if(!isOpen() || !video)return;
       positionPlayhead();
-      const next=D.activeIndex(cues,video.currentTime);
+      const position=D.activeIndex(playbackCues,video.currentTime),next=position<0?-1:playbackCues[position].index;
       if(next!==active){rows.get(active)?.classList.toggle('playing',false);blocks.get(active)?.classList.toggle('playing',false);active=next;rows.get(active)?.classList.toggle('playing',true);blocks.get(active)?.classList.toggle('playing',true);}
       if(preview && video.currentTime>=preview.end){if(preview.loop){video.currentTime=preview.start;}else finishPreview();}
       if(!video.paused && !video.ended)raf=env.requestAnimationFrame(tick);
@@ -133,14 +134,14 @@
     async function play(range=false){
       if(!video)return;
       if(!range && !video.paused){stopPreview();return;}
-      if(range && !cues[selected])throw Error('这一句还没有时间，请先标记开始和结束。');
+      if(range && !D.isTimed(cues[selected]))throw Error('这一句还没有时间，请先标记开始和结束。');
       preview=range?{start:cues[selected].start,end:cues[selected].end,loop:$('Loop').checked}:null;
       if(range)video.currentTime=preview.start;video.playbackRate=Number($('Speed').value) || 1;
       await video.play();onPlay();
     }
     function updateEdge(edge,value){commit(D.edge(cues,selected,edge,value,duration,$('Link').checked));}
     function beginDrag(event,index,edge){
-      if(event.button!==0 || !cues[index])return;
+      if(event.button!==0 || !D.isTimed(cues[index]))return;
       event.preventDefault();event.stopPropagation();
       const rect=$('Lane').getBoundingClientRect();if(!rect.width)return;
       selected=index;drag={index,edge,x:event.clientX,width:rect.width,base:D.copy(cues),next:null,target:event.currentTarget,pointerId:event.pointerId};
@@ -166,7 +167,7 @@
       for(const name of ['play','pause','timeupdate','seeked','ended'])video?.removeEventListener?.(name,name==='play'?onPlay:onTime);
       if(saveTimer!==null || savedRevision!==revision)void saveDraft();if(mediaState && video){video.muted=mediaState.muted;video.playbackRate=mediaState.speed;}
       if(dialog.close)dialog.close();else dialog.open=false;
-      video=null;mediaState=null;cues=[];history=[];future=[];timingSlots=[];mapping=null;pendingSlotStart=null;rows.clear();blocks.clear();
+      video=null;mediaState=null;cues=[];history=[];future=[];timingSlots=[];mapping=null;pendingSlotStart=null;markingIndex=-1;playbackCues=[];rows.clear();blocks.clear();
       for(const id of ['List','Lane'])$(id).replaceChildren();$('Paste').value='';$('Text').value='';onClose();
     }
     function open(options){
@@ -176,7 +177,7 @@
       const source=D.fromCues(options.cues),draft=options.draft;mappingError='';
       try{if(draft?.cues?.length)D.validate(draft.cues,duration);cues=draft?.cues?.length?D.fromCues(draft.cues):D.copy(source);}catch{cues=D.copy(source);}
       selected=Math.max(0,Number(draft?.selected)||0);span=[10,30,60,120,300].includes(Number(draft?.span))?Number(draft.span):60;windowStart=Number(draft?.windowStart)||0;
-      history=[];future=[];active=-1;preview=null;pendingSlotStart=null;
+      history=[];future=[];active=-1;preview=null;pendingSlotStart=null;markingIndex=Number.isInteger(draft?.markingIndex)?draft.markingIndex:-1;
       $('Paste').value=draft?.paste || '';
       workflow=['slots','cues'].includes(draft?.workflow)?draft.workflow:(cues.length?'cues':'slots');
       timingSlots=Array.isArray(draft?.timingSlots)?D.copy(draft.timingSlots):[];
@@ -193,12 +194,20 @@
       message(draft?'已恢复本机草稿。':'点击歌词或时间区间试听，拖动两端调整时间。');$('DraftState').textContent='草稿自动保存；点击“保存并载入”后主界面生效。';
     }
     function finishSlot(){
-      const start=slotStart();if(start===null)throw Error('请先点击“标记开始”。');
-      const next=D.captureSlot(timingSlots,start,video.currentTime,duration);D.alignSlots(next,$('Paste').value || '',duration);const keys=new Set(timingSlots.map(c=>c.key)),index=next.findIndex(c=>!keys.has(c.key));
-      remember();timingSlots=next;pendingSlotStart=null;syncMapping();selected=index;
-      if(cues[index].start<windowStart || cues[index].start>=windowStart+span)windowStart=Math.max(0,cues[index].start-span*.15);
-      $('List').scrollTop=Math.max(0,index*rowHeight-rowHeight*2);changed();draw();message(mapping.extraLyrics.length?'歌词已填入；下一行默认从本句终点开始，可直接标记结束，也可重新标记开始。':'歌词已全部填入，可试听检查后保存。');
+      if(mappingError)throw Error(mappingError);
+      const index=markingIndex,start=slotStart();if(index<0)throw Error('歌词已全部标时，请先清空需要重标的句子。');if(start===null)throw Error('请先点击“标记开始”。');
+      const next=D.setSlot(timingSlots,index,start,video.currentTime,duration);D.alignSlots(next,$('Paste').value || '',duration);
+      remember();timingSlots=next;pendingSlotStart=null;markingIndex=D.nextUnmarked(next,mapping.lineCount,index+1);syncMapping();selected=markingIndex>=0?markingIndex:index;
+      const inherited=slotStart();if(markingIndex>=0 && markingIndex!==index+1 && inherited!==null){preview=null;video.currentTime=inherited;if(inherited<windowStart || inherited>=windowStart+span)windowStart=Math.max(0,inherited-span*.15);}
+      const cue=cues[selected];if(D.isTimed(cue) && (cue.start<windowStart || cue.start>=windowStart+span))windowStart=Math.max(0,cue.start-span*.15);
+      changed();draw();$('List').scrollTop=Math.max(0,selected*rowHeight-rowHeight);drawList(true);
+      message(markingIndex>=0?`已标好第 ${index+1} 句，已跳过标好的句子，接着标第 ${markingIndex+1} 句。`:'歌词已全部标时，可试听检查后保存。');
     }
+    $('ClearTiming').onclick=safely(()=>{
+      if(mappingError)throw Error(mappingError);if(!D.isTimed(cues[selected]))return;
+      remember();if(workflow==='cues'){workflow='slots';timingSlots=slotsFrom(cues);$('Paste').value=cues.map(c=>c.text.replace(/\n/g,'\u2028')).join('\n');$('PasteDetails').open=false;}
+      timingSlots[selected]={...timingSlots[selected],start:null,end:null,startLocked:false,endLocked:false};markingIndex=selected;pendingSlotStart=null;syncMapping();stopPreview();changed();draw();message(`第 ${selected+1} 句时间已清空，歌词与其他句子的时间保留。可重新标记开始和结束。`);
+    });
     $('Close').onclick=close;dialog.oncancel=e=>{e.preventDefault();close();};
     $('List').onscroll=()=>drawList();
     $('Paste').oninput=()=>{if(workflow!=='slots')return;try{syncMapping();}catch(error){message(error.message);}changed();draw();};
@@ -206,18 +215,19 @@
     $('Workflow').onchange=safely(()=>{
       const next=$('Workflow').value;if(next===workflow)return;
       if(next==='cues' && (mappingError || !mapping?.balanced || pendingSlotStart!==null)){$('Workflow').value=workflow;throw Error('请先完成待标记的歌词，再进入字幕微调。');}
-      remember();workflow=next;pendingSlotStart=null;
-      if(workflow==='slots'){timingSlots=slotsFrom(cues);$('Paste').value=cues.map(c=>c.text.replace(/\n/g,' ')).join('\n');syncMapping();$('PasteDetails').open=true;}else{mapping=null;mappingError='';}
+      remember();workflow=next;pendingSlotStart=null;markingIndex=-1;
+      if(workflow==='slots'){timingSlots=slotsFrom(cues);$('Paste').value=cues.map(c=>c.text.replace(/\n/g,'\u2028')).join('\n');syncMapping();$('PasteDetails').open=true;}else{mapping=null;mappingError='';}
       stopPreview();changed();draw();message(workflow==='slots'?'粘贴或修改歌词，再播放标时。':'点击歌词或区间试听；拖动两端调整时间。');
     });
     $('SectionMarkStart').onclick=safely(()=>{
-      if(mappingError)throw Error(mappingError);if(!mapping?.lineCount)throw Error('请先粘贴歌词，每行一句。');
-      remember();pendingSlotStart=video.currentTime;preview=null;if(mapping.extraLyrics.length){selected=timingSlots.length;$('List').scrollTop=Math.max(0,selected*rowHeight-rowHeight*2);}changed();draw();message('开始已标记。听到本句结束时点击“标记结束”。');
+      if(mappingError)throw Error(mappingError);if(!mapping?.lineCount)throw Error('请先粘贴歌词，每行一句。');if(markingIndex<0)throw Error('歌词已全部标时，请先清空需要重标的句子。');
+      remember();pendingSlotStart=video.currentTime;preview=null;if(markingIndex>=0){selected=markingIndex;$('List').scrollTop=Math.max(0,selected*rowHeight-rowHeight*2);}changed();draw();message('开始已标记。听到本句结束时点击“标记结束”。');
     });
     $('SectionMarkEnd').onclick=safely(finishSlot);
     $('CancelMark').onclick=()=>{remember();pendingSlotStart=null;changed();draw();message(slotStart()!==null?'已取消手动开始标记，恢复上一句终点作为默认起点。':'已取消未完成的开始标记。');};
     $('DeleteSlot').onclick=safely(()=>{
-      if(!cues[selected])return;
+      if(!D.isTimed(cues[selected]))return;
+      if(workflow==='slots' && !cues[selected].unmatched){$('ClearTiming').onclick();return;}
       if(workflow==='slots'){remember();timingSlots.splice(selected,1);syncMapping();stopPreview();changed();draw();message('已删除时间区间，后续歌词按顺序重新填入。可撤销。');}
       else{const next=D.copy(cues);next.splice(selected,1);commit(next,'已删除这句字幕，可撤销。');}
     });
