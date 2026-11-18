@@ -366,6 +366,9 @@ test('volume remains adjustable during accompaniment preview and saves the chose
   const playing=nodes.get('previewBacking').onclick();
   for(let i=0;i<30 && !nodes.get('transportProgress').oninput;i++)await new Promise(r=>setTimeout(r,1));
   assert.equal(video.currentTime,10);assert.equal(sound.currentTime,10);
+  assert.equal(nodes.get('playbackSpeedControl').hidden,false);
+  nodes.get('playbackSpeed').value='1.25';nodes.get('playbackSpeed').onchange();
+  assert.equal(video.playbackRate,1.25);assert.equal(sound.playbackRate,1.25);
   await nodes.get('pausePlayback').onclick();assert.equal(sound.paused,true);
   listeners.get('playing')();assert.equal(sound.paused,true);
   await nodes.get('pausePlayback').onclick();assert.equal(sound.paused,false);
@@ -390,7 +393,14 @@ test('original playback slider seeks within the selected range at reduced speed'
   for(let i=0;i<10 && !nodes.get('transportProgress').oninput;i++)await Promise.resolve();
   const slider=nodes.get('transportProgress');
   assert.equal(slider.disabled,false);assert.equal(nodes.get('transportTime').textContent,'0:00 / 0:10');
+  assert.equal(nodes.get('playbackSpeedControl').hidden,false);
+  nodes.get('playbackSpeed').value='0.75';nodes.get('playbackSpeed').onchange();
+  assert.equal(video.playbackRate,0.75);assert.equal(nodes.get('speed').value,'0.75');
+  nodes.get('playbackSpeed').value='1';nodes.get('playbackSpeed').onchange();
   await nodes.get('pausePlayback').onclick();assert.equal(video.paused,true);
+  nodes.get('playbackSpeed').value='1.25';nodes.get('playbackSpeed').onchange();
+  assert.equal(video.paused,true);assert.equal(video.playbackRate,1.25);
+  nodes.get('playbackSpeed').value='1';nodes.get('playbackSpeed').onchange();
   slider.value='0.75';await slider.oninput();assert.equal(video.currentTime,3.75);
   assert.equal(video.paused,true);
   await nodes.get('pausePlayback').onclick();assert.equal(video.paused,false);assert.equal(video.currentTime,3.75);
@@ -398,6 +408,7 @@ test('original playback slider seeks within the selected range at reduced speed'
   await nodes.get('pausePlayback').onclick();assert.equal(video.paused,true);
   nodes.get('stop').onclick();await playing;assert.equal(slider.oninput,null);
   assert.equal(nodes.get('pausePlayback').hidden,true);
+  assert.equal(nodes.get('playbackSpeedControl').hidden,true);
   (await storage.ready).close();
 });
 
@@ -419,6 +430,7 @@ test('song replay starts at audio opening and shows progress from the audio cloc
   await new Promise(resolve=>setTimeout(resolve,0));assert.deepEqual(calls.slice(0,2),['audio','video']);assert.deepEqual(audioSeeks,[]);
   assert.equal(video.currentTime,0);
   const pause=nodes.get('pausePlayback');assert.equal(pause.hidden,false);
+  assert.equal(nodes.get('playbackSpeedControl').hidden,true);
   await pause.onclick();assert.equal(sound.paused,true);assert.equal(pause.textContent,'▶ 继续');
   const pausedPlays=calls.length;
   listeners.get('waiting')();listeners.get('playing')();assert.equal(calls.length,pausedPlays);
@@ -1846,7 +1858,7 @@ test('preparation and automatic-practice actions share a settings pane and retur
 
 test('fixed practice tools keep time adjustment and top-level preparation tools reachable without changing pages',async()=>{
   const storage=createStorage(new IDBFactory()),{nodes,root}=await mount(storage);
-  assert.equal(nodes.get('practiceUtilities').hidden,false);assert.equal(nodes.get('quickSpeed').hidden,false);
+  assert.equal(nodes.get('practiceUtilities').hidden,false);assert.equal(nodes.get('playbackSpeedControl').hidden,true);
   nodes.get('adjustClipBounds').onclick();assert.equal(nodes.get('clipDialog').open,true);assert.ok(!nodes.get('settingsDialog').open);
   nodes.get('start').value='1';nodes.get('end').value='4';nodes.get('end').onchange();
   let returned=0;nodes.get('openPreparation').focus=()=>returned++;

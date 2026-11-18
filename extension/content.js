@@ -45,9 +45,12 @@
     $('pausePlayback').disabled=!playbackControl || playbackToggling;
     $('pausePlayback').textContent=playbackPaused?'▶ 继续':'Ⅱ 暂停';
     $('pausePlayback').setAttribute('aria-label',playbackPaused?'继续播放':'暂停播放');
+    $('playbackSpeedControl').hidden=!playbackControl?.setSpeed;
+    $('playbackSpeed').disabled=!playbackControl?.setSpeed || playbackToggling;
+    $('playbackSpeed').value=$('speed').value;
   }
-  function allowPlaybackPause(pause,resume){
-    playbackControl={pause,resume};playbackPaused=false;playbackToggling=false;renderPlaybackToggle();
+  function allowPlaybackPause(pause,resume,setSpeed=null){
+    playbackControl={pause,resume,setSpeed};playbackPaused=false;playbackToggling=false;renderPlaybackToggle();
   }
   let playbackControlsSlot = 'defaultPlaybackSlot';
   const transport = EchoTransport.create({
@@ -612,6 +615,12 @@
   }
   $('leadInSeconds').onchange=()=>{$('leadInSeconds').value=EchoPractice.leadInSeconds($('leadInSeconds').value);updateSettingsSummaries();saveProgress();};
   $('speed').onchange = () => {updateSummaries();saveProgress();}; $('loopCount').onchange = ()=>{updateSummaries();saveProgress();};
+  $('playbackSpeed').onchange=()=>{
+    if(!playbackControl?.setSpeed || playbackToggling)return;
+    const speed=Number($('playbackSpeed').value);
+    if(![0.75,1,1.25].includes(speed))return;
+    playbackControl.setSpeed(speed);$('speed').value=String(speed);updateSummaries();saveProgress();
+  };
   for(const id of ['prepSeconds','autoNext'])$(id).onchange=saveProgress;
   function currentId() { return new URL(location.href).searchParams.get('v'); }
   function video() {
@@ -679,7 +688,7 @@
     $('singDetails').hidden=recording || (!hasBackingTools() && mode!=='separating' && !karaokeIssue);
     $('karaokeSettings').hidden=recording;
     $('backingOption').hidden=recording;
-    for(const id of ['practiceTools','backingSettings','practiceSettings','quickSpeed'])$(id).hidden=recording;
+    for(const id of ['practiceTools','backingSettings','practiceSettings'])$(id).hidden=recording;
     for(const id of ['practiceTools','backingSettings','practiceSettings','captionSettings','openBacking','adjustClipBounds','openSubtitleEditor','createLyrics'])$(id).disabled=busy;
     $('captionSetup').hidden=recording || cues.length>0;
     $('clipBounds').hidden=recording || $('practiceScope').value!=='clip';
@@ -803,7 +812,7 @@
     return token===generation;
   }
   async function original(r, token, withLeadIn=true) {
-    if(withLeadIn)r={...r,start:leadInStart(r)};
+    r={...r,start:withLeadIn?leadInStart(r):r.start};
     closeWord();
     const v = video(); saveVideo(v); v.muted = false; v.playbackRate = r.speed;
     await seek(v, r.start, token);
@@ -812,7 +821,10 @@
     if (token !== generation) return;
     await new Promise(resolve => {
       playback.onCancel(resolve);
-      allowPlaybackPause(()=>v.pause(),()=>v.play());
+      allowPlaybackPause(()=>v.pause(),()=>v.play(),mode==='original'?speed=>{
+        r.speed=speed;v.playbackRate=speed;
+        playback.timeout(()=>{v.pause();resolve();},Math.max(0,(r.end-v.currentTime)/speed)*1000+15000);
+      }:null);
       showVideoTransport('原声',v,r,elapsed=>{
         v.currentTime=r.start+elapsed*r.speed;
         playback.timeout(()=>{v.pause();resolve();},Math.max(0,(r.end-v.currentTime)/r.speed)*1000+15000);
@@ -1413,7 +1425,10 @@
         status(`正在试听${backingName()}…`);await v.play();if(token!==generation)return;sync();
         await new Promise(resolve=>{
           playback.onCancel(resolve);a.onended=resolve;
-          allowPlaybackPause(()=>{v.pause();a.pause();},async()=>{await v.play();if(token===generation)sync();});
+          allowPlaybackPause(()=>{v.pause();a.pause();},async()=>{await v.play();if(token===generation)sync();},speed=>{
+            r.speed=speed;v.playbackRate=speed;a.playbackRate=speed;
+            playback.timeout(resolve,Math.max(0,(r.end-v.currentTime)/speed)*1000+15000);
+          });
           showVideoTransport(`${backingName()}试听`,v,r,elapsed=>{
             v.currentTime=r.start+elapsed*r.speed;
             a.currentTime=Math.max(0,v.currentTime-ready.start);

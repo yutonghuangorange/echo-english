@@ -76,7 +76,7 @@
     .scope-row{gap:8px;margin:0 0 10px}.scope-row>select{flex:1;min-width:0}.header-actions #favoriteVideo{font-size:18px;padding:4px 6px}
     .practice-utilities{display:grid;grid-auto-flow:column;grid-auto-columns:minmax(0,1fr);gap:6px;padding:6px 20px;border-top:1px solid var(--dock-border);background:var(--dock-surface);flex-shrink:0}
     .utility-setting{display:flex;align-items:center;justify-content:center;gap:5px;min-width:0;padding:8px 6px;text-align:left;font-size:11px;background:var(--dock-button);border-color:var(--dock-border)}.utility-setting:hover:not(:disabled){background:var(--dock-button-hover)}.utility-setting small,.utility-setting>span:last-child[aria-hidden]{display:none}.utility-setting #backingSummary{display:block;font-size:9px;white-space:nowrap;color:#90a4b6}
-    .dock-heading-row{display:flex;align-items:center;justify-content:space-between;gap:10px;margin-bottom:8px}.dock-heading-row .dock-heading{margin:0}.dock-heading-row #quickSpeed .row{margin:0;gap:6px}.dock-heading-row #quickSpeed label{flex:0 0 auto;font-size:10px}.dock-heading-row #speed{width:110px;padding:5px 8px;font-size:11px}
+    .dock-heading-row{display:flex;align-items:center;justify-content:space-between;gap:10px;margin-bottom:8px}.dock-heading-row .dock-heading{margin:0}.playback-speed{display:flex;align-items:center;gap:6px;margin-left:auto}.playback-speed select{width:76px;padding:3px 6px;font-size:12px}.transport-heading{align-items:center}
     .pages:has(#page-practice:not([hidden])){--page-padding:12px;padding:12px 20px}.clip-selector-row{display:flex;gap:6px;align-items:center;margin:0 0 12px}.clip-selector-row select{min-width:0;flex:1}.clip-selector-row button{font-size:10px;padding:9px 7px;flex:0 0 auto}#clipBounds{margin-bottom:0}
     .cue-card{padding:12px}.panel[data-mode="idle"] .caption-context{display:none}.panel[data-mode="idle"] .caption{min-height:44px;padding:8px 0 10px}.panel[data-mode="idle"] .cue-card{margin-bottom:0}
     .pages:has(#page-practice:not([hidden])){display:flex;flex-direction:column}
@@ -168,7 +168,7 @@
 <button id="backingSettings" class="utility-setting" aria-haspopup="dialog"><span id="backingPreferencesTitle">伴奏设置</span><span aria-hidden="true">›</span></button>
 <button id="practiceSettings" class="utility-setting" aria-haspopup="dialog"><span>录音设置</span><small id="speedSummary"></small><span aria-hidden="true">›</span></button>
 </div><div id="practiceDock" class="practice-dock">
-      <div class="dock-heading-row"><div class="dock-heading">播放与录音</div>        <div id="quickSpeed">          <div class="row"><label class="hint" for="speed">播放速度</label><select id="speed" aria-label="练习速度"><option value="0.75">0.75× 慢速</option><option value="1" selected>1× 原速</option><option value="1.25">1.25×</option></select></div></div></div><div class="main-actions"><button id="original">▶ 听原声</button><button id="replay" disabled>▷ 回听录音</button><button class="primary" id="record">● 开始配音</button></div>
+      <div class="dock-heading-row"><div class="dock-heading">播放与录音</div></div><div class="main-actions"><button id="original">▶ 听原声</button><button id="replay" disabled>▷ 回听录音</button><button class="primary" id="record">● 开始配音</button></div>
     </div>
     <section id="recordingDock" class="recording-dock" aria-label="已选录音与回放操作" hidden>
         <div id="recordingContent" class="selected-recording" hidden>
@@ -181,7 +181,7 @@
     </section>
     <div id="liveMeter" class="live-meter" hidden><div class="meter-heading"><span>麦克风 · 实时音量</span><output id="liveMeterValue">正在检测…</output></div><canvas id="liveMeterCanvas" width="640" height="64" aria-hidden="true"></canvas><div class="meter-track" role="meter" aria-label="麦克风实时音量，单位 dBFS" aria-valuemin="-60" aria-valuemax="0" aria-valuenow="-60"><div id="liveMeterBar" class="meter-fill"></div></div><label id="backingLiveControls" class="mix-row" hidden><span id="backingLiveLabel">伴奏</span><input id="backingLiveVolume" type="range" min="0" max="2" step="0.05" value="1" aria-label="录音中伴奏监听音量"><output id="backingLiveValue" for="backingLiveVolume">100%</output></label><label id="sidetoneLiveControls" class="mix-row" hidden><span>耳返</span><input id="sidetoneLiveVolume" type="range" min="0" max="1" step="0.05" value="0.35" aria-label="录音中耳返音量"><output id="sidetoneLiveValue">35%</output></label><button id="liveVocalSettings" class="text-button">耳返混响（实验）</button><p id="sidetoneLatency" class="hint" style="font-size:10px;margin:4px 0;line-height:1.5" hidden></p></div>
     <div id="defaultPlaybackSlot"><section id="playbackControls" class="playback-controls" aria-label="回放进度与音量"><div id="transport" class="transport" hidden>
-      <div class="transport-heading"><span id="transportLabel"></span><span id="transportTime"></span></div>
+      <div class="transport-heading"><span id="transportLabel"></span><label id="playbackSpeedControl" class="playback-speed" hidden>速度<select id="playbackSpeed" aria-label="当前播放速度"><option value="0.75">0.75×</option><option value="1">1×</option><option value="1.25">1.25×</option></select></label><span id="transportTime"></span></div>
       <input id="transportProgress" type="range" min="0" max="1" step="0.001" value="0" aria-label="播放进度，可点击或拖动跳转" style="display:block;width:100%;margin:6px 0;accent-color:#b3eedb" disabled>
     </div>
     <details id="mixControls" class="mix-controls" hidden>
@@ -267,6 +267,7 @@
 
           <p id="soundEffectsStatus" class="hint" role="status"></p>
         </section><section id="settings-practice" role="tabpanel" aria-labelledby="settingsPracticeTab" class="fold-content" hidden>
+          <div class="settings-group"><h3>练习速度</h3><div class="row"><label class="hint" for="speed">默认速度</label><select id="speed" aria-label="练习速度"><option value="0.75">0.75× 慢速</option><option value="1" selected>1× 原速</option><option value="1.25">1.25×</option></select></div><p class="hint">用于听原声、伴奏试听与新录音。已有录音按录制时的速度回放；更改不会改变已有录音。</p></div>
           <div class="settings-group"><h3>开始前的准备</h3><div class="row"><label class="hint" for="leadInMode">前置播放</label><select id="leadInMode" aria-describedby="leadInHint"><option value="none">关闭</option><option value="seconds">前 N 秒</option><option id="previousLeadIn" value="previous">上一句</option></select></div>
           <div id="leadInSecondsRow" class="row" hidden><label class="hint" for="leadInSeconds">前置时长（秒）</label><input id="leadInSeconds" type="number" min="0" max="30" step="1" value="3" aria-describedby="leadInHint"></div><p class="hint" id="leadInHint">先播放片段前的原声作准备，不录入准备段。</p>
 </div>
