@@ -2,7 +2,8 @@
 
 Requires the existing karaoke environment, plus separately installed BandIt
 inference dependencies and an unmodified checkout of the official repository.
-See CINEMATIC_EVALUATION.md for commands, provenance, and measured limitations.
+Use --help for arguments; model installation and licenses are documented in
+karaoke/README.md. Runtime measurements do not establish separation quality.
 """
 import argparse
 import json
