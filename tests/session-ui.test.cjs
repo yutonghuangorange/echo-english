@@ -1717,6 +1717,27 @@ test('document shortcuts only act when the panel is visible and no input or dial
   (await storage.ready).close();
 });
 
+test('typing in panel editors keeps keyboard events away from YouTube without blocking text input',async()=>{
+  const storage=createStorage(new IDBFactory()),{root,nodes}=await mount(storage);
+  for(const target of [{tagName:'TEXTAREA'},{tagName:'INPUT'},{tagName:'SELECT'},{isContentEditable:true},{closest:()=>({})}]){
+    for(const type of ['keydown','keypress','keyup']){
+      for(const key of [' ','k','ArrowLeft','Enter']){
+        let stopped=0,prevented=0;
+        // Match shadow-DOM retargeting: the page sees the host, not the input.
+        root['on'+type]({key,target:{tagName:'DIV'},composedPath:()=>[target],stopPropagation(){stopped++;},preventDefault(){prevented++;}});
+        assert.equal(stopped,1);assert.equal(prevented,0);
+      }
+    }
+  }
+  let stopped=0;
+  root.onkeydown({key:' ',target:{tagName:'BUTTON'},stopPropagation(){stopped++;}});assert.equal(stopped,0);
+  // Existing Escape-to-close behavior still takes priority inside an input.
+  nodes.get('openPreparation').onclick();
+  root.onkeydown({key:'Escape',target:{tagName:'TEXTAREA'},stopPropagation(){},preventDefault(){}});
+  assert.equal(nodes.get('toolsDialog').open,false);
+  (await storage.ready).close();
+});
+
 test('current-clip original playback stops before an overlapping next cue and restores explicit manual bounds',async()=>{
   const storage=createStorage(new IDBFactory()),listeners=new Map();let time=0,paused=true;
   const video={duration:30,muted:false,playbackRate:1,get currentTime(){return time;},set currentTime(value){time=value;queueMicrotask(()=>emit('seeked'));},get paused(){return paused;},pause(){paused=true;},async play(){paused=false;},

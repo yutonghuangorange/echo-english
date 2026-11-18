@@ -1882,8 +1882,16 @@
     if (token === generation) { finish(); status('自动跟读完成。可以重练或下载这次录音。'); }
   });
   $('close').onclick = () => { closeClipDialog();settings.close();closeRecordingDialog();tools.close();library.close(true);closeWord(); stop(); host.style.display = 'none'; };
+  // YouTube sees the shadow host rather than the focused editor, so its
+  // document shortcuts cannot reliably tell that the user is typing.
+  // Stop propagation only: preserve native typing, selection and paste.
+  function isolateEditorKeys(event){
+    const target=event.composedPath?.()[0] || event.target;
+    if(target?.isContentEditable || ['INPUT','TEXTAREA','SELECT'].includes(target?.tagName) || target?.closest?.('[contenteditable="true"],[role="textbox"]'))event.stopPropagation();
+  }
+  for(const name of ['keyup','keypress'])root.addEventListener(name,isolateEditorKeys);
   root.addEventListener('keydown',event=>{
-    if(event.key!=='Escape')return;
+    if(event.key!=='Escape'){isolateEditorKeys(event);return;}
     event.preventDefault();event.stopPropagation();
     if(subtitleEditor?.isOpen()){subtitleEditor.close();return;}
     if(tools.isOpen()){tools.close();return;}
