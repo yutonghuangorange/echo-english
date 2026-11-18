@@ -36,11 +36,6 @@
     if(lines.length>MAX_CUES)throw Error('歌词最多 2000 句，每行一句，空行分段。');
     return lines;
   }
-  function paste(text,duration,key=newKey){
-    const cues=lyricLines(text).map(line=>({...line,key:key(),estimated:true,startLocked:false,endLocked:false}));
-    if(!cues.length)throw Error('请粘贴歌词，每行一句。');
-    allocate(cues,0,cues.length-1,0,duration,'length');return validate(cues,duration);
-  }
   function captureSlot(slots,start,end,duration,key=newKey){
     const next=[...copy(slots),{start,end,key:key()}].sort((a,b)=>a.start-b.start);
     validate(next.map(c=>({...c,text:'时间区间'})),duration);return next;
@@ -51,26 +46,6 @@
     if(rows.length)validate(rows,duration);
     return {rows,extraLyrics:lines.slice(slots.length).map((line,i)=>({...line,line:slots.length+i+1})),missingLyrics:Math.max(0,slots.length-lines.length),lineCount:lines.length,balanced:slots.length>0 && slots.length===lines.length};
   }
-  function interpolate(source,first,last,start,end,duration,method='length'){
-    if(!Number.isInteger(first) || !Number.isInteger(last) || first<0 || last<first || last>=source.length)throw Error('请选择有效的起句和止句。');
-    if(!Number.isFinite(start) || !Number.isFinite(end) || start<0 || end>duration || end<=start)throw Error('请设置有效的段落开始和结束时间。');
-    const cues=copy(source);
-    // Explicit section marks redefine its outer boundaries. Interior anchors
-    // remain fixed, including gaps between separately fixed cue boundaries.
-    cues[first].start=start;cues[last].end=end;
-    let runFirst=first,runStart=start;
-    for(let i=first;i<=last;i++){
-      if(cues[i].startLocked){
-        if(i>runFirst)allocate(cues,runFirst,i-1,runStart,cues[i].start,method);
-        runFirst=i;runStart=cues[i].start;
-      }
-      if(cues[i].endLocked){allocate(cues,runFirst,i,runStart,cues[i].end,method);runFirst=i+1;runStart=cues[i].end;}
-    }
-    if(runFirst<=last)allocate(cues,runFirst,last,runStart,end,method);
-    // Explicit outer anchors protect this section during later estimates.
-    cues[first].startLocked=true;cues[last].endLocked=true;
-    return validate(cues,duration);
-  }
   function edge(source,index,which,value,duration,link=true){
     const cues=copy(source),cue=cues[index];if(!cue || !['start','end'].includes(which) || !Number.isFinite(value))throw Error('请选择有效时间。');
     const adjacent=which==='start'?cues[index-1]:cues[index+1],other=which==='start'?'end':'start';
@@ -79,11 +54,6 @@
       adjacent[other]=value;adjacent.estimated=false;
     }
     cue[which]=value;cue.estimated=false;return validate(cues,duration);
-  }
-  function move(source,index,delta,duration){
-    const cues=copy(source),c=cues[index];if(!c || !Number.isFinite(delta))throw Error('请选择有效区间。');
-    if(c.startLocked || c.endLocked)throw Error('此句有固定锚点，请先解除固定再整体移动。');
-    c.start+=delta;c.end+=delta;c.estimated=false;return validate(cues,duration);
   }
   function merge(source,first,last,duration,key=newKey){
     if(first<0 || last<=first || last>=source.length)throw Error('请选择至少两句连续歌词合并。');
@@ -119,6 +89,6 @@
   }
   function activeIndex(cues,time){let low=0,high=cues.length-1,result=-1;while(low<=high){const mid=(low+high)>>1;if(cues[mid].start<=time){result=mid;low=mid+1;}else high=mid-1;}return result>=0 && time<cues[result].end?result:-1;}
   function windowIndices(cues,start,end){let low=0,high=cues.length;while(low<high){const mid=(low+high)>>1;if(cues[mid].start<end)low=mid+1;else high=mid;}const result=[];for(let i=0;i<low;i++)if(cues[i].end>start)result.push(i);return result;}
-  const api={MIN,MAX_CUES,MAX_TEXT,copy,validate,fromCues,lyricLines,captureSlot,alignSlots,paste,interpolate,edge,move,merge,replaceText,parseTime,time,serialize,activeIndex,windowIndices};
+  const api={MIN,MAX_CUES,MAX_TEXT,copy,validate,fromCues,lyricLines,captureSlot,alignSlots,edge,merge,replaceText,parseTime,time,serialize,activeIndex,windowIndices};
   if(typeof module!=='undefined')module.exports=api;else root.EchoSubtitleEditor=api;
 })(globalThis);
