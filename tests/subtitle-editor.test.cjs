@@ -47,3 +47,11 @@ test('active lookup handles gaps and timeline window does not render offscreen r
   const source=input();assert.equal(D.activeIndex(source,3),1);assert.equal(D.activeIndex(source,10),-1);assert.deepEqual(D.windowIndices(source,3,6),[1]);
   source[1].start=4;assert.equal(D.activeIndex(source,3.5),-1);
 });
+
+test('recorded slots map lyrics in order without inventing timestamps for excess lyrics',()=>{
+  let slots=D.captureSlot([],10,20,120,key);slots=D.captureSlot(slots,30,40,120,key);
+  const exact=D.alignSlots(slots,'Line one\nLine two',120);assert.equal(exact.balanced,true);assert.equal(exact.rows[0].start,10);assert.equal(exact.rows[0].end,20);assert.equal(exact.rows[1].start,30);
+  const extra=D.alignSlots(slots,'One\nTwo\nThree',120);assert.equal(extra.balanced,false);assert.deepEqual(extra.extraLyrics,[{text:'Three',group:0,line:3}]);assert.equal(extra.rows.length,2);
+  const missing=D.alignSlots(slots,'Only one',120);assert.equal(missing.missingLyrics,1);assert.equal(missing.rows[1].unmatched,true);assert.equal(missing.rows[1].start,30);
+  assert.equal(D.alignSlots([],'No timing yet',120).rows.length,0);assert.throws(()=>D.captureSlot(slots,45,44,120,key));assert.throws(()=>D.captureSlot([],NaN,20,120,key));
+});

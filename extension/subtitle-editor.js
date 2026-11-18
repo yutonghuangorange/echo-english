@@ -26,15 +26,30 @@
       cues[i]={...cues[i],start:cursor,end:i===last?end:cursor+length,estimated:true};cursor=cues[i].end;
     }
   }
-  function paste(text,duration,key=newKey){
+  function lyricLines(text){
     if(typeof text!=='string' || text.length>MAX_TEXT)throw Error('歌词请控制在 20 万字以内。');
-    let group=0;const cues=[];
+    let group=0;const lines=[];
     for(const line of text.replace(/\r/g,'').split('\n')){
-      if(!line.trim()){if(cues.length)group++;continue;}
-      cues.push({text:line.trim(),key:key(),group,estimated:true,startLocked:false,endLocked:false});
+      if(!line.trim()){if(lines.length)group++;continue;}
+      lines.push({text:line.trim(),group});
     }
-    if(!cues.length || cues.length>MAX_CUES)throw Error('请粘贴歌词，每行一句，最多 2000 句；空行分段。');
+    if(lines.length>MAX_CUES)throw Error('歌词最多 2000 句，每行一句，空行分段。');
+    return lines;
+  }
+  function paste(text,duration,key=newKey){
+    const cues=lyricLines(text).map(line=>({...line,key:key(),estimated:true,startLocked:false,endLocked:false}));
+    if(!cues.length)throw Error('请粘贴歌词，每行一句。');
     allocate(cues,0,cues.length-1,0,duration,'length');return validate(cues,duration);
+  }
+  function captureSlot(slots,start,end,duration,key=newKey){
+    const next=[...copy(slots),{start,end,key:key()}].sort((a,b)=>a.start-b.start);
+    validate(next.map(c=>({...c,text:'时间区间'})),duration);return next;
+  }
+  function alignSlots(slots,text,duration){
+    const lines=lyricLines(text);
+    const rows=slots.map((slot,i)=>({...slot,text:lines[i]?.text || '（缺少歌词）',group:lines[i]?.group,unmatched:i>=lines.length,estimated:false}));
+    if(rows.length)validate(rows,duration);
+    return {rows,extraLyrics:lines.slice(slots.length).map((line,i)=>({...line,line:slots.length+i+1})),missingLyrics:Math.max(0,slots.length-lines.length),lineCount:lines.length,balanced:slots.length>0 && slots.length===lines.length};
   }
   function interpolate(source,first,last,start,end,duration,method='length'){
     if(!Number.isInteger(first) || !Number.isInteger(last) || first<0 || last<first || last>=source.length)throw Error('请选择有效的起句和止句。');
@@ -104,6 +119,6 @@
   }
   function activeIndex(cues,time){let low=0,high=cues.length-1,result=-1;while(low<=high){const mid=(low+high)>>1;if(cues[mid].start<=time){result=mid;low=mid+1;}else high=mid-1;}return result>=0 && time<cues[result].end?result:-1;}
   function windowIndices(cues,start,end){let low=0,high=cues.length;while(low<high){const mid=(low+high)>>1;if(cues[mid].start<end)low=mid+1;else high=mid;}const result=[];for(let i=0;i<low;i++)if(cues[i].end>start)result.push(i);return result;}
-  const api={MIN,MAX_CUES,MAX_TEXT,copy,validate,fromCues,paste,interpolate,edge,move,merge,replaceText,parseTime,time,serialize,activeIndex,windowIndices};
+  const api={MIN,MAX_CUES,MAX_TEXT,copy,validate,fromCues,lyricLines,captureSlot,alignSlots,paste,interpolate,edge,move,merge,replaceText,parseTime,time,serialize,activeIndex,windowIndices};
   if(typeof module!=='undefined')module.exports=api;else root.EchoSubtitleEditor=api;
 })(globalThis);

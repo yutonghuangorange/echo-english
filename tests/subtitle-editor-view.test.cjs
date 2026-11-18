@@ -25,7 +25,7 @@ test('editor mounts bounded lists and timelines only when open and releases play
   assert.equal(f.frames.size,0);assert.equal(f.videoListeners.size,0);assert.equal(f.$('List').children.length,0);assert.equal(f.$('First').children.length,0);assert.equal(f.video.paused,true);assert.equal(f.video.muted,true);assert.equal(f.video.playbackRate,.75);assert.equal(f.closed,1);assert.equal(f.drafts.at(-1).id,'first');assert.equal(f.drafts.at(-1).draft.cues.length,1000);
 });
 test('paste, merge, undo, export and apply all use the draft until explicit apply',async()=>{
-  const f=fixture();f.editor.open({videoId:'empty',video:f.video,cues:[]});f.$('Paste').value='One\nTwo\n\nThree';f.$('Build').onclick();
+  const f=fixture();f.editor.open({videoId:'empty',video:f.video,cues:[]});f.$('Workflow').value='cues';f.$('Workflow').onchange();f.$('Paste').value='One\nTwo\n\nThree';f.$('Build').onclick();
   assert.equal(f.applied,null);assert.match(f.$('Count').textContent,/3 句/);f.$('Last').value='1';f.$('Last').onchange();f.$('Merge').onclick();assert.match(f.$('Count').textContent,/2 句/);
   f.$('Undo').onclick();assert.match(f.$('Count').textContent,/3 句/);f.$('Srt').onclick();assert.match(f.exports[0].text,/-->/);
   await f.$('Apply').onclick();assert.equal(f.applied.length,3);assert.equal(f.editor.isOpen(),false);assert.ok(f.drafts.length);
@@ -65,4 +65,50 @@ test('I/O marks section boundaries without interrupting playback, applies them a
   f.video.currentTime=1;key('KeyI');f.video.currentTime=9;key('KeyO');f.$('Estimate').onclick();await f.editor.flush();draft=f.drafts.at(-1).draft;assert.equal(draft.cues[0].start,1);assert.equal(draft.cues.at(-1).end,9);
   f.video.currentTime=5;f.$('Dialog').onkeydown({code:'KeyI',target:{tagName:'INPUT'},preventDefault(){throw Error('typing must be ignored');},stopPropagation(){}});assert.equal(f.$('SectionStart').value,'00:00:01.000');
   f.editor.close();await f.editor.flush();
+});
+
+test('pending section start survives choosing the last lyric before marking the end',async()=>{
+  const f=fixture();f.editor.open({videoId:'pending',video:f.video,cues:f.cues.slice(0,4)});
+  f.video.currentTime=10;f.$('SectionMarkStart').onclick();
+  f.$('Last').value='3';f.$('Last').onchange();
+  assert.equal(f.$('SectionStart').value,'00:00:10.000');
+  f.video.currentTime=30;f.$('SectionMarkEnd').onclick();f.$('Estimate').onclick();await f.editor.flush();
+  assert.equal(f.drafts.at(-1).draft.cues[0].start,10);assert.equal(f.drafts.at(-1).draft.cues[3].end,30);f.editor.close();await f.editor.flush();
+});
+
+test('marker-first workflow records without lyrics, highlights both mismatch directions and never exports placeholders',async()=>{
+  const f=fixture();f.editor.open({videoId:'listen-first',video:f.video,cues:[]});assert.equal(f.$('Workflow').value,'slots');assert.equal(f.$('SectionMarkStart').disabled,false);
+  await f.$('Play').onclick();f.video.currentTime=10;f.$('SectionMarkStart').onclick();f.video.currentTime=20;f.$('SectionMarkEnd').onclick();
+  f.video.currentTime=30;f.$('SectionMarkStart').onclick();f.video.currentTime=40;f.$('SectionMarkEnd').onclick();assert.equal(f.video.paused,false);
+  assert.equal(f.$('Apply').disabled,true);assert.equal(f.$('MappingIssues').hidden,false);assert.match(f.$('MappingIssues').children[0].textContent,/缺少 2 行/);
+  f.$('Paste').value='One\nTwo\nExtra line';f.$('Paste').oninput();assert.equal(f.$('MappingIssues').children[1].className,'se-unmatched-lyric');assert.match(f.$('MappingIssues').children[1].textContent,/Extra line/);
+  f.$('Srt').onclick();await f.$('Apply').onclick();assert.equal(f.exports.length,0);assert.equal(f.applied,null);
+  f.$('Paste').value='One\nTwo';f.$('Paste').oninput();assert.equal(f.$('MappingIssues').hidden,true);assert.equal(f.$('Apply').disabled,false);
+  await f.$('Apply').onclick();assert.equal(f.applied[0].start,10);assert.equal(f.applied[0].end,20);assert.equal(f.applied[1].start,30);assert.equal(f.applied[1].text,'Two');await f.editor.flush();
+});
+test('unmatched markers, pending start and excess lyrics survive draft reopen and excess marker deletion can be undone',async()=>{
+  const f=fixture();f.editor.open({videoId:'draft-markers',video:f.video,cues:[]});
+  f.video.currentTime=5;f.$('SectionMarkStart').onclick();f.video.currentTime=10;f.$('SectionMarkEnd').onclick();f.video.currentTime=15;f.$('SectionMarkStart').onclick();f.video.currentTime=20;f.$('SectionMarkEnd').onclick();
+  f.$('Paste').value='Only one';f.$('Paste').oninput();await f.editor.flush();const draft=f.drafts.at(-1).draft;f.editor.close();await f.editor.flush();
+  f.editor.open({videoId:'draft-markers',video:f.video,cues:[],draft});assert.equal(f.$('Apply').disabled,true);f.$('DeleteSlot').onclick();assert.equal(f.$('Apply').disabled,false);f.$('Undo').onclick();assert.equal(f.$('Apply').disabled,true);
+  f.video.currentTime=25;f.$('SectionMarkStart').onclick();await f.editor.flush();assert.equal(f.drafts.at(-1).draft.pendingSlotStart,25);f.editor.close();await f.editor.flush();
+});
+test('manual pending section times survive selection, single-cue edits and draft restore',async()=>{
+  const f=fixture();f.editor.open({videoId:'manual',video:f.video,cues:f.cues.slice(0,3)});
+  f.$('SectionStart').value='10';f.$('SectionStart').oninput();f.$('SectionEnd').value='30';f.$('SectionEnd').oninput();
+  f.$('Last').value='2';f.$('Last').onchange();f.$('End').value='0.15';f.$('End').onchange();assert.equal(f.$('SectionStart').value,'10');assert.equal(f.$('SectionEnd').value,'30');
+  await f.editor.flush();const draft=f.drafts.at(-1).draft;f.editor.close();await f.editor.flush();f.editor.open({videoId:'manual',video:f.video,cues:f.cues.slice(0,3),draft});assert.equal(f.$('SectionStart').value,'10');
+  f.$('Estimate').onclick();await f.editor.flush();assert.equal(f.drafts.at(-1).draft.cues[0].start,10);assert.equal(f.drafts.at(-1).draft.cues[2].end,30);f.editor.close();await f.editor.flush();
+});
+
+test('pending section times cannot export or load old cue timings until explicitly applied',async()=>{
+  const f=fixture();f.editor.open({videoId:'no-stale-load',video:f.video,cues:f.cues.slice(0,3)});
+  f.$('SectionStart').value='10';f.$('SectionStart').oninput();f.$('SectionEnd').value='30';f.$('SectionEnd').oninput();f.$('Last').value='2';f.$('Last').onchange();
+  f.$('Srt').onclick();await f.$('Apply').onclick();assert.equal(f.exports.length,0);assert.equal(f.applied,null);assert.match(f.$('Message').textContent,/尚未应用/);
+  f.$('Estimate').onclick();await f.$('Apply').onclick();assert.equal(f.applied[0].start,10);assert.equal(f.applied[2].end,30);await f.editor.flush();
+});
+test('a balanced marker draft cannot load while a new start is unfinished, including after restore',async()=>{
+  const f=fixture();f.editor.open({videoId:'unfinished',video:f.video,cues:[]});f.video.currentTime=5;f.$('SectionMarkStart').onclick();f.video.currentTime=10;f.$('SectionMarkEnd').onclick();f.$('Paste').value='One';f.$('Paste').oninput();
+  f.video.currentTime=20;f.$('SectionMarkStart').onclick();await f.$('Apply').onclick();assert.equal(f.applied,null);await f.editor.flush();const draft=f.drafts.at(-1).draft;f.editor.close();await f.editor.flush();
+  f.editor.open({videoId:'unfinished',video:f.video,cues:[],draft});assert.equal(f.$('SectionStart').value,'00:00:20.000');assert.equal(f.$('Apply').disabled,true);f.editor.close();await f.editor.flush();
 });
