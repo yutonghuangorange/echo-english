@@ -3,6 +3,8 @@
   function create({env = root} = {}) {
     let frame = 0, timer = 0, completion = null;
     let watchRevision = 0, timerRevision = 0;
+    let paused=false, pendingTimeout=null;
+    const now=()=>env.performance?.now?.() ?? Date.now();
     let removeWatch = () => {};
 
     function watchEnd(media, end, done) {
@@ -39,11 +41,23 @@
     function timeout(done, milliseconds) {
       env.clearTimeout(timer);
       const revision = ++timerRevision;
+      pendingTimeout={done,remaining:milliseconds,started:now()};
+      if(paused)return;
       timer = env.setTimeout(() => {
         if (revision !== timerRevision) return;
-        timer = 0;
+        timer = 0;pendingTimeout=null;
         done();
       }, milliseconds);
+    }
+
+    function setPaused(value) {
+      if(paused===value)return;
+      paused=value;
+      if(!pendingTimeout)return;
+      if(paused){
+        pendingTimeout.remaining=Math.max(0,pendingTimeout.remaining-(now()-pendingTimeout.started));
+        env.clearTimeout(timer);timer=0;++timerRevision;
+      }else timeout(pendingTimeout.done,pendingTimeout.remaining);
     }
 
     function onCancel(done) { completion = done; }
@@ -87,12 +101,13 @@
       env.cancelAnimationFrame(frame);
       env.clearTimeout(timer);
       frame = timer = 0;
+      paused=false;pendingTimeout=null;
       const done = completion;
       completion = null;
       done?.();
     }
 
-    return {watchEnd, timeout, onCancel, delay, seek, cancel};
+    return {watchEnd, timeout, onCancel, delay, seek, cancel, setPaused};
   }
   const api = {create};
   if (typeof module !== 'undefined') module.exports = api;

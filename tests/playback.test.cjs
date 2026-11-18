@@ -47,6 +47,22 @@ test('stop resolves a pending practice delay once and removes scheduled work', a
   assert.equal(env.timers.size, 0);
 });
 
+test('paused playback freezes its watchdog and preserves remaining time across seek and cancellation',()=>{
+  const env=clock();let time=0,completed=0;env.performance={now:()=>time};
+  const playback=create({env});
+  playback.timeout(()=>completed++,1000);
+  const stale=[...env.timers.values()][0].fn;
+  time=300;playback.setPaused(true);assert.equal(env.timers.size,0);
+  stale();assert.equal(completed,0);
+  time=100000;playback.setPaused(false);
+  assert.equal([...env.timers.values()][0].ms,700);
+  playback.setPaused(true);playback.timeout(()=>completed++,2000);
+  assert.equal(env.timers.size,0);
+  playback.setPaused(false);assert.equal([...env.timers.values()][0].ms,2000);
+  playback.setPaused(true);playback.cancel();playback.setPaused(false);
+  assert.equal(env.timers.size,0);assert.equal(completed,0);
+});
+
 test('a completion callback can start the next operation without being cancelled', () => {
   const env = clock(), playback = create({env});
   let completed = 0;

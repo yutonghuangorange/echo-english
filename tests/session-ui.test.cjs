@@ -358,7 +358,7 @@ test('volume remains adjustable during accompaniment preview and saves the chose
   await storage.saveBacking({key:'music',videoId:'video',start:0,end:60,createdAt:1,blob:new Blob(['audio'])});
   const listeners=new Map();let time=0;
   const video={duration:60,get currentTime(){return time;},set currentTime(value){time=value;queueMicrotask(()=>listeners.get('seeked')?.());},muted:false,playbackRate:1,pause(){},async play(){},addEventListener(name,fn){listeners.set(name,fn);},removeEventListener(name,fn){if(listeners.get(name)===fn)listeners.delete(name);}};
-  class Audio{constructor(){sound=this;}pause(){}async play(){}}
+  class Audio{constructor(){sound=this;this.paused=true;}pause(){this.paused=true;}async play(){this.paused=false;}}
   const {nodes}=await mount(storage,{video,globals:{Audio,EchoKaraoke:{...require('../extension/karaoke.js'),async createBackingOutput(){return {setVolume(value){gain=value;},dispose(){}};}}}});
   nodes.get('activityMode').value='sing';nodes.get('activityMode').onchange();
   nodes.get('openBacking').onclick();assert.equal(nodes.get('settingsDialog').open,true);
@@ -366,6 +366,9 @@ test('volume remains adjustable during accompaniment preview and saves the chose
   const playing=nodes.get('previewBacking').onclick();
   for(let i=0;i<30 && !nodes.get('transportProgress').oninput;i++)await new Promise(r=>setTimeout(r,1));
   assert.equal(video.currentTime,10);assert.equal(sound.currentTime,10);
+  await nodes.get('pausePlayback').onclick();assert.equal(sound.paused,true);
+  listeners.get('playing')();assert.equal(sound.paused,true);
+  await nodes.get('pausePlayback').onclick();assert.equal(sound.paused,false);
   assert.equal(nodes.get('settings-generation').hidden,false);
   assert.equal(nodes.get('backingVolume').disabled,false);
   nodes.get('backingVolume').value='1.5';nodes.get('backingVolume').oninput();
@@ -380,16 +383,21 @@ test('volume remains adjustable during accompaniment preview and saves the chose
 
 test('original playback slider seeks within the selected range at reduced speed',async()=>{
   const storage=createStorage(new IDBFactory());
-  const video={duration:60,currentTime:0,muted:false,playbackRate:1,pause(){},async play(){},addEventListener(){},removeEventListener(){}};
+  const video={duration:60,currentTime:0,muted:false,playbackRate:1,paused:true,pause(){this.paused=true;},async play(){this.paused=false;},addEventListener(){},removeEventListener(){}};
   const {nodes}=await mount(storage,{video});
   nodes.get('speed').value='0.5';
   const playing=nodes.get('original').onclick();
   for(let i=0;i<10 && !nodes.get('transportProgress').oninput;i++)await Promise.resolve();
   const slider=nodes.get('transportProgress');
   assert.equal(slider.disabled,false);assert.equal(nodes.get('transportTime').textContent,'0:00 / 0:10');
+  await nodes.get('pausePlayback').onclick();assert.equal(video.paused,true);
   slider.value='0.75';await slider.oninput();assert.equal(video.currentTime,3.75);
+  assert.equal(video.paused,true);
+  await nodes.get('pausePlayback').onclick();assert.equal(video.paused,false);assert.equal(video.currentTime,3.75);
   slider.value='0.25';await slider.oninput();assert.equal(video.currentTime,1.25);
+  await nodes.get('pausePlayback').onclick();assert.equal(video.paused,true);
   nodes.get('stop').onclick();await playing;assert.equal(slider.oninput,null);
+  assert.equal(nodes.get('pausePlayback').hidden,true);
   (await storage.ready).close();
 });
 
@@ -400,9 +408,9 @@ test('song replay starts at audio opening and shows progress from the audio cloc
     addEventListener(name,fn){listeners.set(name,fn);},removeEventListener(name){listeners.delete(name);},
     async play(){if(!calls.includes('video'))this.currentTime=3;calls.push('video');listeners.get('playing')?.();}};
   class Audio{
-    constructor(){sound=this;this.elapsed=0;}
+    constructor(){sound=this;this.elapsed=0;this.paused=true;}
     get currentTime(){return this.elapsed;}set currentTime(value){audioSeeks.push(value);this.elapsed=value;}
-    pause(){}async play(){calls.push('audio');}
+    pause(){this.paused=true;}async play(){this.paused=false;calls.push('audio');}
   }
   const {nodes}=await mount(storage,{video,globals:{Audio,requestAnimationFrame(fn){frames.set(++frameId,fn);return frameId;},cancelAnimationFrame(id){frames.delete(id);}}});
   nodes.get('activityMode').value='sing';nodes.get('activityMode').onchange();
@@ -410,6 +418,14 @@ test('song replay starts at audio opening and shows progress from the audio cloc
   for(let i=0;i<10 && !calls.includes('video');i++)await Promise.resolve();
   await new Promise(resolve=>setTimeout(resolve,0));assert.deepEqual(calls.slice(0,2),['audio','video']);assert.deepEqual(audioSeeks,[]);
   assert.equal(video.currentTime,0);
+  const pause=nodes.get('pausePlayback');assert.equal(pause.hidden,false);
+  await pause.onclick();assert.equal(sound.paused,true);assert.equal(pause.textContent,'▶ 继续');
+  const pausedPlays=calls.length;
+  listeners.get('waiting')();listeners.get('playing')();assert.equal(calls.length,pausedPlays);
+  nodes.get('transportProgress').value='0.25';await nodes.get('transportProgress').oninput();
+  assert.equal(sound.paused,true);assert.equal(calls.length,pausedPlays);
+  await pause.onclick();assert.equal(sound.paused,false);assert.equal(pause.textContent,'Ⅱ 暂停');
+  sound.elapsed=0;audioSeeks.length=0;
   assert.equal(nodes.get('transport').hidden,false);
   assert.equal(nodes.get('transportTime').textContent,'0:00 / 0:10');
   sound.duration=2;sound.elapsed=0.5;frames.values().next().value();
@@ -423,6 +439,7 @@ test('song replay starts at audio opening and shows progress from the audio cloc
   slider.value='0.125';await slider.oninput();
   assert.equal(sound.currentTime,1);assert.equal(video.currentTime,1);
   sound.onended();await replaying;assert.equal(nodes.get('transport').hidden,true);
+  assert.equal(pause.hidden,true);
   assert.equal(slider.disabled,true);assert.equal(slider.oninput,null);(await storage.ready).close();
 });
 

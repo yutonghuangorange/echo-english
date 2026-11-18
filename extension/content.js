@@ -25,6 +25,16 @@
   let cues = [], index = -1, take = null, mode = 'idle', generation = 0,clipRangeAdjusted=false;
   let recordingSession = null, audio = null, savedVideo = null;
   const playback = EchoPlayback.create();
+  let playbackControl=null,playbackPaused=false,playbackToggling=false;
+  function renderPlaybackToggle(){
+    $('pausePlayback').hidden=!playbackControl;
+    $('pausePlayback').disabled=!playbackControl || playbackToggling;
+    $('pausePlayback').textContent=playbackPaused?'▶ 继续':'Ⅱ 暂停';
+    $('pausePlayback').setAttribute('aria-label',playbackPaused?'继续播放':'暂停播放');
+  }
+  function allowPlaybackPause(pause,resume){
+    playbackControl={pause,resume};playbackPaused=false;playbackToggling=false;renderPlaybackToggle();
+  }
   let playbackControlsSlot = 'defaultPlaybackSlot';
   const transport = EchoTransport.create({
     container: $('transport'), slider: $('transportProgress'),
@@ -672,6 +682,7 @@
     $('next').disabled=busy || index<0 || index>=cues.length-1;
     updateBackingControls();
     $('stop').disabled = !busy || mode==='saving'; $('stop').hidden = !busy;
+    renderPlaybackToggle();
     $('recordingDialogPreview').disabled=!take || !['idle','replay'].includes(mode);
     $('recordingDialogPreview').textContent=mode==='replay'?'■ 停止试听':take?.capture==='vocal' && !take.withBacking?'▶ 试听调整效果':'▶ 回听录音';
     $('recordingDialogPreview').setAttribute('aria-pressed',String(mode==='replay'));
@@ -707,6 +718,7 @@
     if (savedVideo) { const { v, muted, rate } = savedVideo; v.pause(); v.muted = muted; v.playbackRate = rate; savedVideo = null; }
   }
   function cancelPlayback() {
+    playbackControl=null;playbackPaused=false;playbackToggling=false;renderPlaybackToggle();
     recordingSession?.pauseFeedback();
     transport.hide();
     replayMonitor?.dispose();replayMonitor=null;
@@ -786,6 +798,7 @@
     if (token !== generation) return;
     await new Promise(resolve => {
       playback.onCancel(resolve);
+      allowPlaybackPause(()=>v.pause(),()=>v.play());
       showVideoTransport('原声',v,r,elapsed=>{
         v.currentTime=r.start+elapsed*r.speed;
         playback.timeout(()=>{v.pause();resolve();},Math.max(0,(r.end-v.currentTime)/r.speed)*1000+15000);
@@ -1373,7 +1386,7 @@
       await seek(v,r.start,token);if(token!==generation)return;
       const a=new Audio(url);audio=a;a.playbackRate=r.speed;a.volume=1;a.preservesPitch=true;
       const wait=()=>a.pause(), sync=()=>{
-        if(token!==generation)return;
+        if(token!==generation || playbackPaused)return;
         a.currentTime=Math.max(0,v.currentTime-ready.start);
         void a.play().catch(()=>{if(token===generation){stop();status('伴奏无法播放，请重新生成。');}});
       };
@@ -1386,6 +1399,7 @@
         status(`正在试听${backingName()}…`);await v.play();if(token!==generation)return;sync();
         await new Promise(resolve=>{
           playback.onCancel(resolve);a.onended=resolve;
+          allowPlaybackPause(()=>{v.pause();a.pause();},async()=>{await v.play();if(token===generation)sync();});
           showVideoTransport(`${backingName()}试听`,v,r,elapsed=>{
             v.currentTime=r.start+elapsed*r.speed;
             a.currentTime=Math.max(0,v.currentTime-ready.start);
@@ -1535,7 +1549,7 @@
     let started=false,buffering=false;
     const onWaiting = () => {if(started){buffering=true;a.pause();accompaniment?.pause();}};
     const onPlaying = () => {
-      if(audio!==a || !started || !buffering)return;
+      if(audio!==a || playbackPaused || !started || !buffering)return;
       buffering=false;
       const position=videoPosition();
       if(Math.abs(v.currentTime-position)>0.15)v.currentTime=position;
@@ -1586,7 +1600,7 @@
         if(token!==generation)return;
         playback.watchEnd(v,t.end,()=>v.pause());
         playback.timeout(resolvePlayback,Math.max(0,duration()-elapsed)*1000+15000);
-        if(v.currentTime<t.end)await v.play();
+        if(!playbackPaused && v.currentTime<t.end)await v.play();
       }});
       renderMixControls();
       playback.onCancel(resolvePlayback);
@@ -1599,6 +1613,12 @@
         // A partially recorded take or delayed video must not cut off the file.
         playback.watchEnd(v, t.end, () => v.pause());
         playback.timeout(resolvePlayback, EchoPractice.playbackTimeout(t));
+        allowPlaybackPause(()=>{a.pause();accompaniment?.pause();v.pause();},async()=>{
+          buffering=false;
+          await a.play();if(token!==generation)return;
+          await accompaniment?.sync();if(token!==generation)return;
+          v.currentTime=videoPosition();if(v.currentTime<t.end)await v.play();
+        });
       }
       await playbackDone;
     } finally {
@@ -1899,6 +1919,13 @@
     if(usesBacking() && !backingFor(r)){$('openBacking').click();status(`请先为当前练习范围准备${backingName()}，再开始${isSinging()?'录唱':'配音'}。`);return;}
     return record();
   }); $('stop').onclick = stop;
+  $('pausePlayback').onclick=guarded(async()=>{
+    if(!playbackControl || playbackToggling)return;
+    const control=playbackControl,pausing=!playbackPaused;
+    playbackToggling=true;playbackPaused=pausing;playback.setPaused(pausing);renderPlaybackToggle();
+    try{await (pausing?control.pause():control.resume());}
+    finally{if(playbackControl===control){playbackToggling=false;renderPlaybackToggle();}}
+  });
   $('replay').onclick = guarded(async () => { if(isSinging())return songTake && playRecording(songTake);const token = ++generation; mode = 'replay'; controls(); status('正在随画面播放你的配音…'); await replay(token); });
   $('compare').onclick = guarded(async () => { if (!take) return; const token = ++generation; mode = 'compare'; controls(); status('对比 1/2：原声'); await original(take, token, false); if (token !== generation) return; status('对比 2/2：你的配音'); await replay(token); });
   $('import').onclick = () => { if(mode==='idle')$('file').click(); };
