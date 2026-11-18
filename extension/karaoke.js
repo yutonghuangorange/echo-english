@@ -14,7 +14,7 @@
   }
   function key(videoId, range) {const base=`${videoId}:${Number(range.start).toFixed(3)}:${Number(range.end).toFixed(3)}`;const modelKey=modelOf(range)===DEFAULT_MODEL?base:`${base}:${modelOf(range)}`;return qualityOf(range)==='standard'?modelKey:`${modelKey}:lossless`;}
   function covers(backing, videoId, range) {return !!backing && backing.videoId===videoId && modelOf(backing)===modelOf(range) && qualityOf(backing)===qualityOf(range) && range.start>=backing.start-0.001 && range.end<=backing.end+0.001;}
-  function canReplayBacking(take){return !!take && take.capture==='vocal' && !take.withBacking && (take.kind==='song' || !!take.backingKey);}
+  function canReplayBacking(take){return !!take && take.capture==='vocal' && !take.withBacking && (take.kind==='song' || !!take.backingKey || take.referenceSource==='original');}
   function backingForTake(backings,take,videoId){
     const range={start:take.start,end:take.capturedEnd ?? take.end,model:take.backingModel || DEFAULT_MODEL,quality:take.backingQuality || 'standard'};
     return backings.find(b=>b.key===take.backingKey && covers(b,videoId,range)) || backings.find(b=>covers(b,videoId,range)) || null;
