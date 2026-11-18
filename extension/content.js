@@ -377,7 +377,7 @@
     $('backingVolume').setAttribute('aria-label',singing?'录唱监听音量':'背景监听音量');
     $('practiceToolsSummary').hidden=false;
     $('transcriptTitle').textContent=singing?'选择想练的一句歌词':'找到想练的那一句';
-    $('transcriptSubtitle').textContent=singing?'点选歌词，主录唱区会切到对应片段。':'点选一句，回到练习。可搜索台词或导入字幕。';
+    $('transcriptSubtitle').textContent=singing?'点选歌词，主录唱区会切到对应片段。':'点选一句，主练习区会切到对应片段。';renderTranscriptTools();
     $('cueHeading').textContent=singing?'当前歌词':'当前台词';
     $('practiceFlowHint').textContent=singing?'自动练唱：原曲 → 准备 → 录唱 → 回听。':'自动跟读：原声 → 准备 → 配音 → 回放。';
     $('tab-transcript').textContent=singing?'歌词':'台词';
@@ -1488,7 +1488,16 @@
     const language=contentLanguage();
     $('languageInfo').textContent=`${$('contentLanguage').value==='auto'?'文本建议（可手动更正）':'已选择'}：${EchoLanguages.languages[language]} · ${language==='en'?'支持英文点词查释义':'保留原文；该语言查词暂未接入'}`;
   }
+  function renderTranscriptTools(){
+    const has=cues.length>0;
+    $('transcriptContent').dataset.empty=String(!has);
+    $('transcriptListTitle').textContent=has?`${isSinging()?'歌词':'台词'} · ${cues.length} 句`:'自己制作字幕';
+    $('openSubtitleEditor').textContent=has?(isSinging()?'编辑歌词':'编辑字幕'):(isSinging()?'粘贴歌词':'粘贴文本');
+    $('openSubtitleEditor').classList.toggle('primary',!has);
+    $('transcriptEditorHint').hidden=has;$('transcriptEmpty').hidden=has;
+  }
   function renderCueList(){
+    renderTranscriptTools();
     $('list').replaceChildren();
     const query=$('transcriptSearch').value.trim().toLowerCase();let matches=0;
     cues.forEach((cue,i)=>{
@@ -1599,7 +1608,6 @@
     cues = next.map(c=>({...c,key:EchoStorage.cueKey(c)})); index = -1; $('list').replaceChildren();
     renderParagraphOptions();
     $('transcriptSearch').value='';
-    $('transcriptEmpty').hidden = next.length > 0;
     renderCueList();
     if (cues.length && preferredIndex >= 0) select(Math.min(preferredIndex,cues.length-1)); else {updateCaption();chooseCurrentTake();saveProgress();}
   }
@@ -1707,7 +1715,7 @@
     $('captionSourceInfo').textContent=captionAvailability==='unavailable'?`${noAutomaticCaptions}${loaded}`:loaded || '可刷新语言后选择字幕。内容语言只影响文本处理。';
     $('createLyrics').hidden=captionAvailability!=='unavailable';
     $('practiceSetup').textContent=captionAvailability==='unavailable'?noAutomaticCaptions:'先读取或导入字幕，也可直接设置练习范围。';
-    $('transcriptEmpty').textContent=captionAvailability==='unavailable'?noAutomaticCaptions:'还没有台词。点击上方按钮读取。';
+    $('transcriptEmpty').textContent=captionAvailability==='unavailable'?'自动载入字幕不可用：此视频没有可读取的字幕。可导入字幕文件，或粘贴歌词／文本制作。':'还没有字幕。可以读取视频字幕、导入文件，或粘贴文本制作。';
     $('read').textContent=captionAvailability==='unavailable'?'重新检测字幕':'读取台词';
   }
   async function captionsRequest(action,extra={}){
