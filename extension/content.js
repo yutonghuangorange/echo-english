@@ -777,30 +777,42 @@
     $('vocalReverb').value=effects.reverb;
     $('vocalReverbAmount').value=effects.amount;
     $('vocalReverbValue').textContent=`${Math.round(effects.amount*100)}%`;
-    for(const id of vocalEffectControls)$(id).disabled=!available || mode!=='idle';
+    const editable=mode==='idle' || (mode==='replay' && audio?.setEffects && replayTake?.id===take?.id);
+    for(const id of vocalEffectControls)$(id).disabled=!available || !editable;
+    for(const id of ['previewVocalEffects','downloadVocalEffects'])$(id).disabled=!available || mode!=='idle';
     $('vocalReverbAmount').disabled ||= effects.reverb==='off';
   }
-  async function saveVocalEffects(reset=false){
-    if(mode!=='idle' || take?.capture!=='vocal' || take.withBacking)return;
-    const id=take.id,owner=videoId,token=++generation;
+  let vocalEffectRevision=0;
+  function applyVocalEffects(reset=false){
+    if(take?.capture!=='vocal' || take.withBacking)return null;
+    if(mode!=='idle' && !(mode==='replay' && audio?.setEffects && replayTake?.id===take.id))return null;
     const effects=EchoVocalEffects.normalize(reset?{}:{delayMs:$('vocalDelay').value,reverb:$('vocalReverb').value,amount:$('vocalReverbAmount').value});
-    mode='saving';controls();
+    take={...take,effects};
+    videoHistory=videoHistory.map(value=>value.id===take.id?{...value,effects}:value);
+    if(songTake?.id===take.id)songTake={...songTake,effects};
+    if(replayTake?.id===take.id)audio?.setEffects?.(effects);
+    $('vocalDelayValue').textContent=`${effects.delayMs>0?'+':''}${effects.delayMs} ms`;
+    $('vocalReverbValue').textContent=`${Math.round(effects.amount*100)}%`;
+    $('vocalReverbAmount').disabled=effects.reverb==='off';
+    if(reset)renderVocalEffects();
+    return effects;
+  }
+  async function saveVocalEffects(reset=false){
+    const effects=applyVocalEffects(reset);
+    if(!effects)return;
+    const id=take.id,owner=videoId,revision=++vocalEffectRevision;
     try{
       const updated=await storage.updateTakeEffects(id,effects);
-      if(owner!==videoId || token!==generation)return;
+      if(owner!==videoId || id!==take?.id || revision!==vocalEffectRevision)return;
       if(!updated)throw Error('录音已不存在，请重新选择。');
-      videoHistory=videoHistory.map(value=>value.id===id?updated:value);
-      if(songTake?.id===id)songTake={...songTake,effects};
-      if(take?.id===id)take={...take,effects};
-      $('vocalEffectsStatus').textContent='已保存到此录音版本。点击试听调整可回听。';
-    }catch(error){if(owner===videoId && token===generation)$('vocalEffectsStatus').textContent=`保存失败：${error.message}`;}
-    finally{if(owner===videoId && token===generation){mode='idle';controls();}}
+      $('vocalEffectsStatus').textContent='已保存。播放中可直接调整并听到变化。';
+    }catch(error){if(owner===videoId && id===take?.id && revision===vocalEffectRevision)$('vocalEffectsStatus').textContent=`保存失败：${error.message}`;}
   }
-  for(const id of ['vocalDelay','vocalReverb','vocalReverbAmount'])$(id).onchange=()=>saveVocalEffects();
-  $('vocalDelay').oninput=()=>{$('vocalDelayValue').textContent=`${Number($('vocalDelay').value)>0?'+':''}${$('vocalDelay').value} ms`;};
-  $('vocalReverbAmount').oninput=()=>{$('vocalReverbValue').textContent=`${Math.round(Number($('vocalReverbAmount').value)*100)}%`;};
+  for(const id of ['vocalDelay','vocalReverb','vocalReverbAmount']){
+    $(id).oninput=()=>applyVocalEffects();
+    $(id).onchange=()=>saveVocalEffects();
+  }
   for(const [id,delta] of [['vocalEarlier',-10],['vocalLater',10]])$(id).onclick=()=>{
-    if(mode!=='idle')return;
     $('vocalDelay').value=EchoVocalEffects.normalize({delayMs:Number($('vocalDelay').value)+delta}).delayMs;
     return saveVocalEffects();
   };
@@ -1370,13 +1382,12 @@
     const t = take, v = video(); saveVideo(v); v.muted = true; v.playbackRate = t.speed;
     await seek(v, t.start, token);
     if (token !== generation) return;
-    const previewBlob=await EchoVocalEffects.preview(t);
-    if(token!==generation)return;
-    const previewUrl=previewBlob===t.blob?null:URL.createObjectURL(previewBlob);
-    audio = new Audio(previewUrl || t.url);
+    const player=t.capture==='vocal' && !t.withBacking?await EchoVocalEffects.createPlayer(t,replayMix().vocal):new Audio(t.url);
+    if(token!==generation){player.dispose?.();return;}
+    audio=player;
     const a = audio;
     let accompaniment=null, voiceOutput=null;
-    replayTake=t;replayBackingReady=false;replayVoiceMax=2;
+    replayTake=t;replayBackingReady=false;replayVoiceMax=2;renderVocalEffects();
     $('replayVocalVolume').max='2';
     const hasBackground=EchoKaraoke.canReplayBacking(t);
     const vocalOffset=t.capture==='vocal'?(t.vocalOffset || 0):0;
@@ -1398,7 +1409,7 @@
     a.onended=()=>{ended=true;accompaniment?.pause();resolvePlayback();};
     try {
       try {
-        voiceOutput=await EchoKaraoke.createAudioOutput(a,replayMix().vocal,globalThis);
+        voiceOutput=a.setEffects?a:await EchoKaraoke.createAudioOutput(a,replayMix().vocal,globalThis);
         if(token!==generation){voiceOutput.dispose();return;}
         replayVoiceOutput=voiceOutput;
       } catch {
@@ -1453,7 +1464,6 @@
       }
       await playbackDone;
     } finally {
-      if(previewUrl)URL.revokeObjectURL(previewUrl);
       v.removeEventListener('waiting', onWaiting);v.removeEventListener('playing', onPlaying);
       accompaniment?.dispose();if(replayMonitor===accompaniment)replayMonitor=null;
       voiceOutput?.dispose();if(replayVoiceOutput===voiceOutput)replayVoiceOutput=null;

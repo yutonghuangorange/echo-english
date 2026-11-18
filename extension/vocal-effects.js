@@ -50,7 +50,7 @@
     const offset = Math.max(0, -effects.delayMs / 1000);
     if (offset < buffer.duration) source.start(Math.max(0, effects.delayMs / 1000), offset);
     const rendered = await context.startRendering();
-    // Normalize before playback and mixing to keep the vocal/backing ratio consistent.
+    // Prevent clipping in processed vocal downloads and assembled mixes.
     let peak = 1;
     for (let c = 0; c < rendered.numberOfChannels; c++) {
       for (const sample of rendered.getChannelData(c)) peak = Math.max(peak, Math.abs(sample));
@@ -96,7 +96,133 @@
     return wav(await renderTake(take, env));
   }
 
-  const api = {normalize, enabled, impulse, process, wav, renderTake, preview};
+  // One decoded vocal buffer and a stable clock allow edits during playback.
+  // Alignment reschedules only the vocal source; video/accompaniment keep their position.
+  async function createPlayer(take, volume = 1, env = root) {
+    const context = new env.AudioContext();
+    let buffer;
+    try {buffer = await context.decodeAudioData(await take.blob.arrayBuffer());}
+    catch (error) {await context.close(); throw error;}
+    let effects = normalize(take.effects), position = 0, startedAt = 0;
+    let playing = false, disposed = false, source = null, sourceGain = null, timer = 0, playbackRevision = 0;
+    const listeners = new Map();
+    const output = context.createGain(), wet = context.createGain();
+    output.connect(context.destination);
+    wet.connect(output);
+    let reverb = null, reverbPreset = 'off';
+    const clock = () => playing ? Math.min(buffer.duration, position + context.currentTime - startedAt) : position;
+    const emit = name => {player['on' + name]?.(); for (const listener of listeners.get(name) || []) listener();};
+    const smooth = (param, value) => {
+      param.cancelScheduledValues(context.currentTime);
+      param.setTargetAtTime(value, context.currentTime, 0.01);
+    };
+    function setVolume(value) {
+      smooth(output.gain, Number.isFinite(Number(value)) ? Math.max(0, Math.min(2, Number(value))) : 1);
+    }
+    function stopSource() {
+      env.clearTimeout(timer);
+      timer = 0;
+      if (source) {
+        const old = source, gain = sourceGain;
+        gain.gain.cancelScheduledValues(context.currentTime);
+        gain.gain.setTargetAtTime(0, context.currentTime, 0.003);
+        old.onended = () => {old.disconnect(); gain.disconnect();};
+        old.stop(context.currentTime + 0.02);
+        source = sourceGain = null;
+      }
+    }
+    function configureReverb() {
+      if (effects.reverb !== reverbPreset) {
+        if (reverb) {sourceGain?.disconnect(reverb); reverb.disconnect();}
+        reverb = null;
+        reverbPreset = effects.reverb;
+        if (reverbPreset !== 'off') {
+          reverb = context.createConvolver();
+          reverb.buffer = impulse(context, reverbPreset);
+          reverb.connect(wet);
+          sourceGain?.connect(reverb);
+        }
+      }
+      smooth(wet.gain, effects.reverb === 'off' ? 0 : effects.amount);
+    }
+    function schedule() {
+      stopSource();
+      if (!playing || disposed) return;
+      const at = clock(), delay = effects.delayMs / 1000;
+      const offset = Math.max(0, at - delay);
+      if (offset < buffer.duration) {
+        source = context.createBufferSource();
+        source.buffer = buffer;
+        sourceGain = context.createGain();
+        sourceGain.gain.setValueAtTime(0, context.currentTime);
+        sourceGain.gain.linearRampToValueAtTime(1, context.currentTime + 0.01);
+        source.connect(sourceGain);
+        sourceGain.connect(output);
+        if (reverb) sourceGain.connect(reverb);
+        source.start(context.currentTime + Math.max(0, delay - at), offset);
+      }
+      timer = env.setTimeout(() => {
+        if (!playing || disposed) return;
+        // AudioContext time stops while the device is suspended.
+        if (clock() < buffer.duration - 0.01) {schedule(); return;}
+        position = buffer.duration; playing = false;
+        stopSource();
+        void context.suspend();
+        emit('ended');
+      }, Math.max(0, buffer.duration - at) * 1000);
+    }
+    const player = {
+      get currentTime() {return clock();},
+      set currentTime(value) {
+        position = Math.max(0, Math.min(buffer.duration, Number(value) || 0));
+        startedAt = context.currentTime;
+        schedule();
+      },
+      get duration() {return buffer.duration;},
+      get paused() {return !playing;},
+      get ended() {return !playing && position >= buffer.duration;},
+      set volume(value) {setVolume(value);},
+      set src(value) {if (!value) player.dispose();},
+      async play() {
+        if (disposed || playing) return;
+        const revision = ++playbackRevision;
+        await context.resume();
+        if (disposed || revision !== playbackRevision || playing) return;
+        if (position >= buffer.duration) position = 0;
+        startedAt = context.currentTime; playing = true;
+        schedule(); emit('playing');
+      },
+      pause() {
+        playbackRevision++;
+        if (!playing) return;
+        position = clock(); playing = false;
+        stopSource(); void context.suspend();
+      },
+      setEffects(value) {
+        const next = normalize(value), moved = next.delayMs !== effects.delayMs;
+        effects = next;
+        configureReverb();
+        if (moved) schedule();
+      },
+      setVolume,
+      addEventListener(name, listener) {
+        if (!listeners.has(name)) listeners.set(name, new Set());
+        listeners.get(name).add(listener);
+      },
+      removeEventListener(name, listener) {listeners.get(name)?.delete(listener);},
+      dispose() {
+        if (disposed) return;
+        player.pause(); disposed = true;
+        reverb?.disconnect(); wet.disconnect(); output.disconnect();
+        void context.close().catch(() => {});
+      }
+    };
+    setVolume(volume); configureReverb();
+    await context.suspend();
+    return player;
+  }
+
+  const api = {normalize, enabled, impulse, process, wav, renderTake, preview, createPlayer};
   if (typeof module !== 'undefined') module.exports = api;
   else root.EchoVocalEffects = api;
 })(globalThis);

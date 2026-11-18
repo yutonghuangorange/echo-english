@@ -164,7 +164,7 @@
             <input id="vocalReverbAmount" type="range" min="0" max="1" step="0.05" value="0.25" aria-label="混响强度">
             <div class="row"><button id="previewVocalEffects">▷ 试听调整</button><button id="downloadVocalEffects">下载后期 WAV</button></div><div class="row"><button id="resetVocalEffects" class="text-button">重置此版本后期</button></div>
             <p id="vocalEffectsStatus" class="hint" role="status"></p>
-            <p class="hint">按版本自动保存，回听、混合及整首导出沿用设置。原始下载可保留原声。移出录音边界的声音及末尾混响会裁切。</p>
+            <p class="hint">播放中可直接调整并听到变化。按版本自动保存，混合及整首导出沿用设置。原始下载可保留原声。移出录音边界的声音及末尾混响会裁切。</p>
           </div></details>
           <div class="recording-downloads"><a id="download">↓ 下载所选录音</a><button id="takeMixDownload" hidden>人声＋伴奏</button></div><p class="hint" id="mixDownloadHint">混合下载采用底部的回听音量比例，原始录音保持不变。</p>
         <details class="fold" id="recordingDetails"><summary>音量波形与录音详情</summary><div class="fold-content">

@@ -48,3 +48,32 @@ test('WAV encoding preserves channels and normalizes clipping',async()=>{
   assert.equal(view.getUint16(22,true),2);assert.equal(view.getUint32(24,true),44100);
   assert.equal(view.getInt16(44,true),32767);assert.equal(view.getInt16(48,true),-32768);
 });
+
+test('live edits preserve the playback clock and reverb changes do not restart vocals',async()=>{
+  const contexts=[],starts=[],timers=new Map();let nextTimer=0;
+  const parameter=()=>({value:0,cancelScheduledValues(){},setValueAtTime(v){this.value=v;},setTargetAtTime(v){this.value=v;},linearRampToValueAtTime(v){this.value=v;}});
+  class AudioContext {
+    constructor(){this.currentTime=0;this.sampleRate=1000;this.destination={};contexts.push(this);}
+    async decodeAudioData(){return buffer(10000);}
+    createGain(){return {gain:parameter(),connect(){},disconnect(){}};}
+    createConvolver(){return {connect(){},disconnect(){}};}
+    createBuffer(channels,length,sampleRate){return buffer(length,sampleRate,channels);}
+    createBufferSource(){return {connect(){},disconnect(){},start(...args){starts.push(args);},stop(){this.onended?.();}};}
+    async resume(){this.state='running';}async suspend(){this.state='suspended';}async close(){this.state='closed';}
+  }
+  const env={AudioContext,setTimeout(fn){const id=++nextTimer;timers.set(id,fn);return id;},clearTimeout(id){timers.delete(id);}};
+  const player=await effects.createPlayer({blob:new Blob(['audio'])},1,env),ctx=contexts[0];
+  assert.equal(player.paused,true);await player.play();ctx.currentTime=2;
+  player.setEffects({delayMs:-100,reverb:'ktv',amount:0.4});
+  assert.equal(player.currentTime,2);assert.deepEqual(starts.at(-1),[2,2.1]);
+  const sourceCount=starts.length;
+  player.setEffects({delayMs:-100,reverb:'theatre',amount:0.7});
+  assert.equal(starts.length,sourceCount);assert.equal(player.currentTime,2);
+  player.setEffects({delayMs:100});assert.deepEqual(starts.at(-1),[2,1.9]);
+  ctx.currentTime=3;player.pause();ctx.currentTime=4;assert.equal(player.currentTime,3);
+  await player.play();assert.equal(player.currentTime,3);
+  player.currentTime=1;assert.equal(player.currentTime,1);assert.deepEqual(starts.at(-1),[4,0.9]);
+  let ended=0;player.onended=()=>ended++;ctx.currentTime=13;
+  timers.values().next().value();assert.equal(player.ended,true);assert.equal(ended,1);
+  player.dispose();assert.equal(ctx.state,'closed');assert.equal(timers.size,0);
+});

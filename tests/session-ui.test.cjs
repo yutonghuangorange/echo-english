@@ -39,6 +39,7 @@ async function mount(storage, overrides = {}) {
     EchoSubtitleEditor:require('../extension/subtitle-editor.js'),EchoSubtitleEditorView:require('../extension/subtitle-editor-view.js'),EchoSettingsDialog:require('../extension/settings-dialog.js'),EchoPracticeTools:require('../extension/practice-tools.js'),EchoCaptionTracks:require('../extension/caption-tracks.js'),EchoPanelView:require('../extension/panel-view.js'),EchoTransport:require('../extension/transport.js'),EchoPlayback:require('../extension/playback.js'),
     EchoVocalEffects:require('../extension/vocal-effects.js'),EchoAudioExport:require('../extension/audio-export.js'),EchoAssembly:require('../extension/assembly.js'),EchoPanelSize:require('../extension/panel-size.js'),EchoLanguages:require('../extension/languages.js'),EchoKaraoke:require('../extension/karaoke.js'),EchoStorage:{...require('../extension/storage.js'),createStorage:()=>storage},EchoSelection:require('../extension/selection.js'),EchoPractice:require('../extension/practice.js'),EchoDictionary:require('../extension/dictionary.js'),EchoSubtitles:require('../extension/subtitles.js'),EchoLibrary:require('../extension/library.js'),EchoModels:require('../extension/models.js'),EchoLiveMeter:require('../extension/live-meter.js'),EchoRecording:require('../extension/recording.js'),EchoMicrophone:require('../extension/microphone.js'),EchoAudioAnalysis:require('../extension/audio-analysis.js')};
   Object.assign(context,overrides.globals || {});
+  if(!overrides.globals?.EchoVocalEffects?.createPlayer)context.EchoVocalEffects={...context.EchoVocalEffects,async createPlayer(take){return new context.Audio(take.url);}};
   // Existing UI fixtures provide a caption transport; integration fixtures can
   // pass the real page-context client to verify fetch rather than messaging.
   if(!overrides.globals?.EchoCaptionTracks?.createClient)context.EchoCaptionTracks={...context.EchoCaptionTracks,createClient:()=>({request:message=>context.chrome.runtime.sendMessage?.({...message,type:'echo-captions'})})};
@@ -2016,15 +2017,37 @@ test('post-production UI persists per-version alignment and reverb, restores on 
 });
 
 test('stopping during vocal processing prevents stale audio playback',async()=>{
-  const storage=createStorage(new IDBFactory());let release,requested=false,created=0;
+  const storage=createStorage(new IDBFactory());let release,requested=false,created=0,disposed=0;
   const blob=new Blob(['voice']);
   await storage.saveTake({id:'voice',videoId:'video',cueKey:'manual:0:5',start:0,end:5,speed:1,createdAt:1,capture:'vocal',blob,effects:{delayMs:-100}});
   const video={duration:60,currentTime:0,muted:false,playbackRate:1,pause(){},async play(){}};
-  const {nodes}=await mount(storage,{video,globals:{Audio:class{constructor(){created++;}},EchoVocalEffects:{...require('../extension/vocal-effects.js'),preview(){requested=true;return new Promise(resolve=>{release=resolve;});}}}});
+  const {nodes}=await mount(storage,{video,globals:{Audio:class{constructor(){created++;}},EchoVocalEffects:{...require('../extension/vocal-effects.js'),createPlayer(){requested=true;return new Promise(resolve=>{release=resolve;});}}}});
   nodes.get('tab-recordings').onclick();
   const playing=nodes.get('reviewReplay').onclick();
   await waitUntil(()=>requested);
-  nodes.get('stop').onclick();release(blob);await playing;
-  assert.equal(created,0);assert.equal(nodes.get('panel').dataset.mode,'idle');assert.equal(video.muted,false);
+  nodes.get('stop').onclick();release({dispose(){disposed++;}});await playing;
+  assert.equal(created,0);assert.equal(disposed,1);assert.equal(nodes.get('panel').dataset.mode,'idle');assert.equal(video.muted,false);
   (await storage.ready).close();
+});
+
+test('editing alignment and reverb during replay updates the same player and saves without resetting progress',async()=>{
+  const storage=createStorage(new IDBFactory());let player,players=0,plays=0;
+  await storage.saveTake({id:'voice',videoId:'video',cueKey:'manual:0:5',start:0,end:5,speed:1,createdAt:1,capture:'vocal',blob:new Blob(['voice'])});
+  const video={duration:60,currentTime:0,muted:false,playbackRate:1,pause(){},async play(){},addEventListener(){},removeEventListener(){}};
+  const {nodes}=await mount(storage,{video,globals:{EchoVocalEffects:{...require('../extension/vocal-effects.js'),async createPlayer(){
+    players++;player={currentTime:0,duration:5,paused:true,async play(){plays++;this.paused=false;},pause(){this.paused=true;},dispose(){},setEffects(effects){this.effects=effects;},setVolume(){}};
+    return player;
+  }}}});
+  nodes.get('tab-recordings').onclick();
+  const playing=nodes.get('reviewReplay').onclick();await waitUntil(()=>nodes.get('transport').hidden===false);
+  player.currentTime=2;video.currentTime=2;
+  assert.equal(nodes.get('vocalDelay').disabled,false);
+  nodes.get('vocalDelay').value='-120';nodes.get('vocalDelay').oninput();await nodes.get('vocalDelay').onchange();
+  nodes.get('vocalReverb').value='ktv';await nodes.get('vocalReverb').onchange();
+  nodes.get('vocalReverbAmount').value='0.5';nodes.get('vocalReverbAmount').oninput();await nodes.get('vocalReverbAmount').onchange();
+  assert.equal(players,1);assert.equal(plays,1);assert.equal(player.currentTime,2);assert.equal(video.currentTime,2);
+  assert.equal(nodes.get('panel').dataset.mode,'replay');
+  assert.deepEqual(player.effects,{delayMs:-120,reverb:'ktv',amount:0.5});
+  assert.deepEqual((await storage.listTakes('video'))[0].effects,player.effects);
+  nodes.get('stop').onclick();await playing;(await storage.ready).close();
 });
