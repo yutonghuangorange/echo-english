@@ -1357,6 +1357,33 @@ for(const quality of ['high','lossless'])test(`recording quality ${quality} pers
   const restored=await mount(storage,{video,globals});assert.equal(restored.nodes.get('recordingQuality').value,quality);
   (await storage.ready).close();
 });
+test('practice settings persist the recording version limit and pass it to new captures',async()=>{
+  const storage=createStorage(new IDBFactory()),preferences=new Map(),limits=[];
+  const save=storage.saveTake.bind(storage);storage.saveTake=(value,options)=>{limits.push(options.maxTakes);return save(value,options);};
+  class MediaRecorder{
+    static isTypeSupported(){return true;}
+    constructor(){this.state='inactive';this.mimeType='audio/webm';}
+    start(){this.state='recording';}
+    stop(){this.state='inactive';this.ondataavailable({data:new Blob(['voice'])});queueMicrotask(()=>this.onstop());}
+  }
+  const globals={MediaRecorder,window:{localStorage:{getItem:key=>preferences.get(key) ?? null,setItem:(key,value)=>preferences.set(key,value)},addEventListener(){},speechSynthesis:{cancel(){}}},
+    navigator:{mediaDevices:{async getUserMedia(){return {getTracks:()=>[{stop(){}}]};}}},requestAnimationFrame:fn=>setTimeout(fn,1),cancelAnimationFrame:clearTimeout};
+  const {nodes}=await mount(storage,{video:leadInVideo(),globals});
+  assert.equal(nodes.get('takeLimit').value,'3');
+  for(const limit of ['5','0']){
+    nodes.get('takeLimit').value=limit;nodes.get('takeLimit').onchange();
+    await nodes.get('record').onclick();
+    assert.equal(limits.at(-1),Number(limit));
+  }
+  assert.match(nodes.get('takeRetentionInfo').textContent,/全部版本/);
+  const before=(await storage.listTakes('video')).length;
+  nodes.get('takeLimit').value='1';nodes.get('takeLimit').onchange();
+  assert.equal((await storage.listTakes('video')).length,before);
+  const restored=await mount(storage,{video:leadInVideo(),globals});assert.equal(restored.nodes.get('takeLimit').value,'1');
+  assert.match(restored.nodes.get('takeRetentionInfo').textContent,/最近 1 个/);
+  (await storage.ready).close();
+});
+
 test('unsupported lossless recording stops before requesting microphone permission',async()=>{
   const storage=createStorage(new IDBFactory());let requests=0;
   class MediaRecorder{static isTypeSupported(type){return !type.includes('pcm');}}

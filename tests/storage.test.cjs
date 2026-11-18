@@ -29,6 +29,25 @@ test('delete and undo restore the original audio and metadata',async()=>{
   assert.equal(await restored.blob.text(),'audio');assert.equal(restored.start,1);assert.equal(restored.speed,1);
   (await storage.ready).close();
 });
+
+test('configurable retention prunes only the saved segment and exempts imported recordings',async()=>{
+  const storage=createStorage(new IDBFactory());
+  for(let i=1;i<=6;i++)await storage.saveTake(take(String(i)),{maxTakes:0});
+  await storage.saveTake({...take('7'),imported:true},{maxTakes:0});
+  await storage.saveTake(take('8','video','other'),{maxTakes:1});
+  assert.equal((await storage.listTakes('video')).length,8);
+  await storage.saveTake(take('9'),{maxTakes:5});
+  assert.deepEqual((await storage.listTakes('video')).map(t=>t.id),['9','8','7','6','5','4','3']);
+  await storage.saveTake(take('10'),{maxTakes:1});
+  assert.deepEqual((await storage.listTakes('video')).map(t=>t.id),['10','8','7']);
+  (await storage.ready).close();
+});
+
+test('invalid version limits fall back to three while zero explicitly means unlimited',()=>{
+  const {takeLimit}=require('../extension/storage.js');
+  for(const value of [undefined,null,'',' ',true,-1,1.5,101,Infinity,'bad'])assert.equal(takeLimit(value),3);
+  for(const value of [0,1,5,100])assert.equal(takeLimit(String(value)),value);
+});
 test('upgrades v1 latest take without losing its audio or leaving a duplicate',async()=>{
   const factory=new IDBFactory();
   const old=await new Promise((resolve,reject)=>{

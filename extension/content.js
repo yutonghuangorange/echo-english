@@ -7,6 +7,20 @@
   const root = host.attachShadow({ mode: 'open' });
   root.innerHTML = EchoPanelView.html;
   const $ = id => root.getElementById(id);
+  const takeLimitKey='echo-take-limit-v1';
+  function recordingTakeLimit(){
+    try{return EchoStorage.takeLimit(window.localStorage.getItem(takeLimitKey));}catch{return EchoStorage.MAX_TAKES;}
+  }
+  function renderTakeLimit(){
+    const limit=recordingTakeLimit();$('takeLimit').value=String(limit);
+    $('takeRetentionInfo').textContent=`${limit===0?'每个练习片段保留全部版本':`每个练习片段保留最近 ${limit} 个版本`}；可在练习设置调整。导入的录音额外保留，可手动删除。演唱与配音分别保存。连播使用各片段最新版本。`;
+  }
+  $('takeLimit').onchange=()=>{
+    try{window.localStorage.setItem(takeLimitKey,String(EchoStorage.takeLimit($('takeLimit').value)));}
+    catch{status('无法保存版本数设置，请检查浏览器存储权限。');}
+    renderTakeLimit();
+  };
+  renderTakeLimit();
   EchoPanelSize.attach({panel:$('panel'),host,handle:$('resizePanel'),moveHandle:$('movePanel'),env:window});
   // Use the actual available practice area so a user-sized panel can show more
   // context without making the compact layout or the fixed controls taller.
@@ -1425,7 +1439,7 @@
   $('undoDelete').onclick=guarded(async()=>{
     if(!deletedTake || mode!=='idle') return;
     const value=deletedTake,id=videoId;mode='saving';controls();
-    await storage.saveTake(value);
+    await storage.saveTake(value,{maxTakes:0});
     if(id!==videoId) return;
     deletedTake=null;$('undoDelete').hidden=true;mode='idle';await refreshHistory(value.id);status('已恢复录音。');
   });
@@ -1442,7 +1456,7 @@
       status('录音完成，正在保存…');
     }
     try {
-      await storage.saveTake(value);
+      await storage.saveTake(value,{maxTakes:recordingTakeLimit()});
       if (!ownsUI()) return;
       const request=++historyRequest;
       const values = await storage.listTakes(id);

@@ -247,7 +247,7 @@
 <details class="fold" id="recordingDetails"><summary>音量波形与录音详情</summary><div class="fold-content">
           <p class="hint" id="recordingTechnical" style="white-space:pre-line;overflow-wrap:anywhere"></p>
           <div id="analysis" hidden><canvas id="waveform" width="660" height="180" role="img" aria-label="录音音量波形，橙色表示低音量停顿"></canvas><div id="analysisText" class="analysis-text" role="status"></div><small>波形显示音量和停顿，不代表发音准确度。</small></div>
-          <small>每个练习片段保留最近 3 次；导入的录音额外保留，可手动删除。演唱与配音分别保存。连播使用各片段最新版本。</small>
+          <small id="takeRetentionInfo"></small>
         </div></details>
       <div class="recording-delete"><span class="hint">仅删除当前版本，可撤销。</span><button id="deleteTake" class="text-button danger" disabled>删除当前版本</button></div>
     </section><section id="recording-downloads" role="tabpanel" aria-labelledby="recordingDownloadTab" hidden>
@@ -274,6 +274,7 @@
           <div class="row"><label class="hint" for="prepSeconds">自动练习停顿</label><select id="prepSeconds" aria-label="自动练习停顿"><option value="0">不停顿</option><option value="2">2 秒</option><option value="3" selected>3 秒</option><option value="5">5 秒</option></select></div>
           <label class="check"><input type="checkbox" id="autoNext">回放结束后自动练下一句</label><p class="hint" id="practiceFlowHint">自动跟读：原声 → 准备 → 配音 → 回放。</p>
 </div>
+        <div class="settings-group"><h3>录音版本保存</h3><div class="row"><label class="hint" for="takeLimit">每片段保留版本数</label><input id="takeLimit" type="number" min="0" max="100" step="1" value="3" aria-describedby="takeLimitHint"></div><p class="hint" id="takeLimitHint">1–100 个，0 表示不限。对本浏览器所有视频生效，演唱与配音分别计数。调整不会立即删除录音；下次保存该片段的新录音时，超出上限的最旧版本会被删除。导入版本额外保留；不限时请留意存储空间。</p></div>
         <div class="secondary-actions"><button id="loop">↻ 单句循环</button><button id="autoPractice">▶ 自动跟读</button></div></section><section id="settings-microphone" role="tabpanel" aria-labelledby="settingsMicTab" class="fold-content">
           <div class="settings-group"><h3>输入与保存音质</h3><div class="field-heading"><label for="inputDevice">麦克风输入</label><button id="detectInputs" class="text-button">授权并检测</button></div><select id="inputDevice" aria-describedby="inputDeviceHint"><option value="">系统默认麦克风</option></select><p id="inputDeviceHint" class="hint">可选择内置、USB 或耳机麦克风。首次检测需要麦克风权限。</p><div class="row"><label class="hint" for="recordingQuality">录音音质</label><select id="recordingQuality" aria-describedby="recordingQualityHint"><option value="high">高品质压缩</option><option id="losslessQuality" value="lossless">无损 PCM</option></select></div><p class="hint" id="recordingQualityHint"></p></div>
           <div class="settings-group"><h3>录入人声</h3><div id="manualGainRow"><div class="row"><label class="hint" for="manualGainDb">手动录音增益</label><output class="hint" id="manualGainValue" for="manualGainDb">+0 dB</output></div><input id="manualGainDb" type="range" min="0" max="24" step="1" value="0" aria-describedby="manualGainHint" style="width:100%"><p class="hint" id="manualGainHint">固定放大人声，回听与下载均生效。默认不放大；可从 +6 dB 试起，留意录音音量的过载提示。只影响新录音，也会放大底噪。</p></div><label class="hint"><input id="echoCancellation" type="checkbox" aria-describedby="echoCancellationHint"> 录音时启用回声消除</label>

@@ -1,5 +1,8 @@
 (function(root) {
   const MAX_TAKES = 3;
+  function takeLimit(value){
+    return (typeof value==='number' || typeof value==='string' && value.trim()!=='') && Number.isInteger(Number(value)) && Number(value)>=0 && Number(value)<=100?Number(value):MAX_TAKES;
+  }
   const {cueKey} = typeof module !== 'undefined' ? require('./selection.js') : root.EchoSelection;
   function createStorage(factory = root.indexedDB, name = 'echo-dubbing-v1') {
     const ready = new Promise((resolve,reject) => {
@@ -62,12 +65,13 @@
         store.getAll().onsuccess=e=>{for(const old of e.target.result.filter(v=>!v.imported).sort((a,b)=>b.createdAt-a.createdAt).slice(8))store.delete(old.key);};
       }); },
       listTakes(videoId) { return transaction(['recordings'],'readonly',(tx,set)=>{tx.objectStore('recordings').index('videoId').getAll(videoId).onsuccess=e=>set(e.target.result.sort((a,b)=>b.createdAt-a.createdAt || b.id.localeCompare(a.id)));}); },
-      saveTake(value) {
+      saveTake(value,{maxTakes=MAX_TAKES}={}) {
+        const limit=takeLimit(maxTakes);
         return transaction(['recordings'],'readwrite',(tx,set)=>{
           const store=tx.objectStore('recordings'); store.put(value);
           store.index('segment').getAll([value.videoId,value.cueKey]).onsuccess=e=>{
             const takes=e.target.result.sort((a,b)=>b.createdAt-a.createdAt || b.id.localeCompare(a.id));
-            const expired=takes.filter(t=>!t.imported).slice(MAX_TAKES);
+            const expired=limit===0?[]:takes.filter(t=>!t.imported).slice(limit);
             for (const old of expired) store.delete(old.id);
             set(takes.filter(t=>!expired.includes(t)));
           };
@@ -132,6 +136,6 @@
       }
     };
   }
-  const api={createStorage,cueKey,MAX_TAKES};
+  const api={createStorage,cueKey,MAX_TAKES,takeLimit};
   if (typeof module !== 'undefined') module.exports=api; else root.EchoStorage=api;
 })(globalThis);
