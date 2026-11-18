@@ -324,7 +324,7 @@ test('waveform decoding starts only after opening recording details',async()=>{
   await storage.saveTake({id:'one',videoId:'video',cueKey:'manual:0.00:5.00',start:0,end:5,speed:1,createdAt:1,blob:new Blob(['audio'])});
   class AudioContext{constructor(){decodes++;throw Error('no decoder in fixture');}}
   const {nodes}=await mount(storage,{globals:{AudioContext}});
-  assert.equal(decodes,0);nodes.get('openRecordingAdjust').onclick();nodes.get('recordingDetails').open=true;nodes.get('recordingDetails').ontoggle();
+  assert.equal(decodes,0);nodes.get('recordingDetails').open=true;nodes.get('recordingDetails').ontoggle();
   assert.equal(decodes,1);assert.match(nodes.get('analysisText').textContent,/仍可回放或下载/);
   (await storage.ready).close();
 });
@@ -2142,7 +2142,7 @@ test('recording can change headphone reverb live while the saved stream stays dr
   (await storage.ready).close();
 });
 
-test('recording dialogs separate downloads and adjustments, block practice shortcuts and preserve live preview',async()=>{
+test('recording effects stay inline while downloads use a dialog and live preview remains available',async()=>{
   const storage=createStorage(new IDBFactory());let player;
   await storage.saveTake({id:'voice',videoId:'video',cueKey:'manual:0:5',start:0,end:5,speed:1,createdAt:1,capture:'vocal',blob:new Blob(['voice'])});
   const video={duration:60,currentTime:0,muted:false,playbackRate:1,pause(){},async play(){},addEventListener(){},removeEventListener(){}};
@@ -2151,16 +2151,17 @@ test('recording dialogs separate downloads and adjustments, block practice short
   }}}});
   document.documentElement.children[0].style.display='block';nodes.get('tab-recordings').onclick();
   nodes.get('openRecordingDownload').onclick();assert.equal(nodes.get('recordingDialog').open,true);
-  assert.equal(nodes.get('recording-adjustments').hidden,true);assert.equal(nodes.get('recording-downloads').hidden,false);
+  assert.equal(nodes.get('recording-adjustments').hidden,false);
   let shortcut=0;nodes.get('compare').onclick=()=>shortcut++;
   events.get('keydown')({altKey:true,shiftKey:true,code:'KeyC',preventDefault(){},stopPropagation(){}});assert.equal(shortcut,0);
-  nodes.get('recordingAdjustTab').onclick();assert.equal(nodes.get('recording-adjustments').hidden,false);
-  const preview=nodes.get('recordingDialogPreview').onclick();await waitUntil(()=>player?.paused===false);
-  assert.equal(nodes.get('recordingDialog').open,true);assert.match(nodes.get('recordingDialogPreview').textContent,/停止/);
-  const stopped=nodes.get('recordingDialogPreview').onclick();await stopped;await preview;
-  assert.equal(nodes.get('panel').dataset.mode,'idle');assert.equal(nodes.get('recordingDialog').open,true);
-  nodes.get('takeReverbSettings').onclick();assert.equal(nodes.get('recordingDialog').open,false);assert.equal(nodes.get('settings-sound').hidden,false);
-  nodes.get('closeSettings').onclick();nodes.get('openRecordingAdjust').onclick();
+  nodes.get('closeRecordingDialog').onclick();assert.equal(nodes.get('recordingDialog').open,false);
+  const preview=nodes.get('previewVocalEffects').onclick();await waitUntil(()=>player?.paused===false);
+  assert.equal(nodes.get('recordingDialog').open,false);assert.match(nodes.get('previewVocalEffects').textContent,/停止/);
+  nodes.get('inlineVocalReverb').value='ktv';await nodes.get('inlineVocalReverb').onchange();assert.equal(nodes.get('vocalReverb').value,'ktv');
+  const stopped=nodes.get('previewVocalEffects').onclick();await stopped;await preview;
+  assert.equal(nodes.get('panel').dataset.mode,'idle');assert.equal(nodes.get('recordingDialog').open,false);
+  nodes.get('openVocalSettings').onclick();assert.equal(nodes.get('settings-sound').hidden,false);
+  nodes.get('closeSettings').onclick();nodes.get('openRecordingDownload').onclick();
   nodes.get('closeRecordingDialog').onclick();assert.equal(nodes.get('recordingDialog').open,false);
   (await storage.ready).close();
 });
