@@ -620,6 +620,7 @@
     $('sidetoneLiveControls').hidden=!recording || !sidetoneEnabled;
     $('sidetoneLatency').hidden=!recording || !sidetoneEnabled;
     $('sidetoneLatency').textContent=EchoMicrophone.describeMonitoring(recordingSession?.sidetoneInfo);
+    $('recordingDock').hidden=currentPage!=='recordings' || !take || ['recording','lead-in','permission','loading'].includes(mode);
     $('practiceDock').hidden=currentPage!=='practice' || mode!=='idle';$('practiceUtilities').hidden=currentPage!=='practice' || mode!=='idle';
     $('historyBrowser').hidden=!videoHistory.length;
     $('playAll').hidden=!videoHistory.length;
@@ -969,6 +970,12 @@
       status(`正在播放 · ${value.label || '手动片段'}`);await replay(token);
     }catch(error){if(token===undefined || token===generation){stop();status(error.message || String(error));}}
   }
+  function selectRecording(value){
+    if(!value || !['idle','replay'].includes(mode))return;
+    if(mode==='replay' && value.id!==take?.id)stop();
+    setTake(value);renderHistory();saveProgress();
+    if(mode==='idle')status('已选录音，可在底部回放或对比原声。');
+  }
   function renderHistory() {
     const list=$('historyList'), scroll=list.scrollTop;
     const queue=EchoPractice.recordingQueue(videoHistory);
@@ -988,7 +995,7 @@
       const versions=videoHistory.filter(t=>t.cueKey===value.cueKey).length;
       button.append(document.createTextNode(`${value.label || '手动片段'} · ${recordingTime(value.start)} · ${versions} 个版本`));
       const small=document.createElement('small');small.textContent=recordingText(value);button.append(small);
-      button.onclick=guarded(()=>playRecording(value));
+      button.onclick=guarded(()=>selectRecording(value));
       const row=document.createElement('div');row.className='history-item';
       const remove=document.createElement('button');remove.className='history-delete';remove.textContent='删除';
       remove.title='删除此片段的最新版本，可撤销';remove.onclick=guarded(()=>deleteRecording(value));
@@ -1002,7 +1009,7 @@
       versions.forEach((value,i)=>{
         const button=document.createElement('button');button.className='version-choice';button.textContent=`版本 ${i+1}${i===versions.length-1?' · 最新':''}`;
         button.title=new Date(value.createdAt).toLocaleString('zh-CN');button.setAttribute('aria-pressed',String(value.id===take.id));
-        button.onclick=guarded(()=>playRecording(value));$('versionChoices').append(button);
+        button.onclick=guarded(()=>selectRecording(value));$('versionChoices').append(button);
       });
     }
     controls();

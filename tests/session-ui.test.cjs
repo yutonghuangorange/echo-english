@@ -563,7 +563,7 @@ test('play all replays latest recordings in timeline order even without a curren
   (await storage.ready).close();
 });
 
-test('recording timeline plays in one click, exposes versions directly and filters by words',async()=>{
+test('recording timeline selects without autoplay, exposes versions and uses the fixed playback dock',async()=>{
   const storage=createStorage(new IDBFactory());const cue={start:0,end:1,text:'Hello world'};
   await storage.saveSession({videoId:'video',index:0,start:0,end:1,speed:'1',cues:[cue]});
   for(const [id,createdAt] of [['old',1],['new',2]])await storage.saveTake({id,createdAt,videoId:'video',cueKey:cueKey(cue),start:0,end:1,speed:1,label:'第 1 句',blob:new Blob([id])});
@@ -574,8 +574,10 @@ test('recording timeline plays in one click, exposes versions directly and filte
   assert.equal(nodes.get('historyList').children.length,1);
   assert.equal(nodes.get('versionChoices').children.length,2);
   assert.equal(nodes.get('versionChoices').children[1].getAttribute('aria-pressed'),'true');
-  await nodes.get('historyList').children[0].children[0].onclick();assert.equal(played,1);
-  await nodes.get('versionChoices').children[0].onclick();assert.equal(played,2);
+  assert.equal(nodes.get('recordingDock').hidden,true);nodes.get('tab-recordings').onclick();assert.equal(nodes.get('recordingDock').hidden,false);
+  await nodes.get('historyList').children[0].children[0].onclick();assert.equal(played,0);
+  await nodes.get('versionChoices').children[0].onclick();assert.equal(played,0);
+  await nodes.get('reviewReplay').onclick();assert.equal(played,1);
   assert.equal(nodes.get('versionChoices').children[0].getAttribute('aria-pressed'),'true');
   nodes.get('recordingSearch').value='missing';nodes.get('recordingSearch').oninput();
   assert.equal(nodes.get('historyList').children[0].textContent,'没有匹配的录音，试试其他关键词。');
@@ -2104,8 +2106,8 @@ test('reverb migrates from the selected legacy version, stays shared across vers
   const {nodes,events}=await mount(storage,{video,globals:{location,Audio}});
   assert.equal(nodes.get('vocalReverb').value,'ktv');assert.equal(Number(nodes.get('vocalDelay').value),-120);
   const selected=nodes.get('versionChoices').children.find(button=>button.attrs['aria-pressed']==='false');
-  const playing=selected.onclick();await waitUntil(()=>Number(nodes.get('vocalDelay').value)===80);
-  assert.equal(nodes.get('vocalReverb').value,'ktv');nodes.get('stop').onclick();await playing;
+  await selected.onclick();assert.equal(Number(nodes.get('vocalDelay').value),80);
+  assert.equal(nodes.get('vocalReverb').value,'ktv');assert.equal(nodes.get('panel').dataset.mode,'idle');
   await nodes.get('resetVocalEffects').onclick();assert.equal(nodes.get('vocalReverb').value,'ktv');
   assert.equal((await storage.listTakes('video')).find(t=>t.id==='older').effects.delayMs,-120);
   nodes.get('vocalReverb').value='theatre';await nodes.get('vocalReverb').onchange();
