@@ -75,6 +75,7 @@ test('live edits preserve the playback clock and reverb changes do not restart v
   ctx.currentTime=3;player.pause();ctx.currentTime=4;assert.equal(player.currentTime,3);
   await player.play();assert.equal(player.currentTime,3);
   player.currentTime=1;assert.equal(player.currentTime,1);assert.deepEqual(starts.at(-1),[4,0.9]);
+  player.setEffects({fadeOutSeconds:2});ctx.currentTime=12;assert.equal(player.fadeGain,0.5);
   let ended=0;player.onended=()=>ended++;ctx.currentTime=13;
   timers.values().next().value();assert.equal(player.ended,true);assert.equal(ended,1);
   player.dispose();assert.equal(ctx.state,'closed');assert.equal(timers.size,0);
@@ -105,4 +106,15 @@ test('seeking disconnects the old voice and rebuilds its convolution without res
   assert.equal(player.currentTime,5);assert.equal(oldSourceGain.disconnected,true);assert.equal(oldConvolver.disconnected,true);
   assert.equal(convolvers.length,2);assert.equal(convolvers[0].buffer,convolvers[1].buffer); // IR cached; tail state is fresh.
   player.dispose();
+});
+
+test('fade-out uses the captured endpoint and handles short recordings and disabled fades',()=>{
+  assert.equal(effects.fadeGain(1,4,2),1);
+  assert.equal(effects.fadeGain(3,4,2),0.5);
+  assert.equal(effects.fadeGain(4,4,2),0);
+  assert.equal(effects.fadeGain(5,4,2),0);
+  assert.equal(effects.fadeGain(0.5,1,5),0.5);
+  assert.equal(effects.fadeGain(5,4,0),1);
+  assert.equal(effects.normalize({fadeOutSeconds:99}).fadeOutSeconds,5);
+  assert.equal(effects.durationOf(buffer(10000),{start:10,end:20,capturedEnd:14,speed:1,vocalOffset:0.2}),4.2);
 });

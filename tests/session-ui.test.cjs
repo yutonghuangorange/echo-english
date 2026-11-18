@@ -2047,10 +2047,11 @@ test('editing alignment and reverb during replay updates the same player and sav
   nodes.get('vocalDelay').value='-120';nodes.get('vocalDelay').oninput();await nodes.get('vocalDelay').onchange();
   nodes.get('vocalReverb').value='ktv';await nodes.get('vocalReverb').onchange();
   nodes.get('vocalReverbAmount').value='0.5';nodes.get('vocalReverbAmount').oninput();await nodes.get('vocalReverbAmount').onchange();
+  nodes.get('vocalFadeOut').value='1.5';nodes.get('vocalFadeOut').oninput();await nodes.get('vocalFadeOut').onchange();
   assert.equal(players,1);assert.equal(plays,1);assert.equal(player.currentTime,2);assert.equal(video.currentTime,2);
   assert.equal(nodes.get('panel').dataset.mode,'replay');
-  assert.deepEqual(player.effects,{delayMs:-120,reverb:'ktv',amount:0.5});
-  assert.deepEqual((await storage.listTakes('video'))[0].effects,{delayMs:-120});
+  assert.deepEqual(player.effects,{delayMs:-120,reverb:'ktv',amount:0.5,fadeOutSeconds:1.5});
+  assert.deepEqual((await storage.listTakes('video'))[0].effects,{delayMs:-120,fadeOutSeconds:1.5});
   assert.deepEqual((await storage.getSession('video')).vocalReverb,{delayMs:0,reverb:'ktv',amount:0.5});
   nodes.get('stop').onclick();await playing;(await storage.ready).close();
 });

@@ -6,13 +6,25 @@
     return {
       delayMs: Math.round(Math.max(-2000, Math.min(2000, number(value?.delayMs, 0)))),
       reverb: Object.hasOwn(presets, value?.reverb) ? value.reverb : 'off',
-      amount: Math.max(0, Math.min(2, number(value?.amount, 0.25)))
+      amount: Math.max(0, Math.min(2, number(value?.amount, 0.25))),
+      ...(number(value?.fadeOutSeconds,0)>0?{fadeOutSeconds:Math.min(5,number(value.fadeOutSeconds,0))}:{})
     };
   }
 
   function enabled(value) {
     const effects = normalize(value);
-    return effects.delayMs !== 0 || (effects.reverb !== 'off' && effects.amount > 0);
+    return effects.delayMs !== 0 || effects.fadeOutSeconds > 0 || (effects.reverb !== 'off' && effects.amount > 0);
+  }
+
+  function fadeGain(position, duration, seconds) {
+    if (!(seconds > 0)) return 1;
+    return Math.max(0, Math.min(1, (duration - position) / Math.min(seconds, duration)));
+  }
+
+  function durationOf(buffer, take) {
+    const end = Math.min(take.end, take.capturedEnd ?? take.end);
+    const recorded = (end - take.start) / (take.speed || 1) + (take.vocalOffset || 0);
+    return Number.isFinite(recorded) && recorded > 0 ? Math.min(buffer.duration, recorded) : buffer.duration;
   }
 
   const impulseCache = new WeakMap();
@@ -69,7 +81,7 @@
     return {set, reset: () => set(current, true), dispose() {clear();input.disconnect(output);}};
   }
 
-  async function process(buffer, value, env = root) {
+  async function process(buffer, value, env = root, endTime = buffer.duration) {
     const effects = normalize(value);
     if (!enabled(effects)) return buffer;
     const context = new env.OfflineAudioContext(2, buffer.length, buffer.sampleRate);
@@ -79,6 +91,10 @@
     const offset = Math.max(0, -effects.delayMs / 1000);
     if (offset < buffer.duration) source.start(Math.max(0, effects.delayMs / 1000), offset);
     const rendered = await context.startRendering();
+    if (effects.fadeOutSeconds > 0) for (let c = 0; c < rendered.numberOfChannels; c++) {
+      const data = rendered.getChannelData(c);
+      for (let i = 0; i < data.length; i++) data[i] *= fadeGain(i / rendered.sampleRate, endTime, effects.fadeOutSeconds);
+    }
     // Keep the vocal/backing ratio unchanged. Normalize only the final file,
     // after all stems have been mixed, never individual takes.
     return rendered;
@@ -109,7 +125,7 @@
     const context = new env.AudioContext();
     try {
       const decoded = await context.decodeAudioData(await take.blob.arrayBuffer());
-      return await process(decoded, take.effects, env);
+      return await process(decoded, take.effects, env, durationOf(decoded,take));
     } finally {await context.close();}
   }
 
@@ -120,15 +136,16 @@
     let buffer;
     try {buffer = await context.decodeAudioData(await take.blob.arrayBuffer());}
     catch (error) {await context.close(); throw error;}
+    const duration = durationOf(buffer,take);
     let effects = normalize(take.effects), position = 0, startedAt = 0;
     let playing = false, disposed = false, source = null, sourceGain = null, timer = 0, playbackRevision = 0;
     const listeners = new Map();
-    const output = context.createGain(), vocalBus = context.createGain();
-    output.connect(context.destination);
+    const output = context.createGain(), vocalBus = context.createGain(), fade = context.createGain();
+    output.connect(fade);fade.connect(context.destination);
     let reverb;
     try {reverb = createReverb(context, vocalBus, output, effects);}
     catch (error) {vocalBus.disconnect();output.disconnect();await context.close();throw error;}
-    const clock = () => playing ? Math.min(buffer.duration, position + context.currentTime - startedAt) : position;
+    const clock = () => playing ? Math.min(duration, position + context.currentTime - startedAt) : position;
     const emit = name => {player['on' + name]?.(); for (const listener of listeners.get(name) || []) listener();};
     const smooth = (param, value) => {
       param.cancelScheduledValues(context.currentTime);
@@ -150,13 +167,24 @@
         source = sourceGain = null;
       }
     }
+    function scheduleFade() {
+      const at = clock(), seconds = effects.fadeOutSeconds;
+      fade.gain.cancelScheduledValues(context.currentTime);
+      fade.gain.setValueAtTime(fadeGain(at, duration, seconds), context.currentTime);
+      if (seconds > 0 && playing) {
+        const begin = Math.max(at, duration - seconds);
+        if (begin > at) fade.gain.setValueAtTime(1, context.currentTime + begin - at);
+        fade.gain.linearRampToValueAtTime(0, context.currentTime + duration - at);
+      }
+    }
     function schedule(reset = false) {
       stopSource(reset);
       if (reset) reverb.reset();
       if (!playing || disposed) return;
+      scheduleFade();
       const at = clock(), delay = effects.delayMs / 1000;
       const offset = Math.max(0, at - delay);
-      if (offset < buffer.duration) {
+      if (offset < duration) {
         source = context.createBufferSource();
         source.buffer = buffer;
         sourceGain = context.createGain();
@@ -169,23 +197,24 @@
       timer = env.setTimeout(() => {
         if (!playing || disposed) return;
         // AudioContext time stops while the device is suspended.
-        if (clock() < buffer.duration - 0.01) {schedule(); return;}
-        position = buffer.duration; playing = false;
+        if (clock() < duration - 0.01) {schedule(); return;}
+        position = duration; playing = false;
         stopSource();
         void context.suspend();
         emit('ended');
-      }, Math.max(0, buffer.duration - at) * 1000);
+      }, Math.max(0, duration - at) * 1000);
     }
     const player = {
       get currentTime() {return clock();},
       set currentTime(value) {
-        position = Math.max(0, Math.min(buffer.duration, Number(value) || 0));
+        position = Math.max(0, Math.min(duration, Number(value) || 0));
         startedAt = context.currentTime;
         schedule(true);
       },
-      get duration() {return buffer.duration;},
+      get duration() {return duration;},
+      get fadeGain() {return fadeGain(clock(),duration,effects.fadeOutSeconds);},
       get paused() {return !playing;},
-      get ended() {return !playing && position >= buffer.duration;},
+      get ended() {return !playing && position >= duration;},
       set volume(value) {setVolume(value);},
       set src(value) {if (!value) player.dispose();},
       async play() {
@@ -193,7 +222,7 @@
         const revision = ++playbackRevision;
         await context.resume();
         if (disposed || revision !== playbackRevision || playing) return;
-        if (position >= buffer.duration) position = 0;
+        if (position >= duration) position = 0;
         startedAt = context.currentTime; playing = true;
         schedule(); emit('playing');
       },
@@ -206,7 +235,7 @@
       setEffects(value) {
         const next = normalize(value), moved = next.delayMs !== effects.delayMs;
         effects = next;
-        reverb.set(effects);
+        reverb.set(effects);scheduleFade();
         if (moved) schedule(true);
       },
       setVolume,
@@ -218,7 +247,7 @@
       dispose() {
         if (disposed) return;
         player.pause(); disposed = true;
-        reverb.dispose(); vocalBus.disconnect(); output.disconnect();
+        reverb.dispose(); vocalBus.disconnect(); output.disconnect(); fade.disconnect();
         void context.close().catch(() => {});
       }
     };
@@ -227,7 +256,7 @@
     return player;
   }
 
-  const api = {normalize, enabled, impulse, createReverb, process, wav, renderTake, createPlayer};
+  const api = {fadeGain, durationOf, normalize, enabled, impulse, createReverb, process, wav, renderTake, createPlayer};
   if (typeof module !== 'undefined') module.exports = api;
   else root.EchoVocalEffects = api;
 })(globalThis);

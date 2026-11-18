@@ -133,3 +133,16 @@ test('shared reverb processes the assembled vocal once before accompaniment is m
   assert.equal(renders,1);assert.deepEqual(Array.from(processed.getChannelData(0)).map(n=>n.toFixed(2)),['0.10','0.20']);
   const view=new DataView(await result.blob.arrayBuffer());assert(Math.abs(view.getInt16(44,true)/32767-.25)<.0001);assert(Math.abs(view.getInt16(48,true)/32767-.4)<.0001);
 });
+
+test('early-stop export fades vocals and backing together at the captured endpoint',async()=>{
+  const make=()=>({length:8,duration:4,sampleRate:2,numberOfChannels:1,getChannelData:()=>new Float32Array(8).fill(0.2)});
+  class AudioContext{async decodeAudioData(){return make();}async close(){}}
+  class OfflineAudioContext{
+    constructor(){this.sampleRate=2;this.destination={};}
+    createBufferSource(){return {connect(){},start(){}};}
+    async startRendering(){const data=new Float32Array(8).fill(0.2);return {...make(),getChannelData:()=>data};}
+  }
+  const result=await render({takes:[voice('a',0,8,1,{capturedEnd:4,effects:{fadeOutSeconds:2}})],duration:4,sampleRate:2,backing:{start:0,end:8,blob:new Blob(['backing'])}}, {AudioContext,OfflineAudioContext,setTimeout:fn=>queueMicrotask(fn)});
+  const view=new DataView(await result.blob.arrayBuffer());
+  for(const [frame,expected] of [[0,0.4],[4,0.4],[6,0.2],[7,0.1]])assert.ok(Math.abs(view.getInt16(44+frame*4,true)/32767-expected)<0.001);
+});

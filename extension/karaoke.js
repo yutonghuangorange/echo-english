@@ -94,13 +94,14 @@
   }
   // Keep accompaniment on the recording's clock, never the video's clock.
   // Raw vocals include microphone pre-roll; backing starts after vocalOffset.
-  function followRecording({monitor,voice,take,enabled=true,onError}, env=root) {
+  function followRecording({monitor,voice,take,enabled=true,volume=1,fade=()=>1,onError}, env=root) {
     let disposed=false,playing=false,pending=false,buffering=false,frame=0,revision=0;
     function pause() {
       ++revision;pending=false;playing=false;monitor.pause();
     }
     async function sync(force=false) {
       if(disposed)return;
+      monitor.setVolume?.(volume*fade());
       const elapsed=(voice.currentTime || 0)-(take.vocalOffset || 0);
       const position=take.start+elapsed*take.speed;
       if(!enabled || voice.paused || voice.ended || buffering || elapsed<0 || position>=take.end) {
@@ -127,7 +128,7 @@
     return {
       sync:()=>sync(true),pause,
       setEnabled(value){enabled=!!value;if(enabled)void sync(true);else pause();},
-      setVolume:value=>monitor.setVolume(value),
+      setVolume(value){volume=value;monitor.setVolume(value*fade());},
       dispose(){
         if(disposed)return;disposed=true;env.cancelAnimationFrame(frame);pause();
         voice.removeEventListener?.('waiting',waiting);voice.removeEventListener?.('playing',resumed);

@@ -37,7 +37,7 @@
   let modelPreferences={speech:EchoKaraoke.DEFAULT_MODEL,sing:EchoKaraoke.DEFAULT_MODEL};
   let paragraphFirst=0,paragraphLast=1,assemblyChoices=[],assemblyContext=null;
   let vocalReverb=EchoVocalEffects.normalize(),monitorReverb=false;
-  const takeEffects=value=>EchoVocalEffects.normalize({...vocalReverb,delayMs:EchoVocalEffects.normalize(value?.effects).delayMs});
+  const takeEffects=value=>EchoVocalEffects.normalize({...vocalReverb,delayMs:EchoVocalEffects.normalize(value?.effects).delayMs,fadeOutSeconds:value?.effects?.fadeOutSeconds});
   const monitoringEffects=()=>monitorReverb?vocalReverb:{};
   let recordingQuality='high',inputDeviceId='',sidetoneEnabled=false,sidetoneVolume=0.35,sidetoneMode='minimum';
   let inputDeviceRequest=0,inputDeviceList=[];
@@ -796,13 +796,15 @@
     $(id).onchange=async()=>{if(!applySoundEffects())return;const owner=videoId,saved=await saveProgress();if(owner!==videoId)return;$('soundEffectsStatus').textContent=saved===false?'保存失败，请检查本地空间。':'已保存到本视频。原始录音保持干声。';};
   }
   for(const id of ['openVocalSettings','micVocalSettings','liveVocalSettings'])$(id).onclick=()=>{settings.open('sound',id);renderSoundEffects();};
-  const vocalEffectControls=['vocalDelay','vocalEarlier','vocalLater','downloadVocalEffects','resetVocalEffects'];
+  const vocalEffectControls=['vocalDelay','vocalEarlier','vocalLater','vocalFadeOut','downloadVocalEffects','resetVocalEffects'];
   function renderVocalEffects(){
     const available=take?.capture==='vocal' && !take.withBacking;
     $('vocalEffects').hidden=!available;
     $('downloadVocalEffects').hidden=!available;
     const effects=EchoVocalEffects.normalize(take?.effects);
     $('vocalDelay').value=effects.delayMs;
+    $('vocalFadeOut').value=effects.fadeOutSeconds || 0;
+    $('vocalFadeOutValue').textContent=effects.fadeOutSeconds?effects.fadeOutSeconds+' 秒':'关闭';
     $('vocalDelayValue').textContent=`${effects.delayMs>0?'+':''}${effects.delayMs} ms`;
     renderSoundEffects();
     const editable=mode==='idle' || (mode==='replay' && audio?.setEffects && replayTake?.id===take?.id);
@@ -813,12 +815,14 @@
   function applyVocalEffects(reset=false){
     if(take?.capture!=='vocal' || take.withBacking)return null;
     if(mode!=='idle' && !(mode==='replay' && audio?.setEffects && replayTake?.id===take.id))return null;
-    const effects={delayMs:EchoVocalEffects.normalize(reset?{}:{delayMs:$('vocalDelay').value}).delayMs};
+    const settings=EchoVocalEffects.normalize(reset?{}:{delayMs:$('vocalDelay').value,fadeOutSeconds:$('vocalFadeOut').value});
+    const effects={delayMs:settings.delayMs,...(settings.fadeOutSeconds?{fadeOutSeconds:settings.fadeOutSeconds}:{})};
     take={...take,effects};
     videoHistory=videoHistory.map(value=>value.id===take.id?{...value,effects}:value);
     if(songTake?.id===take.id)songTake={...songTake,effects};
     if(replayTake?.id===take.id)audio?.setEffects?.(takeEffects(take));
     $('vocalDelayValue').textContent=`${effects.delayMs>0?'+':''}${effects.delayMs} ms`;
+    $('vocalFadeOutValue').textContent=effects.fadeOutSeconds?effects.fadeOutSeconds+' 秒':'关闭';
     if(reset)renderVocalEffects();
     return effects;
   }
@@ -835,6 +839,8 @@
   }
   $('vocalDelay').oninput=()=>applyVocalEffects();
   $('vocalDelay').onchange=()=>saveVocalEffects();
+  $('vocalFadeOut').oninput=()=>applyVocalEffects();
+  $('vocalFadeOut').onchange=()=>saveVocalEffects();
   for(const [id,delta] of [['vocalEarlier',-10],['vocalLater',10]])$(id).onclick=()=>{
     $('vocalDelay').value=EchoVocalEffects.normalize({delayMs:Number($('vocalDelay').value)+delta}).delayMs;
     return saveVocalEffects();
@@ -1396,7 +1402,7 @@
           if(!result){if(ownsUI() && mode==='saving'){mode='idle';controls();}return;}
           if(id===videoId)observePosition();
           const value={id:crypto.randomUUID(),videoId:id,cueKey:selection.key,label:selection.label,...r,...result,createdAt:Date.now(),capture:'vocal',
-            autoGainControl:constraints.autoGainControl,vocalOffset,...(capturedEnd>r.start?{capturedEnd}:{}),...(ready?{backingKey:ready.key,backingModel:EchoKaraoke.modelOf(ready),backingQuality:EchoKaraoke.qualityOf(ready)}:{}),...(singingTake?{kind:'song'}:{})};
+            autoGainControl:constraints.autoGainControl,vocalOffset,...(capturedEnd>r.start?{capturedEnd}:{}),...(ready?{backingKey:ready.key,backingModel:EchoKaraoke.modelOf(ready),backingQuality:EchoKaraoke.qualityOf(ready)}:{}),...(singingTake?{kind:'song',...(capturedEnd>r.start && capturedEnd<r.end-0.1?{effects:{fadeOutSeconds:2}}:{})}:{})};
           await saveRecording(value,{token,keepBusy,monitored:!!ready,ownsUI});
         } finally {if(recordingSession===session)recordingSession=null;}
       }
@@ -1487,7 +1493,7 @@
           try {
             const monitor=await EchoKaraoke.createMonitor({blob:ready.blob,video:v,start:ready.start,speed:t.speed,volume:replayMix().backing});
             if(token!==generation){monitor.dispose();return;}
-            accompaniment=EchoKaraoke.followRecording({monitor,voice:a,take:t,enabled:$('replayWithBacking').checked,
+            accompaniment=EchoKaraoke.followRecording({monitor,voice:a,take:t,enabled:$('replayWithBacking').checked,volume:replayMix().backing,fade:()=>a.fadeGain ?? 1,
               onError:()=>{if(token===generation){replayBackingReady=false;renderMixControls();status('背景音无法播放，当前仅回听人声；可重新提取后再试。');}}});
             replayMonitor=accompaniment;replayBackingReady=true;
           } catch(error) {

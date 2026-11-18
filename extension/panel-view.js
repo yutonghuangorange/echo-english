@@ -154,12 +154,14 @@
           <div class="recording-heading"><div class="eyebrow">当前录音</div><button id="reuseSongRange" class="text-button" hidden>练习此段 →</button></div><div id="historyInfo"></div><div id="recordingText"></div>
           <div class="row"><button id="reviewReplay">▷ 回放录音</button><button id="compare">⇄ 对比原声</button></div>
           <div class="version-toolbar"><div id="versionChoices" class="version-choices" role="group" aria-label="当前片段的录音版本"></div><button id="deleteTake" class="text-button danger" disabled>删除此版</button></div>
-          <details class="fold" id="vocalEffects" hidden><summary>此版本 · 人声对齐</summary><div class="fold-content">
+          <details class="fold" id="vocalEffects" hidden><summary>此版本 · 人声对齐与淡出</summary><div class="fold-content">
             <label class="hint" for="vocalDelay">人声位移（毫秒） · <output id="vocalDelayValue">0 ms</output></label>
             <input id="vocalDelay" type="range" min="-2000" max="2000" step="10" value="0" aria-label="人声位移，负数提前，正数延后">
             <div class="row"><button id="vocalEarlier">提前 10 ms</button><button id="vocalLater">延后 10 ms</button></div>
             <p class="hint">人声听起来慢了就向左提前，快了就向右延后。位移按录音实际时间计算。</p>
-            <div class="row"><button id="resetVocalEffects" class="text-button">重置此版本对齐</button></div>
+            <label class="hint" for="vocalFadeOut">结尾淡出 · <output id="vocalFadeOutValue">关闭</output></label>
+            <input id="vocalFadeOut" type="range" min="0" max="5" step="0.5" value="0" aria-label="结尾淡出时长，人声和伴奏一起淡出">
+            <div class="row"><button id="resetVocalEffects" class="text-button">重置此版本对齐与淡出</button></div>
             <p id="vocalEffectsStatus" class="hint" role="status"></p>
             <p class="hint">对齐仅保存到此录音版本。混响在「声音效果」中统一设置；回听和处理后下载沿用设置。原始人声下载不受影响。移出边界的声音会裁切。</p>
           </div></details>

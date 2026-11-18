@@ -98,6 +98,11 @@
         await add(decoded,0,duration,origin-backing.start,Math.max(0,Math.min(2,volume)));
       }
       check();
+      const last=timeline.segments.at(-1),fadeSeconds=effects.normalize(last.take.effects).fadeOutSeconds;
+      if(fadeSeconds>0)for(let i=0;i<length;i++){
+        const gain=effects.fadeGain(i/sampleRate,last.end,fadeSeconds);
+        channels[0][i]*=gain;channels[1][i]*=gain;
+      }
       let peak=1;for(let i=0;i<length;i++)peak=Math.max(peak,Math.abs(channels[0][i]),Math.abs(channels[1][i]));
       const bytes=new ArrayBuffer(44+length*4),view=new DataView(bytes);
       const text=(at,value)=>{for(let i=0;i<value.length;i++)view.setUint8(at+i,value.charCodeAt(i));};
