@@ -2203,3 +2203,28 @@ test('original phase of comparison keeps replay volume in place but disables unr
   assert.equal(nodes.get('replayVocalVolume').disabled,false);
   (await storage.ready).close();
 });
+
+test('lead-in progress stays visible through a delayed seek and recording playback startup',async()=>{
+  const storage=createStorage(new IDBFactory()),events=new Map();let position=0,holdSeek=false,releaseSeek,releasePlay,plays=0,starts=0;
+  await storage.saveSession({videoId:'video',start:10,end:15,speed:'1',cues:[],leadInMode:'seconds',leadInSeconds:3});
+  const emit=name=>{for(const fn of [...events.get(name)||[]])fn();};
+  const video={duration:60,muted:false,playbackRate:1,pause(){},
+    get currentTime(){return position;},set currentTime(value){position=value;if(holdSeek)releaseSeek=()=>{holdSeek=false;emit('seeked');};else queueMicrotask(()=>emit('seeked'));},
+    addEventListener(name,fn){if(!events.has(name))events.set(name,new Set());events.get(name).add(fn);},removeEventListener(name,fn){events.get(name)?.delete(fn);},
+    async play(){if(++plays===2)await new Promise(resolve=>{releasePlay=resolve;});}};
+  class MediaRecorder{static isTypeSupported(){return true;}constructor(){this.state='inactive';this.mimeType='audio/webm';}
+    start(){starts++;this.state='recording';}stop(){this.state='inactive';this.ondataavailable({data:new Blob(['voice'])});queueMicrotask(()=>this.onstop());}}
+  const {nodes}=await mount(storage,{video,globals:{MediaRecorder,navigator:{mediaDevices:{getUserMedia:async()=>({getTracks:()=>[{stop(){}}]})}},requestAnimationFrame:fn=>setTimeout(fn,1),cancelAnimationFrame:clearTimeout}});
+  const pending=nodes.get('record').onclick();await waitUntil(()=>nodes.get('transportLabel').textContent==='准备录音 · 前置原声');
+  const visibility=[];let hidden=nodes.get('transport').hidden;
+  Object.defineProperty(nodes.get('transport'),'hidden',{get:()=>hidden,set:value=>{hidden=value;visibility.push(value);}});
+  holdSeek=true;position=10;emit('timeupdate');await waitUntil(()=>!!releaseSeek);
+  assert.equal(hidden,false);assert.equal(nodes.get('liveMeter').hidden,false);assert.equal(starts,0);
+  releaseSeek();await waitUntil(()=>!!releasePlay);
+  assert.equal(starts,1);assert.equal(nodes.get('panel').dataset.mode,'recording');
+  assert.equal(nodes.get('transportLabel').textContent,'录音');assert.equal(hidden,false);
+  assert.equal(nodes.get('transportProgress').disabled,true);assert.equal(nodes.get('liveMeter').hidden,false);
+  assert.equal(visibility.includes(true),false);
+  nodes.get('stop').onclick();releasePlay();await pending;assert.equal(hidden,true);
+  (await storage.ready).close();
+});

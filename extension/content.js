@@ -759,6 +759,7 @@
     if(token!==generation)return false;
     const update=()=>status(`准备录音 · ${Math.max(0,Math.ceil((r.start-v.currentTime)/r.speed))} 秒后开始`);
     update();v.addEventListener('timeupdate',update);
+    let completed=false;
     try{
       await v.play();
       if(token!==generation)return false;
@@ -768,9 +769,10 @@
         playback.watchEnd(v,r.start,()=>{v.pause();resolve();});
         playback.timeout(()=>{v.pause();reject(Error('前置播放超时，请检查视频后重试。'));},EchoPractice.playbackTimeout({start,end:r.start,speed:r.speed}));
       });
+      completed=true;
     }finally{
       v.removeEventListener('timeupdate',update);
-      if(token===generation){playback.cancel();transport.hide();}
+      if(token===generation){playback.cancel();if(!completed)transport.hide();}
     }
     return token===generation;
   }
@@ -1491,6 +1493,7 @@
     if(!session.start())return false;
     const clock=()=>globalThis.performance?.now?.() ?? Date.now(),captureStartedAt=clock();
     mode='recording';controls();session.startMeter();
+    showVideoTransport('录音',v,r);
     status('录音已启动，正在准备同步播放…');
     v.addEventListener('waiting',onWaiting);v.addEventListener('playing',onPlaying);v.addEventListener('timeupdate',observePosition);
     if(ready){
@@ -1507,7 +1510,6 @@
     if(Number.isFinite(position) && Math.abs(v.currentTime-position)>0.15)v.currentTime=position;
     $('sidetoneLatency').textContent=EchoMicrophone.describeMonitoring(session.sidetoneInfo);
     status(ready?'● 正在录制人声，伴奏仅在耳机播放…':singingTake?'● 正在录制清唱人声…':'● 正在配音，视频原声已静音…');
-    showVideoTransport('录音',v,r);
     const endRecording=()=>{if(!active())return;cancelPlayback();restoreVideo();mode='saving';controls();session.stop();};
     playback.watchEnd(v,r.end,endRecording);playback.timeout(endRecording,EchoPractice.playbackTimeout(r));
     return session.completed;

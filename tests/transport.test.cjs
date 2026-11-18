@@ -97,3 +97,14 @@ test('browser globals are available in manifest order with the unchanged panel c
   assert.match(context.EchoPanelView.html, /id="record"/);
   assert.match(context.EchoPanelView.html, /id="transportProgress"/);
 });
+
+test('replacing the preparation clock with recording never hides the progress view',()=>{
+  const {view,container,slider,label,frames}=fixture();
+  view.show({label:'准备录音 · 前置原声',position:()=>3,duration:()=>3});
+  const visibility=[];let hidden=container.hidden;
+  Object.defineProperty(container,'hidden',{get:()=>hidden,set:value=>{hidden=value;visibility.push(value);}});
+  view.show({label:'录音',position:()=>0,duration:()=>10});
+  assert.deepEqual(visibility,[false]);assert.equal(label.textContent,'录音');
+  assert.equal(slider.disabled,true);assert.equal(slider.oninput,null);assert.equal(frames.size,1);
+  view.hide();assert.equal(container.hidden,true);assert.equal(frames.size,0);
+});

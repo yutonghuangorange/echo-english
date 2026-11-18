@@ -27,16 +27,21 @@
       if (!active) renderIdle();
     }
 
-    function hide() {
+    function cancelClock() {
       ++revision;
       env.cancelAnimationFrame(frame);
       frame = 0;
+    }
+
+    function hide() {
+      cancelClock();
       active = false;
       renderIdle();
     }
 
     function show({label: text, position, duration, seekTo = null}) {
-      hide();
+      // Replacing a phase must not hide/reset the view between media clocks.
+      cancelClock();
       active = true;
       const current = revision;
       container.hidden = false;
