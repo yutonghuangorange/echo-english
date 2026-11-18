@@ -660,7 +660,8 @@
     updateBackingControls();
     $('stop').disabled = !busy || mode==='saving'; $('stop').hidden = !busy;
     $('recordingDialogPreview').disabled=!take || !['idle','replay'].includes(mode);
-    $('recordingDialogPreview').textContent=mode==='replay'?'■ 停止试听':'▷ 试听';
+    $('recordingDialogPreview').textContent=mode==='replay'?'■ 停止试听':take?.capture==='vocal' && !take.withBacking?'▶ 试听调整效果':'▶ 回听录音';
+    $('recordingDialogPreview').setAttribute('aria-pressed',String(mode==='replay'));
     $('recordingDialogStop').hidden=!busy || mode==='replay';$('recordingDialogStop').disabled=mode==='saving';
     $('recordingDialogStop').textContent=mode==='exporting'?'取消导出':'停止播放';
     for(const id of ['openRecordingAdjust','openRecordingDownload'])$(id).disabled=!take || !['idle','replay'].includes(mode);
