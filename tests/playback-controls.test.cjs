@@ -31,3 +31,18 @@ test('active playback failures are reported while clearing hides both controls',
   await f.pauseButton.onclick();assert.deepEqual(f.errors,[error]);
   f.controls.clear();assert.equal(f.pauseButton.hidden,true);assert.equal(f.speedControl.hidden,true);
 });
+
+
+test('original volume stays synchronized with native media and detaches on playback replacement',()=>{
+  const element=()=>({setAttribute(){}}),volumeControl=element(),volumeInput=element(),volumeValue=element(),events=new Map();
+  const media={volume:.6,muted:false,addEventListener(name,fn){events.set(name,fn);},removeEventListener(name,fn){if(events.get(name)===fn)events.delete(name);}};
+  const controls=attach({pauseButton:element(),speedControl:element(),speedInput:element(),volumeControl,volumeInput,volumeValue,clock:{},getSpeed:()=>1});
+  assert.equal(volumeControl.hidden,true);
+  controls.set(()=>{},()=>{},null,media);assert.equal(volumeControl.hidden,false);assert.equal(volumeValue.textContent,'60%');
+  volumeInput.value='.25';volumeInput.oninput();assert.equal(media.volume,.25);assert.equal(volumeValue.textContent,'25%');
+  media.muted=true;events.get('volumechange')();assert.equal(volumeInput.value,'0');
+  volumeInput.value='.5';volumeInput.oninput();assert.equal(media.muted,false);assert.equal(media.volume,.5);
+  controls.set(()=>{},()=>{});assert.equal(volumeControl.hidden,true);assert.equal(events.size,0);
+  volumeInput.value='.9';volumeInput.oninput();assert.equal(media.volume,.5);
+  controls.set(()=>{},()=>{},null,media);controls.clear();assert.equal(events.size,0);assert.equal(volumeControl.hidden,true);
+});

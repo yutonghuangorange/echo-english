@@ -40,7 +40,7 @@
   let recordingSession = null, audio = null, savedVideo = null;
   const playback = EchoPlayback.create();
   const playbackActions=EchoPlaybackControls.attach({
-    pauseButton:$('pausePlayback'),speedControl:$('playbackSpeedControl'),speedInput:$('playbackSpeed'),clock:playback,
+    pauseButton:$('pausePlayback'),speedControl:$('playbackSpeedControl'),speedInput:$('playbackSpeed'),volumeControl:$('originalVolumeControl'),volumeInput:$('originalVolume'),volumeValue:$('originalVolumeValue'),clock:playback,
     getSpeed:()=>$('speed').value,
     onSpeed:speed=>{$('speed').value=String(speed);updateSummaries();saveProgress();},
     onError:error=>{stop();status(error.message || String(error));}
@@ -400,6 +400,7 @@
     $('recordingPlaybackHint').textContent=recordingPlayback()==='original'?'播放 YouTube 原音，音量沿用 YouTube；无需先生成伴奏。仅保存麦克风人声，建议戴耳机。回听与合成仍使用伴奏／背景音。':usesBacking()?'需先为练习范围准备伴奏／背景音。录制时仅保存麦克风人声，建议戴耳机。':'录制时不播放参考音；仍可开启耳返。已有伴奏／背景音可用于回听和合成。';
     $('backingHelpTitle').textContent=`首次使用：如何启用${backingName()}？`;
     $('backingSettingsHint').textContent=singing?'每次最长 10 分钟。整首生成一次后，较短练习片段可直接复用。':'去掉原对白，尽量保留音乐和环境音。按所选范围提取，最长 10 分钟，建议先试短片段；可能残留对白或损失音效。录音只保存自己的人声。';
+    $('originalVolumeLabel').textContent=singing?'原曲':'原声';
     $('backingVolumeLabel').textContent=singing?'录唱监听音量':'背景监听音量';
     $('backingLiveLabel').textContent=singing?'伴奏':'背景音';
     $('backingLiveVolume').setAttribute('aria-label',singing?'录音中伴奏监听音量':'录音中背景音监听音量');
@@ -816,7 +817,7 @@
       playbackActions.set(()=>v.pause(),()=>v.play(),mode==='original'?speed=>{
         r.speed=speed;v.playbackRate=speed;
         playback.timeout(()=>{v.pause();resolve();},Math.max(0,(r.end-v.currentTime)/speed)*1000+15000);
-      }:null);
+      }:null,v);
       showVideoTransport('原声',v,r,elapsed=>{
         v.currentTime=r.start+elapsed*r.speed;
         playback.timeout(()=>{v.pause();resolve();},Math.max(0,(r.end-v.currentTime)/r.speed)*1000+15000);

@@ -182,6 +182,7 @@
     <div id="defaultPlaybackSlot"><section id="playbackControls" class="playback-controls" aria-label="回放进度与音量"><div id="transport" class="transport" hidden>
       <div class="transport-heading"><span id="transportLabel"></span><label id="playbackSpeedControl" class="playback-speed" hidden>速度<select id="playbackSpeed" aria-label="当前播放速度"><option value="0.75">0.75×</option><option value="1">1×</option><option value="1.25">1.25×</option></select></label><span id="transportTime"></span></div>
       <input id="transportProgress" type="range" min="0" max="1" step="0.001" value="0" aria-label="播放进度，可点击或拖动跳转" style="display:block;width:100%;margin:6px 0;accent-color:#b3eedb" disabled>
+      <label id="originalVolumeControl" class="mix-row" hidden><span id="originalVolumeLabel">原声</span><input id="originalVolume" type="range" min="0" max="1" step="0.01" value="1" aria-label="原曲／原声音量"><output id="originalVolumeValue" for="originalVolume">100%</output></label>
     </div>
     <details id="mixControls" class="mix-controls" hidden>
       <summary>回听音量<span id="mixSummary">人声 100% · 伴奏 100%</span></summary>

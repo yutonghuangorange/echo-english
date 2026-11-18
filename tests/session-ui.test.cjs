@@ -2462,3 +2462,18 @@ test('unified backing page explains first-use setup and reflects model readiness
   assert.match(nodes.get('backingSetupStatus').textContent,/已就绪.*直接选择范围并生成/);
   nodes.get('closeSettings').onclick();(await storage.ready).close();
 });
+
+
+test('original preview exposes its volume beside progress without changing accompaniment gain',async()=>{
+  const storage=createStorage(new IDBFactory()),video=leadInVideo({hold:true});video.volume=.65;
+  const {nodes}=await mount(storage,{video,globals:{requestAnimationFrame:fn=>setTimeout(fn,1),cancelAnimationFrame:clearTimeout}});
+  assert.equal(nodes.get('originalVolumeControl').hidden,true);
+  const pending=nodes.get('original').onclick();await waitUntil(()=>nodes.get('originalVolumeControl').hidden===false);
+  assert.equal(nodes.get('originalVolumeValue').textContent,'65%');
+  nodes.get('originalVolume').value='.3';nodes.get('originalVolume').oninput();assert.equal(video.volume,.3);
+  assert.equal(nodes.get('backingVolume').value,'1');
+  await nodes.get('pausePlayback').onclick();assert.equal(nodes.get('originalVolumeControl').hidden,false);
+  nodes.get('stop').onclick();await pending;
+  assert.equal(nodes.get('originalVolumeControl').hidden,true);assert.equal(video.volume,.3);
+  (await storage.ready).close();
+});
