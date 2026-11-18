@@ -112,6 +112,7 @@
     $('sidetoneLiveVolume').value=sidetoneVolume;
     $('sidetoneVolumeValue').textContent=$('sidetoneLiveValue').textContent=`${Math.round(sidetoneVolume*100)}%`;
     $('sidetoneVolumeRow').hidden=!sidetoneEnabled;
+    $('monitorReverbOptions').hidden=!sidetoneEnabled;
     $('recordingQuality').value=recordingQuality;
     // Keep a saved selection visible even on a browser without support; never
     // silently save a compressed take that the user believes is lossless.
@@ -557,7 +558,9 @@
   }
   function renderMixControls() {
     const target=replayTake || (currentPage==='recordings'?take:currentPage==='practice'?(isSinging()?songTake:take):null);
-    const visible=!!target && !['recording','lead-in','permission','loading','saving'].includes(mode);
+    // These gains belong to saved recordings, never to the original video
+    // or accompaniment preview currently occupying the shared transport.
+    const visible=!!target && (mode==='idle' || !!replayTake);
     const editable=mode==='idle' || !!replayTake;
     $('mixControls').hidden=!visible;
     if(!target)return;
@@ -656,6 +659,7 @@
     $('backingLiveControls').hidden=!recording || !recordingSession?.monitor;
     $('backingLiveVolume').disabled=$('backingLiveControls').hidden;
     $('sidetoneLiveControls').hidden=!recording || !sidetoneEnabled;
+    $('liveVocalSettings').hidden=!recording || !sidetoneEnabled;
     $('sidetoneLatency').hidden=!recording || !sidetoneEnabled;
     $('sidetoneLatency').textContent=EchoMicrophone.describeMonitoring(recordingSession?.sidetoneInfo);
     $('recordingDock').hidden=currentPage!=='recordings' || !take || ['recording','lead-in','permission','loading'].includes(mode);
@@ -698,6 +702,7 @@
     for (const id of ['useHeadphoneSettings','sidetoneMode','sidetoneEnabled','sidetoneVolume','inputDevice','detectInputs','paragraphFirst','paragraphLast','recordingQuality','echoCancellation','autoGainControl','manualGainDb','captionSource','refreshCaptionTracks','contentLanguage','captionLayout','activityMode','read','import','openCaptionSetup','openLanguageSettings','prepareBacking','practiceScope','useBacking','backingVolume','prev','next','markStart','markEnd','original','speed','start','end','leadInMode','leadInSeconds','record','startEarlier','startLater','endEarlier','endLater','loop','loopCount','autoPractice','prepSeconds','autoNext']) $(id).disabled = busy;
     if(isParagraph())for(const id of ['start','end','markStart','markEnd','startEarlier','startLater','endEarlier','endLater'])$(id).disabled=true;
     $('autoNext').disabled=busy || $('practiceScope').value!=='clip';
+    $('autoNextOption').hidden=$('practiceScope').value!=='clip';
     $('useBacking').disabled=busy;
     $('backingVolume').disabled=!['idle','backing','lead-in','recording'].includes(mode);
     renderBackingVolume();
@@ -1737,6 +1742,7 @@
   function captionText(cue){return cue ? captionView(cue).primary : '';}
   function updateLanguageInfo(){
     const language=contentLanguage();
+    $('captionLayoutOption').hidden=language!=='en';
     $('languageInfo').textContent=`${$('contentLanguage').value==='auto'?'文本建议（可手动更正）':'已选择'}：${EchoLanguages.languages[language]} · ${language==='en'?'支持英文点词查释义':'保留原文；该语言查词暂未接入'}`;
   }
   function renderTranscriptTools(){

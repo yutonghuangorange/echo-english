@@ -412,6 +412,46 @@ test('original playback slider seeks within the selected range at reduced speed'
   (await storage.ready).close();
 });
 
+test('recording mix controls appear for saved playback but not original listening or its comparison phase',async()=>{
+  const storage=createStorage(new IDBFactory());
+  await storage.saveTake({id:'voice',videoId:'video',cueKey:'manual:0:5',start:0,end:5,speed:1,createdAt:1,blob:new Blob(['voice'])});
+  const video={duration:60,currentTime:0,paused:true,pause(){this.paused=true;},async play(){this.paused=false;},addEventListener(){},removeEventListener(){}};
+  class Audio{constructor(){this.currentTime=0;this.duration=5;}pause(){}async play(){}}
+  const {nodes}=await mount(storage,{video,globals:{Audio}});
+  nodes.get('tab-recordings').onclick();
+  assert.equal(nodes.get('mixControls').hidden,false);
+  for(const action of ['original','compare']){
+    const playing=nodes.get(action).onclick();await waitUntil(()=>!!nodes.get('transportProgress').oninput);
+    assert.equal(nodes.get('mixControls').hidden,true);
+    nodes.get('stop').onclick();await playing;
+    assert.equal(nodes.get('mixControls').hidden,false);
+  }
+  const replaying=nodes.get('replay').onclick();await waitUntil(()=>!!nodes.get('transportProgress').oninput);
+  assert.equal(nodes.get('mixControls').hidden,false);
+  nodes.get('stop').onclick();await replaying;
+  (await storage.ready).close();
+});
+
+test('dependent practice settings appear only for the selected language, scope and monitoring state',async()=>{
+  const storage=createStorage(new IDBFactory()),{nodes}=await mount(storage);
+  for(const scope of ['whole','paragraph','clip']){
+    nodes.get('practiceScope').value=scope;nodes.get('practiceScope').onchange();
+    assert.equal(nodes.get('autoNextOption').hidden,scope!=='clip');
+  }
+  nodes.get('captionLayout').value='en-zh';nodes.get('captionLayout').onchange();
+  for(const language of ['en','zh','ja','ko','en']){
+    nodes.get('contentLanguage').value=language;nodes.get('contentLanguage').onchange();
+    assert.equal(nodes.get('captionLayoutOption').hidden,language!=='en');
+    assert.equal(nodes.get('captionLayout').value,'en-zh');
+  }
+  for(const enabled of [false,true,false]){
+    nodes.get('sidetoneEnabled').checked=enabled;nodes.get('sidetoneEnabled').onchange();
+    assert.equal(nodes.get('monitorReverbOptions').hidden,!enabled);
+    assert.equal(nodes.get('liveVocalSettings').hidden,true);
+  }
+  (await storage.ready).close();
+});
+
 test('song replay starts at audio opening and shows progress from the audio clock',async()=>{
   const storage=createStorage(new IDBFactory()),listeners=new Map(),calls=[],audioSeeks=[],frames=new Map();let sound,frameId=0;
   await storage.saveTake({id:'song',kind:'song',videoId:'video',cueKey:'song:manual',start:0,end:10,speed:1,createdAt:1,blob:new Blob(['song'])});
@@ -2241,6 +2281,7 @@ test('recording can change headphone reverb live while the saved stream stays dr
   nodes.get('sidetoneEnabled').checked=true;nodes.get('sidetoneEnabled').onchange();
   const recording=nodes.get('record').onclick();await waitUntil(()=>configured && nodes.get('panel').dataset.mode==='recording');
   assert.equal(configured.sidetone,true);assert.equal(configured.sidetoneReverb.reverb,undefined);
+  assert.equal(nodes.get('liveVocalSettings').hidden,false);
   nodes.get('liveVocalSettings').onclick();assert.equal(nodes.get('settings-microphone').hidden,false);
   assert.equal(nodes.get('monitorReverb').disabled,false);
   nodes.get('micVocalSettings').onclick();assert.equal(nodes.get('settings-sound').hidden,false);
@@ -2297,13 +2338,13 @@ test('recording dialogs separate downloads and adjustments, block practice short
 });
 
 
-test('original phase of comparison keeps replay volume in place but disables unrelated controls',async()=>{
+test('original phase of comparison hides unrelated replay gains and restores them after stopping',async()=>{
   const storage=createStorage(new IDBFactory());
   await storage.saveTake({id:'voice',videoId:'video',cueKey:'manual:0:5',start:0,end:5,speed:1,createdAt:1,capture:'vocal',blob:new Blob(['voice'])});
   const {nodes}=await mount(storage,{video:leadInVideo({hold:true})});
   nodes.get('tab-recordings').onclick();
   const playing=nodes.get('compare').onclick();await waitUntil(()=>!!nodes.get('transportProgress').oninput);
-  assert.equal(nodes.get('mixControls').hidden,false);
+  assert.equal(nodes.get('mixControls').hidden,true);
   assert.equal(nodes.get('replayVocalVolume').disabled,true);
   assert.equal(nodes.get('resetReplayMix').disabled,true);
   assert.match(nodes.get('mixHint').textContent,/只用于录音回听/);
