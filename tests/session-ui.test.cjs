@@ -2051,3 +2051,42 @@ test('editing alignment and reverb during replay updates the same player and sav
   assert.deepEqual((await storage.listTakes('video'))[0].effects,player.effects);
   nodes.get('stop').onclick();await playing;(await storage.ready).close();
 });
+
+test('refresh reconnects a pending backing task, restores progress, and loads its result without starting again',async()=>{
+  const storage=createStorage(new IDBFactory()),id='a'.repeat(32),values=new Map();let polls=0,starts=0;
+  values.set('echo-backing-job:video',JSON.stringify({id,videoId:'video',start:10,end:20,model:'demucs-htdemucs',quality:'standard'}));
+  const job={id,videoId:'video',start:10,end:20};
+  const {nodes}=await mount(storage,{video:{duration:60,pause(){}},globals:{
+    setTimeout:(fn,ms)=>setTimeout(fn,ms===1500?150:ms),
+    window:{localStorage:{getItem:key=>values.get(key),setItem:(key,value)=>values.set(key,value),removeItem:key=>values.delete(key)},addEventListener(){}},
+    chrome:{runtime:{onMessage:{addListener(){}},async sendMessage(message){
+      if(message.action==='start')starts++;
+      if(message.action==='status')return {...job,state:++polls===1?'separating':'ready',progress:43};
+      if(message.action==='audio')return {audio:'YXVkaW8=',mime:'audio/mpeg'};
+      return {};
+    }}}
+  }});
+  await waitUntil(()=>nodes.get('panel').dataset.mode==='separating');
+  assert.equal(nodes.get('generationProgress').hidden,false);assert.equal(nodes.get('generationProgress').value,43);
+  await waitUntil(()=>nodes.get('panel').dataset.mode==='idle' && values.get('echo-backing-job:video')===undefined);
+  assert.equal(starts,0);const backings=await storage.listBackings('video');
+  assert.equal(backings.length,1);assert.equal(backings[0].start,10);assert.equal(backings[0].end,20);
+  (await storage.ready).close();
+});
+
+test('page unload detaches the pending backing poll without cancelling the server task',async()=>{
+  const storage=createStorage(new IDBFactory()),id='b'.repeat(32),values=new Map(),events=new Map();let cancels=0;
+  values.set('echo-backing-job:video',JSON.stringify({id,videoId:'video',start:0,end:5,quality:'standard'}));
+  const {nodes}=await mount(storage,{video:{duration:60,pause(){}},globals:{
+    setTimeout:(fn,ms)=>setTimeout(fn,ms===1500?30:ms),
+    window:{localStorage:{getItem:key=>values.get(key),setItem:(key,value)=>values.set(key,value),removeItem:key=>values.delete(key)},addEventListener:(name,fn)=>events.set(name,fn)},
+    chrome:{runtime:{onMessage:{addListener(){}},async sendMessage(message){
+      if(message.action==='cancel')cancels++;
+      return {id,videoId:'video',start:0,end:5,state:'separating',progress:50};
+    }}}
+  }});
+  await waitUntil(()=>nodes.get('panel').dataset.mode==='separating');
+  events.get('pagehide')();await new Promise(resolve=>setTimeout(resolve,40));
+  assert.equal(cancels,0);assert.ok(values.has('echo-backing-job:video'));
+  (await storage.ready).close();
+});

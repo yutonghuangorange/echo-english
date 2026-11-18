@@ -695,7 +695,7 @@
     if (mode === 'loading') restoring = false;
     if (mode === 'reading') status('已停止读取台词。');
     if (mode === 'separating') {karaokeIssue='已停止生成伴奏，可重新生成。';status('已停止生成伴奏。');$('karaokeInfo').textContent='已停止，可重新生成本段伴奏。';$('karaokeProgress').hidden=true;}
-    if(activeKaraokeJob){void karaokeRequest('cancel',{jobId:activeKaraokeJob}).catch(()=>{});activeKaraokeJob=null;}
+    if(activeKaraokeJob){void karaokeRequest('cancel',{jobId:activeKaraokeJob}).catch(()=>{});forgetBackingJob(videoId,activeKaraokeJob);activeKaraokeJob=null;}
     if(!['idle','reading','separating'].includes(previous))status(recordingSession && recordingSession.state!=='inactive'?'录音已结束，正在保存…':'已停止。');
     generation++;
     cancelPlayback(); restoreVideo();
@@ -991,7 +991,7 @@
         status('旧版录音已保留，可在「录音」页回放。');
       }
       chooseCurrentTake(session?.selectedTakeId); restoring=false; controls();
-      if(hasBackingTools()){void checkKaraokeService();void restoreServerBacking();}
+      if(hasBackingTools() || pendingBackingJob(videoId)){void checkKaraokeService();void restoreServerBacking();}
     } catch(error) {
       if(id===videoId && token===generation) { restoring=false; mode='idle'; controls(); status(error.message || '本地存储不可用，仍可录音并下载。'); }
     }
@@ -1061,12 +1061,23 @@
     catch{if(value.videoId===videoId)status('伴奏可以使用，但本地保存失败；刷新后可能需要从本机服务重新取回。');return false;}
   }
   async function restoreServerBacking({explicit=false,range}={}) {
-    if((!explicit && !hasBackingTools()) || mode!=='idle' || restoringBacking)return;
-    let r;try{r=range || (explicit && ['backing','generation'].includes(settings.section())?generationSelection().value:selectedRange());if(!r)return;}catch{return;}
-    if(backingFor(r))return;
+    const pending=pendingBackingJob(videoId);
+    if((!explicit && !hasBackingTools() && !pending) || mode!=='idle' || restoringBacking)return;
+    let r;try{r=pending || range || (explicit && ['backing','generation'].includes(settings.section())?generationSelection().value:selectedRange());if(!r)return;}catch{return;}
+    if(!pending && backingFor(r))return;
     const id=videoId, request=++backingRestoreRequest;
     restoringBacking=true;controls();
     try{
+      if(pending){
+        const job=await karaokeRequest('status',{jobId:pending.id});
+        if(id!==videoId || request!==backingRestoreRequest || mode!=='idle')return;
+        if(['error','cancelled'].includes(job.state)){
+          forgetBackingJob(id,pending.id);status(job.error || '上次伴奏任务已停止，可以重新生成。');return;
+        }
+        restoringBacking=false;
+        await runBackingJob({...pending,model:EchoKaraoke.modelOf(pending),quality:EchoKaraoke.qualityOf(pending)},job);
+        return;
+      }
       const result=await karaokeRequest('cached',{videoId:id,quality:r.quality});
       if(id!==videoId || request!==backingRestoreRequest)return;
       const cached=result.backings?.find(value=>EchoKaraoke.covers(value,id,r));
@@ -1075,7 +1086,10 @@
       if(id!==videoId || request!==backingRestoreRequest)return;
       const stored=await keepBacking({key:EchoKaraoke.key(id,cached),videoId:id,model:cached.model,quality:cached.quality,start:cached.start,end:cached.end,createdAt:Date.now(),blob:EchoKaraoke.blobFromBase64(audio)});
       if(stored && id===videoId && hasBackingTools() && mode==='idle')status('已恢复之前生成的伴奏，无需重新分离。');
-    }catch{/* Cache lookup is optional; ordinary dubbing and explicit generation still work. */}
+    }catch(error){
+      if(pending && /不存在|找不到|无效/.test(error.message))forgetBackingJob(id,pending.id);
+      if(explicit && pending)status('上次任务暂时无法连接，请检查本机服务后重新检测。');
+    }
     finally{if(request===backingRestoreRequest){restoringBacking=false;controls();}}
   }
   function renderBackingVolume(){
@@ -1158,8 +1172,68 @@
     try{assembly.open({takes:assemblyContext.takes,duration,choices:assemblyChoices,withMusic:$('assemblyType').value==='mixed'});mode='assembly';controls();}
     catch(error){assemblyContext=null;throw error;}
   });
+  function pendingBackingJob(id){
+    try{
+      const value=JSON.parse(window.localStorage.getItem('echo-backing-job:'+id));
+      if(value?.videoId===id && /^[a-f0-9]{32}$/.test(value.id) && Number.isFinite(value.start) && Number.isFinite(value.end) && value.start>=0 && value.end>value.start && value.end-value.start<=600)return value;
+    }catch{}
+    return null;
+  }
+  function rememberBackingJob(job,range){
+    try{window.localStorage.setItem('echo-backing-job:'+job.videoId,JSON.stringify({id:job.id,videoId:job.videoId,start:job.start,end:job.end,model:job.model || range.model,quality:job.quality || range.quality}));}catch{}
+  }
+  function forgetBackingJob(id,jobId){
+    try{if(pendingBackingJob(id)?.id===jobId)window.localStorage.removeItem('echo-backing-job:'+id);}catch{}
+  }
+  async function runBackingJob(r,existingJob=null){
+    const name=backingName();
+    const id=videoId, token=++generation;
+    video().pause();mode='separating';controls();
+    if(!settings.isOpen())settings.open('generation','openBacking');
+    $('karaokeProgress').hidden=false;$('karaokeProgress').removeAttribute('value');$('generationProgress').removeAttribute('value');
+    $('generationStage').textContent='正在连接本机伴奏服务…';status(`正在准备${name}，请稍候…`);$('karaokeInfo').textContent='正在连接本机伴奏服务…';
+    $('karaokeNotice').textContent='正在连接本机伴奏服务，请稍候…';$('karaokeNotice').hidden=false;
+    let job=existingJob;
+    try {
+      job ||= await karaokeRequest('start',{videoId:id,start:r.start,end:r.end,model:r.model,quality:r.quality});
+      rememberBackingJob(job,r);
+      if(token!==generation){void karaokeRequest('cancel',{jobId:job.id}).catch(()=>{});return;}
+      if(EchoKaraoke.qualityOf(job)!==r.quality){void karaokeRequest('cancel',{jobId:job.id}).catch(()=>{});throw Error('服务返回的音质与选择不一致，请更新并重启本机服务。');}
+      activeKaraokeJob=job.id;
+      $('karaokeNotice').hidden=true;
+      while(token===generation && id===videoId){
+        if(job.state==='error')throw Error(job.error || `${name}生成失败，请重试。`);
+        if(job.state==='cancelled')throw Error(`${name}任务已停止，请重新生成。`);
+        if(job.state==='ready')break;
+        const text=EchoKaraoke.progressText(job,activity);
+        for(const id of ['karaokeProgress','generationProgress']){if(Number.isFinite(job.progress))$(id).value=job.progress;else $(id).removeAttribute('value');}
+        status(`正在生成${name}，可随时停止。`);$('karaokeInfo').textContent=text;$('generationStage').textContent=text;
+        await new Promise(resolve=>setTimeout(resolve,1500));
+        if(token!==generation)return;
+        job=await karaokeRequest('status',{jobId:job.id});
+      }
+      if(token!==generation || id!==videoId)return;
+      $('karaokeProgress').value=100;status(`正在加载${name}…`);$('karaokeInfo').textContent=EchoKaraoke.progressText(job,activity);
+      const result=await loadBackingAudio(job,()=>token===generation && id===videoId);
+      if(token!==generation || id!==videoId)return;
+      const stored=await keepBacking({key:EchoKaraoke.key(id,r),videoId:id,model:job.model || r.model,quality:job.quality || r.quality,start:r.start,end:r.end,createdAt:Date.now(),blob:EchoKaraoke.blobFromBase64(result)});
+      if(token!==generation || id!==videoId)return;
+      forgetBackingJob(id,job.id);
+      $('useBacking').checked=true;backingPreferences[activity]=true;saveProgress();if(stored)status(`${name}已生成并保存，刷新后也可恢复。准备好后回到主区${isSinging()?'录唱':'配音'}。`);
+    } catch(error) {
+      if(token!==generation)return;
+      if(['error','cancelled'].includes(job?.state))forgetBackingJob(id,job.id);
+      karaokeIssue=error.message || `${name}生成失败，请重试。`;
+      $('karaokeHelp').open=true;
+      $('karaokeInfo').textContent='';status(`未能生成${name}，请查看按钮下方提示。`);
+    } finally {
+      if(modelManagement)void models.refresh().catch(()=>{});
+      if(token===generation){activeKaraokeJob=null;$('karaokeProgress').hidden=true;mode='idle';controls();if(karaokeIssue)$('karaokeNotice').scrollIntoView?.({block:'nearest'});}
+    }
+  }
   $('prepareBacking').onclick=guarded(async()=>{
     if(mode!=='idle')return;
+    if(pendingBackingJob(videoId)){await restoreServerBacking({explicit:true});return;}
     const name=backingName();
     // Explicit generation takes priority over the optional cache lookup.
     backingRestoreRequest++;restoringBacking=false;
@@ -1185,46 +1259,7 @@
       if(r.quality==='lossless' && !serviceLossless){karaokeIssue='无损音质需要新版服务。请重启本机伴奏服务，再点击重新检测。';controls();status(karaokeIssue);return;}
       if(r.model!==EchoKaraoke.DEFAULT_MODEL && !modelManagement){karaokeIssue='BandIt 需要新版本机服务，请在终端停止旧服务，再运行根目录启动脚本并重新检测。';controls();status(karaokeIssue);return;}
     }
-    const id=videoId, token=++generation;
-    video().pause();mode='separating';controls();
-    if(!settings.isOpen())settings.open('generation','openBacking');
-    $('karaokeProgress').hidden=false;$('karaokeProgress').removeAttribute('value');$('generationProgress').removeAttribute('value');
-    $('generationStage').textContent='正在连接本机伴奏服务…';status(`正在准备${name}，请稍候…`);$('karaokeInfo').textContent='正在连接本机伴奏服务…';
-    $('karaokeNotice').textContent='正在连接本机伴奏服务，请稍候…';$('karaokeNotice').hidden=false;
-    let job;
-    try {
-      job=await karaokeRequest('start',{videoId:id,start:r.start,end:r.end,model:r.model,quality:r.quality});
-      if(token!==generation){void karaokeRequest('cancel',{jobId:job.id}).catch(()=>{});return;}
-      if(EchoKaraoke.qualityOf(job)!==r.quality){void karaokeRequest('cancel',{jobId:job.id}).catch(()=>{});throw Error('服务返回的音质与选择不一致，请更新并重启本机服务。');}
-      activeKaraokeJob=job.id;
-      $('karaokeNotice').hidden=true;
-      while(token===generation && id===videoId){
-        if(job.state==='error')throw Error(job.error || `${name}生成失败，请重试。`);
-        if(job.state==='cancelled')throw Error(`${name}任务已停止，请重新生成。`);
-        if(job.state==='ready')break;
-        const text=EchoKaraoke.progressText(job,activity);
-        for(const id of ['karaokeProgress','generationProgress']){if(Number.isFinite(job.progress))$(id).value=job.progress;else $(id).removeAttribute('value');}
-        status(`正在生成${name}，可随时停止。`);$('karaokeInfo').textContent=text;$('generationStage').textContent=text;
-        await new Promise(resolve=>setTimeout(resolve,1500));
-        if(token!==generation)return;
-        job=await karaokeRequest('status',{jobId:job.id});
-      }
-      if(token!==generation || id!==videoId)return;
-      $('karaokeProgress').value=100;status(`正在加载${name}…`);$('karaokeInfo').textContent=EchoKaraoke.progressText(job,activity);
-      const result=await loadBackingAudio(job,()=>token===generation && id===videoId);
-      if(token!==generation || id!==videoId)return;
-      const stored=await keepBacking({key:EchoKaraoke.key(id,r),videoId:id,model:job.model || r.model,quality:job.quality || r.quality,start:r.start,end:r.end,createdAt:Date.now(),blob:EchoKaraoke.blobFromBase64(result)});
-      if(token!==generation || id!==videoId)return;
-      $('useBacking').checked=true;backingPreferences[activity]=true;saveProgress();if(stored)status(`${name}已生成并保存，刷新后也可恢复。准备好后回到主区${isSinging()?'录唱':'配音'}。`);
-    } catch(error) {
-      if(token!==generation)return;
-      karaokeIssue=error.message || `${name}生成失败，请重试。`;
-      $('karaokeHelp').open=true;
-      $('karaokeInfo').textContent='';status(`未能生成${name}，请查看按钮下方提示。`);
-    } finally {
-      if(modelManagement)void models.refresh().catch(()=>{});
-      if(token===generation){activeKaraokeJob=null;$('karaokeProgress').hidden=true;mode='idle';controls();if(karaokeIssue)$('karaokeNotice').scrollIntoView?.({block:'nearest'});}
-    }
+    await runBackingJob(r);
   });
   $('previewBacking').onclick=guarded(async()=>{
     if(mode!=='idle')return;
@@ -1896,7 +1931,7 @@
     if (id) void loadVideo(id);
     else restoring = false;
   });
-  window.addEventListener('pagehide',()=>{practiceLayoutObserver?.disconnect();inputDeviceRequest++;globalThis.navigator?.mediaDevices?.removeEventListener?.('devicechange',onInputDevicesChanged);saveProgress();closeClipDialog();settings.close();tools.close();library.close(true);stop();detachCaptionVideo();});
+  window.addEventListener('pagehide',()=>{practiceLayoutObserver?.disconnect();inputDeviceRequest++;globalThis.navigator?.mediaDevices?.removeEventListener?.('devicechange',onInputDevicesChanged);saveProgress();closeClipDialog();settings.close();tools.close();library.close(true);activeKaraokeJob=null;stop();detachCaptionVideo();});
   // Restore once; changing activities must not reset the user's expanded sections.
   const foldPreferenceKey='echo-folds-v1';
   let foldPreferences={};
