@@ -154,3 +154,26 @@ test('seeking cancels a queued wheel preview and short cue previews stay within 
   const f=fixture();f.editor.open({videoId:'wheel-cancel',video:f.video,cues:[{start:10,end:11,text:'Short'}]});wheel(f,'Start',-100);f.$('Seek').value='50';f.$('Seek').oninput();await waitForWheelPreview();assert.equal(f.video.currentTime,50);assert.equal(f.plays,0);
   wheel(f,'End',-100);await waitForWheelPreview();assert.equal(f.video.currentTime,10.5);f.video.currentTime=12;f.videoListeners.get('timeupdate')();assert.equal(f.video.paused,true);assert.equal(f.video.currentTime,11.5);f.editor.close();await f.editor.flush();
 });
+
+for(const end of [5,4.01])test(`overlap fix trims only the current end (${end}), preserves the next locked start and supports undo`,async()=>{
+  const f=fixture(),cues=[{start:1,end,text:'A',key:'a'},{start:4,end:8,text:'B',key:'b',startLocked:true}];
+  f.editor.open({videoId:'overlap',video:f.video,cues});
+  assert.equal(f.$('Overlap').hidden,false);assert.equal(f.$('TrimOverlap').disabled,false);
+  f.$('TrimOverlap').onclick();assert.equal(f.$('End').value,'00:00:04.000');assert.equal(f.$('Overlap').hidden,true);
+  assert.equal(f.video.paused,true);
+  f.$('Undo').onclick();assert.equal(f.$('End').value,D.time(end));assert.equal(f.$('Overlap').hidden,false);
+  f.$('Redo').onclick();await f.$('Apply').onclick();
+  assert.deepEqual(f.applied.map(c=>[c.start,c.end,c.key]),[[1,4,'a'],[4,8,'b']]);assert.equal(f.applied[1].startLocked,true);await f.editor.flush();
+});
+test('overlap fix works with mouse-marked lyrics and leaves completed timing slots intact',async()=>{
+  const f=fixture();f.editor.open({videoId:'overlap-slots',video:f.video,cues:[]});paste(f,'One\nTwo');mark(f,1,5);mark(f,4,8);
+  await f.$('List').children[1].onclick();f.$('TrimOverlap').onclick();assert.equal(f.$('Overlap').hidden,true);
+  await f.$('Apply').onclick();assert.deepEqual(f.applied.map(c=>[c.start,c.end,c.text]),[[1,4,'One'],[4,8,'Two']]);await f.editor.flush();
+});
+test('overlap fix hides on the last cue or gaps and rejects collapsing a cue with an identical next start',async()=>{
+  const f=fixture();f.editor.open({videoId:'invalid-overlap',video:f.video,cues:[{start:1,end:3,text:'A'},{start:1,end:5,text:'B'}]});
+  assert.equal(f.$('Overlap').hidden,false);assert.equal(f.$('TrimOverlap').disabled,true);
+  f.$('TrimOverlap').onclick();assert.equal(f.$('End').value,'00:00:03.000');assert.match(f.$('Message').textContent,/时间无效/);
+  await f.$('List').children[2].onclick();assert.equal(f.$('Overlap').hidden,true);f.editor.close();await f.editor.flush();
+  f.editor.open({videoId:'gap',video:f.video,cues:[{start:0,end:2,text:'A'},{start:3,end:5,text:'B'}]});assert.equal(f.$('Overlap').hidden,true);f.editor.close();await f.editor.flush();
+});

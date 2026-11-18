@@ -107,6 +107,10 @@
       $('InspectorFields').hidden=!has || !!mappingError;$('InspectorEmpty').hidden=has;
       $('InspectorTitle').textContent=has?`第 ${selected+1} 句 · 时间与文字`:'等待标时';
       if(cue){$('Start').value=D.time(cue.start);$('End').value=D.time(cue.end);$('Text').value=cue.text;$('FixedStart').checked=!!cue.startLocked;$('FixedEnd').checked=!!cue.endLocked;}
+      const following=cues[selected+1],overlaps=has && D.isTimed(following) && cue.end>following.start;
+      $('Overlap').hidden=!overlaps || !!mappingError;
+      $('TrimOverlap').disabled=!overlaps || following.start-cue.start<D.MIN-0.000001;
+      $('OverlapHint').textContent=overlaps?$('TrimOverlap').disabled?'两句起点过近，无法保留有效时长。请先调整起点或合并句子。':`与下一句重叠，可将本句终点缩短至 ${D.time(following.start)}，下一句保持不变。`:'';
       $('TextTools').hidden=marking;
       $('Merge').disabled=!has || selected>=cues.length-1;
       $('DeleteSlot').hidden=marking && !cue?.unmatched;$('DeleteSlot').disabled=!has || !!mappingError;$('ClearTiming').disabled=!has || !!mappingError;
@@ -257,6 +261,12 @@
     $('Redo').onclick=()=>{if(!future.length)return;history.push(state());restore(future.pop());};
     for(const edge of ['start','end'])$(edge==='start'?'Start':'End').addEventListener('wheel',safely(event=>wheelEdge(edge,event)),{passive:false});
     $('Start').onchange=safely(()=>updateEdge('start',D.parseTime($('Start').value)));$('End').onchange=safely(()=>updateEdge('end',D.parseTime($('End').value)));
+    $('TrimOverlap').onclick=safely(()=>{
+      const cue=cues[selected],next=cues[selected+1];
+      if(!D.isTimed(cue) || !D.isTimed(next) || cue.end<=next.start)return;
+      // This explicit fix changes only the selected end, even when a nearly touching next start is linked or locked.
+      commit(D.edge(cues,selected,'end',next.start,duration,false),'已将本句终点设为下一句起点；下一句保持不变，可撤销。');
+    });
     $('MarkStart').onclick=safely(()=>updateEdge('start',video.currentTime));$('MarkEnd').onclick=safely(()=>updateEdge('end',video.currentTime));
     for(const edge of ['Start','End'])$('Fixed'+edge).onchange=safely(()=>{const next=D.copy(cues);next[selected][edge.toLowerCase()+'Locked']=$('Fixed'+edge).checked;commit(next);});
     $('TextApply').onclick=safely(()=>commit(D.replaceText(cues,selected,$('Text').value,duration),'文字已更新；换行拆成多句。'));
