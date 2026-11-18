@@ -4,7 +4,7 @@
   function create({constraints, gainDb, quality, sidetone=false, sidetoneVolume=0.35, sidetoneMode='minimum', sidetoneReverb={}, active, createMonitor, createMeter, onComplete, onError, microphone = root.EchoMicrophone, env = root}) {
     const options = microphone.recordingOptions(quality, env.MediaRecorder);
     let mic, micTrack, input, monitor, meter, recorder, info;
-    let stopping = false, settled = false, released = false;
+    let stopping = false, settled = false, released = false, discarded = false;
     const chunks = [];
     let resolve, reject;
     const completed = new Promise((done, fail) => { resolve = done; reject = fail; });
@@ -31,7 +31,7 @@
       settled = true;
       const blob = new env.Blob(chunks, {type: recorder?.mimeType || options.mimeType || ''});
       if(info && sidetone)info.monitoring=input?.monitoringInfo?.() || null;
-      const result = blob.size ? {blob, recordingInfo: info, inputGainDb: input.db} : null;
+      const result = !discarded && blob.size ? {blob, recordingInfo: info, inputGainDb: input.db} : null;
       release();
       Promise.resolve().then(() => onComplete(result)).then(() => resolve(!!result), reject);
     }
@@ -67,6 +67,7 @@
     }
     return {
       prepare, stop, completed, pauseFeedback,
+      discard(){discarded=true;return stop();},
       get state() { return recorder?.state || 'inactive'; },
       get monitor() { return monitor; },
       get sidetoneInfo(){return input?.monitoringInfo?.() || null;},

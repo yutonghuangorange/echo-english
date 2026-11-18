@@ -2487,3 +2487,34 @@ for(const speed of ['0.5','0.9','1.4'])test(`practice restores saved ${speed} sp
   assert.equal(nodes.get('speed').value,speed);
   (await storage.ready).close();
 });
+
+test('original loop repeats the range without hiding progress and can be switched off while playing',async()=>{
+  const storage=createStorage(new IDBFactory()),video=leadInVideo({hold:true});
+  const {nodes}=await mount(storage,{video,globals:{requestAnimationFrame:fn=>setTimeout(fn,1),cancelAnimationFrame:clearTimeout}});
+  const pending=nodes.get('original').onclick();await waitUntil(()=>video.plays.length===1 && !nodes.get('originalVolumeControl').hidden);
+  assert.equal(nodes.get('originalLoopControl').hidden,false);nodes.get('originalLoop').checked=true;
+  video.currentTime=5;await waitUntil(()=>video.plays.length===2);
+  assert.equal(nodes.get('transport').hidden,false);assert.equal(video.plays[1].at,0);
+  nodes.get('originalLoop').checked=false;video.currentTime=5;await pending;
+  assert.equal(video.plays.length,2);assert.equal(nodes.get('originalLoopControl').hidden,true);
+  (await storage.ready).close();
+});
+
+for(const stage of ['lead-in','recording'])test(`restart from ${stage} discards only the current attempt and runs preparation again`,async()=>{
+  const storage=createStorage(new IDBFactory()),video=leadInVideo({hold:true});let requests=0,released=0;
+  await storage.saveSession({videoId:'video',activity:'sing',scopes:{sing:'clip'},backingPreferences:{sing:false},start:10,end:20,speed:'0.5',cues:[],leadInMode:stage==='lead-in'?'seconds':'none',leadInSeconds:3});
+  await storage.saveTake({id:'kept-version',videoId:'video',kind:'song',cueKey:'song:manual:10.00:20.00',start:10,end:20,speed:1,createdAt:1,blob:new Blob(['kept'])});
+  class MediaRecorder{static isTypeSupported(){return true;}constructor(){this.state='inactive';this.mimeType='audio/webm';}
+    start(){this.state='recording';}stop(){this.state='inactive';this.ondataavailable({data:new Blob(['new-voice'])});queueMicrotask(()=>this.onstop());}}
+  const {nodes}=await mount(storage,{video,globals:{MediaRecorder,navigator:{mediaDevices:{async getUserMedia(){requests++;return {getTracks:()=>[{stop(){released++;}}]};}}},requestAnimationFrame:fn=>setTimeout(fn,1),cancelAnimationFrame:clearTimeout}});
+  const first=nodes.get('record').onclick();await waitUntil(()=>nodes.get('panel').dataset.mode===stage && video.plays.length===1);
+  assert.equal(nodes.get('restartRecording').hidden,false);
+  const restarted=nodes.get('restartRecording').onclick();
+  await waitUntil(()=>requests===2 && video.plays.length===2);
+  assert.equal((await storage.listTakes('video')).length,1);assert.ok(released>=1);
+  assert.equal(video.plays[1].at,stage==='lead-in'?7:10);assert.equal(video.playbackRate,1);
+  if(stage==='lead-in'){video.currentTime=10;await waitUntil(()=>nodes.get('panel').dataset.mode==='recording' && video.plays.length===3);}
+  nodes.get('stop').onclick();await Promise.all([first,restarted]);
+  const takes=await storage.listTakes('video');assert.equal(takes.length,2);assert.ok(takes.some(take=>take.id==='kept-version'));
+  assert.equal(nodes.get('restartRecording').hidden,true);(await storage.ready).close();
+});

@@ -89,3 +89,10 @@ test('requested monitoring mode and latest diagnostics belong to the saved recor
   session.start();info.outputLatency=0.03;await session.stop();
   assert.equal(f.results[0].recordingInfo.monitoring.outputLatency,0.03);
 });
+
+test('discard releases capture resources without returning buffered or final encoder data',async()=>{
+  const f=fixture(),session=create(f.options);await session.prepare();session.start();session.startMeter();
+  f.recorder.ondataavailable({data:new Blob(['earlier-data'])});
+  assert.equal(await session.discard(),false);assert.deepEqual(f.results,[null]);
+  assert.equal(f.count.mic,1);assert.equal(f.count.monitor,1);assert.equal(f.count.input,1);
+});

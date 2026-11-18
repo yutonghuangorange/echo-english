@@ -704,6 +704,9 @@
     $('recordingDialogStop').textContent=mode==='exporting'?'取消导出':'停止播放';
     for(const id of ['openRecordingAdjust','openRecordingDownload'])$(id).disabled=!take || !['idle','replay'].includes(mode);
     $('settingsStop').hidden=!busy;$('settingsStop').disabled=mode==='saving';
+    $('restartRecording').hidden=!['recording','lead-in'].includes(mode);
+    $('restartRecording').disabled=!['recording','lead-in'].includes(mode);
+    $('originalLoopControl').hidden=mode!=='original';
     $('stop').textContent=mode==='lead-in'?'■ 取消准备':mode==='recording'?'■ 结束录音':mode==='saving'?'保存中…':'■ 停止';
     $('reviewReplay').disabled = (busy && mode!=='replay') || !take;
     $('reviewReplay').textContent=mode==='replay'?'■ 停止回放':'▷ 回放录音';
@@ -808,23 +811,25 @@
     r={...r,start:withLeadIn?leadInStart(r):r.start};
     closeWord();
     const v = video(); saveVideo(v); v.muted = false; v.playbackRate = r.speed;
-    await seek(v, r.start, token);
-    if (token !== generation) return;
-    await v.play();
-    if (token !== generation) return;
-    await new Promise(resolve => {
-      playback.onCancel(resolve);
-      playbackActions.set(()=>v.pause(),()=>v.play(),mode==='original'?speed=>{
-        r.speed=speed;v.playbackRate=speed;
-        playback.timeout(()=>{v.pause();resolve();},Math.max(0,(r.end-v.currentTime)/speed)*1000+15000);
-      }:null,v);
-      showVideoTransport('原声',v,r,elapsed=>{
-        v.currentTime=r.start+elapsed*r.speed;
-        playback.timeout(()=>{v.pause();resolve();},Math.max(0,(r.end-v.currentTime)/r.speed)*1000+15000);
+    do {
+      await seek(v, r.start, token);
+      if (token !== generation) return;
+      await v.play();
+      if (token !== generation) return;
+      await new Promise(resolve => {
+        playback.onCancel(resolve);
+        playbackActions.set(()=>v.pause(),()=>v.play(),mode==='original'?speed=>{
+          r.speed=speed;v.playbackRate=speed;
+          playback.timeout(()=>{v.pause();resolve();},Math.max(0,(r.end-v.currentTime)/speed)*1000+15000);
+        }:null,v);
+        showVideoTransport('原声',v,r,elapsed=>{
+          v.currentTime=r.start+elapsed*r.speed;
+          playback.timeout(()=>{v.pause();resolve();},Math.max(0,(r.end-v.currentTime)/r.speed)*1000+15000);
+        });
+        playback.watchEnd(v, r.end, () => { v.pause(); resolve(); });
+        playback.timeout(() => { v.pause(); resolve(); }, (r.end - r.start) / r.speed * 1000 + 15000);
       });
-      playback.watchEnd(v, r.end, () => { v.pause(); resolve(); });
-      playback.timeout(() => { v.pause(); resolve(); }, (r.end - r.start) / r.speed * 1000 + 15000);
-    });
+    } while(token===generation && mode==='original' && $('originalLoop').checked);
     if (token === generation) { cancelPlayback(); restoreVideo(); }
   }
   const canEditSound=()=>['idle','replay','recording'].includes(mode);
@@ -1955,6 +1960,14 @@
   $('prev').onclick = () => select(index - 1,{navigate:true,focusRecord:true}); $('next').onclick = () => select(index + 1,{navigate:true,focusRecord:true});
   $('markStart').onclick = guarded(() => { $('start').value = video().currentTime.toFixed(2); index = -1; updateCaption();chooseCurrentTake();saveProgress(); });
   $('markEnd').onclick = guarded(() => { $('end').value = video().currentTime.toFixed(2); index = -1; updateCaption();chooseCurrentTake();saveProgress(); });
+  $('restartRecording').onclick=guarded(async()=>{
+    if(!['recording','lead-in'].includes(mode) || !recordingSession)return;
+    const previous=recordingSession,token=++generation,id=videoId;
+    cancelPlayback();restoreVideo();mode='restarting';controls();status('正在重新准备录音…');
+    await previous.discard();
+    if(token!==generation || id!==videoId || mode!=='restarting')return;
+    await record({token});
+  });
   $('original').onclick = guarded(async () => { const r = selectedRange(), token = ++generation; mode = 'original'; controls(); status('正在播放原声…'); await original(r, token); if (token === generation) { finish();if($('practiceScope').value==='clip')updateCaption();status('原声播放完成。'); } });
   $('record').onclick = guarded(() => {
     if(mode!=='idle')return;
