@@ -575,7 +575,7 @@ test('recording timeline selects without autoplay, exposes versions and uses the
   assert.equal(nodes.get('versionChoices').children.length,2);
   assert.equal(nodes.get('versionChoices').children[1].getAttribute('aria-pressed'),'true');
   assert.equal(nodes.get('recordingDock').hidden,true);nodes.get('tab-recordings').onclick();assert.equal(nodes.get('recordingDock').hidden,false);
-  assert.ok(nodes.get('recordingTransportSlot').children.includes(nodes.get('transport')));
+  assert.ok(nodes.get('recordingPlaybackSlot').children.includes(nodes.get('playbackControls')));
   assert.equal(nodes.get('transport').hidden,false);
   assert.equal(nodes.get('transportProgress').disabled,true);
   assert.equal(nodes.get('transportTime').textContent,'点击回放开始');
@@ -2147,24 +2147,59 @@ test('recording can change headphone reverb live while the saved stream stays dr
 });
 
 test('recording dialogs separate downloads and adjustments, block practice shortcuts and preserve live preview',async()=>{
-  const storage=createStorage(new IDBFactory());let player;
+  const storage=createStorage(new IDBFactory());let player,players=0,volume=1;
   await storage.saveTake({id:'voice',videoId:'video',cueKey:'manual:0:5',start:0,end:5,speed:1,createdAt:1,capture:'vocal',blob:new Blob(['voice'])});
   const video={duration:60,currentTime:0,muted:false,playbackRate:1,pause(){},async play(){},addEventListener(){},removeEventListener(){}};
   const {nodes,document,events}=await mount(storage,{video,globals:{EchoVocalEffects:{...require('../extension/vocal-effects.js'),async createPlayer(){
-    return player={currentTime:0,duration:5,paused:true,async play(){this.paused=false;},pause(){this.paused=true;},dispose(){},setEffects(){},setVolume(){}};
+    players++;return player={currentTime:0,duration:5,paused:true,async play(){this.paused=false;},pause(){this.paused=true;},dispose(){},setEffects(){},setVolume(value){volume=value;}};
   }}}});
   document.documentElement.children[0].style.display='block';nodes.get('tab-recordings').onclick();
   nodes.get('openRecordingDownload').onclick();assert.equal(nodes.get('recordingDialog').open,true);
+  const sharedControls=nodes.get('playbackControls'),progress=nodes.get('transportProgress');
+  assert.ok(nodes.get('dialogPlaybackSlot').children.includes(sharedControls));
+  assert.equal(nodes.get('transport').hidden,false);assert.equal(progress.disabled,true);
+  assert.equal(nodes.get('mixControls').hidden,false);
   assert.equal(nodes.get('recording-adjustments').hidden,true);assert.equal(nodes.get('recording-downloads').hidden,false);
   let shortcut=0;nodes.get('compare').onclick=()=>shortcut++;
   events.get('keydown')({altKey:true,shiftKey:true,code:'KeyC',preventDefault(){},stopPropagation(){}});assert.equal(shortcut,0);
   nodes.get('recordingAdjustTab').onclick();assert.equal(nodes.get('recording-adjustments').hidden,false);
   const preview=nodes.get('recordingDialogPreview').onclick();await waitUntil(()=>player?.paused===false);
   assert.equal(nodes.get('recordingDialog').open,true);assert.match(nodes.get('recordingDialogPreview').textContent,/停止/);
+  await waitUntil(()=>!!progress.oninput);
+  const seekHandler=progress.oninput;progress.value='0.6';await progress.oninput();assert.equal(player.currentTime,3);
+  nodes.get('replayVocalVolume').value='1.25';nodes.get('replayVocalVolume').oninput();assert.equal(volume,1.25);
+  nodes.get('closeRecordingDialog').onclick();
+  assert.equal(nodes.get('recordingDialog').open,false);assert.equal(player.paused,false);
+  assert.ok(nodes.get('recordingPlaybackSlot').children.includes(sharedControls));
+  assert.equal(progress.oninput,seekHandler);assert.equal(nodes.get('replayVocalVolume').value,'1.25');
+  assert.equal(nodes.get('reviewReplay').disabled,false);assert.match(nodes.get('reviewReplay').textContent,/停止/);
+  nodes.get('openRecordingAdjust').onclick();assert.equal(nodes.get('recordingDialog').open,true);
+  assert.ok(nodes.get('dialogPlaybackSlot').children.includes(sharedControls));assert.equal(progress.oninput,seekHandler);
+  assert.equal(players,1);assert.equal(player.currentTime,3);
+
   const stopped=nodes.get('recordingDialogPreview').onclick();await stopped;await preview;
   assert.equal(nodes.get('panel').dataset.mode,'idle');assert.equal(nodes.get('recordingDialog').open,true);
+  assert.equal(progress.disabled,true);assert.equal(nodes.get('transport').hidden,false);
+  assert.equal(nodes.get('mixControls').hidden,false);
   nodes.get('takeReverbSettings').onclick();assert.equal(nodes.get('recordingDialog').open,false);assert.equal(nodes.get('settings-sound').hidden,false);
   nodes.get('closeSettings').onclick();nodes.get('openRecordingAdjust').onclick();
   nodes.get('closeRecordingDialog').onclick();assert.equal(nodes.get('recordingDialog').open,false);
+  (await storage.ready).close();
+});
+
+
+test('original phase of comparison keeps replay volume in place but disables unrelated controls',async()=>{
+  const storage=createStorage(new IDBFactory());
+  await storage.saveTake({id:'voice',videoId:'video',cueKey:'manual:0:5',start:0,end:5,speed:1,createdAt:1,capture:'vocal',blob:new Blob(['voice'])});
+  const {nodes}=await mount(storage,{video:leadInVideo({hold:true})});
+  nodes.get('tab-recordings').onclick();
+  const playing=nodes.get('compare').onclick();await waitUntil(()=>!!nodes.get('transportProgress').oninput);
+  assert.equal(nodes.get('mixControls').hidden,false);
+  assert.equal(nodes.get('replayVocalVolume').disabled,true);
+  assert.equal(nodes.get('resetReplayMix').disabled,true);
+  assert.match(nodes.get('mixHint').textContent,/只用于录音回听/);
+  nodes.get('stop').onclick();await playing;
+  assert.equal(nodes.get('mixControls').hidden,false);
+  assert.equal(nodes.get('replayVocalVolume').disabled,false);
   (await storage.ready).close();
 });

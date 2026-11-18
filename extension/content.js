@@ -25,7 +25,7 @@
   let cues = [], index = -1, take = null, mode = 'idle', generation = 0,clipRangeAdjusted=false;
   let recordingSession = null, audio = null, savedVideo = null;
   const playback = EchoPlayback.create();
-  let transportInRecordingDock = false;
+  let playbackControlsSlot = 'defaultPlaybackSlot';
   const transport = EchoTransport.create({
     container: $('transport'), slider: $('transportProgress'),
     label: $('transportLabel'), time: $('transportTime'),
@@ -530,13 +530,16 @@
   }
   function renderMixControls() {
     const target=replayTake || (currentPage==='recordings'?take:currentPage==='practice'?(isSinging()?songTake:take):null);
-    const visible=!!target && (mode==='idle' || !!replayTake);
+    const visible=!!target && !['recording','lead-in','permission','loading','saving'].includes(mode);
+    const editable=mode==='idle' || !!replayTake;
     $('mixControls').hidden=!visible;
     if(!target)return;
     const hasBackground=EchoKaraoke.canReplayBacking(target),name=target.kind==='song'?'伴奏':'背景音';
     const ready=hasBackground && (replayTake?replayBackingReady:!!EchoKaraoke.backingForTake(savedBackings,target,videoId));
     const {vocal,backing}=replayMix(), label=target.withBacking?'录音总音量':'人声';
     $('replayVocalLabel').textContent=label;
+    $('replayVocalVolume').disabled=!editable;
+    $('resetReplayMix').disabled=!editable;
     $('replayVocalVolume').setAttribute('aria-label',target.withBacking?'回听录音总音量':'回听人声音量');
     $('replayVocalVolume').max=String(replayTake?replayVoiceMax:2);
     $('replayVocalValue').textContent=`${Math.round(vocal*100)}%`;
@@ -545,12 +548,13 @@
     $('replayBackingOptionLabel').textContent=`回听带${name}`;
     $('replayBackingLabel').textContent=name;
     $('replayBackingVolume').setAttribute('aria-label',`回听${name}音量`);
-    $('replayWithBacking').disabled=!ready;
+    $('replayWithBacking').disabled=!editable || !ready;
     $('replayBackingRow').hidden=!hasBackground;
-    $('replayBackingVolume').disabled=!ready;
+    $('replayBackingVolume').disabled=!editable || !ready;
     $('mixSummary').textContent=`${target.withBacking?'总音量':'人声'} ${Math.round(vocal*100)}%${hasBackground?` · ${name}${$('replayWithBacking').checked?' '+Math.round(backing*100)+'%':'关'}`:''}`;
     $('mixHint').textContent=target.withBacking?'旧版混合录音只能调整总音量，无法分别调节人声和伴奏。':hasBackground?
       ready?'混合下载沿用此比例，原始人声不变。':`暂无可用${name}，当前仅回听人声。`:'只影响回听，原始录音不变。';
+    if(!editable)$('mixHint').textContent='当前未播放录音；此音量只用于录音回听及混合导出。';
     if(replayTake && replayVoiceMax===1)$('mixHint').textContent+=' 当前人声音量最高为 100%。';
   }
   function updateReplayMix() {
@@ -623,11 +627,13 @@
     $('sidetoneLatency').textContent=EchoMicrophone.describeMonitoring(recordingSession?.sidetoneInfo);
     $('recordingDock').hidden=currentPage!=='recordings' || !take || ['recording','lead-in','permission','loading'].includes(mode);
     const dockVisible=!$('recordingDock').hidden;
-    if(dockVisible!==transportInRecordingDock){
-      $(dockVisible?'recordingTransportSlot':'defaultTransportSlot').append($('transport'));
-      transportInRecordingDock=dockVisible;
+    // Reparent the same controls so an active playback clock, seek handler and volume state survive opening the dialog.
+    const nextSlot=$('recordingDialog').open?'dialogPlaybackSlot':dockVisible?'recordingPlaybackSlot':'defaultPlaybackSlot';
+    if(nextSlot!==playbackControlsSlot){
+      $(nextSlot).append($('playbackControls'));
+      playbackControlsSlot=nextSlot;
     }
-    transport.setIdleView(dockVisible?{label:'回放进度',time:'点击回放开始'}:null);
+    transport.setIdleView(dockVisible || $('recordingDialog').open?{label:'回放进度',time:'点击回放开始'}:null);
     $('practiceDock').hidden=currentPage!=='practice' || mode!=='idle';$('practiceUtilities').hidden=currentPage!=='practice' || mode!=='idle';
     $('historyBrowser').hidden=!videoHistory.length;
     $('playAll').hidden=!videoHistory.length;
@@ -674,7 +680,9 @@
     for(const id of ['openRecordingAdjust','openRecordingDownload'])$(id).disabled=!take || !['idle','replay'].includes(mode);
     $('settingsStop').hidden=!busy;$('settingsStop').disabled=mode==='saving';
     $('stop').textContent=mode==='lead-in'?'■ 取消准备':mode==='recording'?'■ 结束录音':mode==='saving'?'保存中…':'■ 停止';
-    $('reviewReplay').disabled = busy || !take;
+    $('reviewReplay').disabled = (busy && mode!=='replay') || !take;
+    $('reviewReplay').textContent=mode==='replay'?'■ 停止回放':'▷ 回放录音';
+    $('reviewReplay').setAttribute('aria-pressed',String(mode==='replay'));
     $('playAll').disabled = busy || !videoHistory.length;
     $('replay').disabled = busy || !(isSinging()?songTake:take);
     $('compare').disabled = busy || !take;
@@ -809,7 +817,7 @@
   function closeRecordingDialog(){
     const dialog=$('recordingDialog');if(!dialog.open)return;
     if(dialog.close)dialog.close();else dialog.open=false;
-    analysisRequest++;$(recordingDialogReturn).focus();
+    analysisRequest++;controls();$(recordingDialogReturn).focus();
   }
   $('openRecordingAdjust').onclick=()=>openRecordingDialog('adjust');
   $('openRecordingDownload').onclick=()=>openRecordingDialog('download');
@@ -827,7 +835,7 @@
   function renderSoundEffects(){
     const editable=canEditSound();
     $('vocalReverb').value=vocalReverb.reverb;
-    $('takeReverbSettings').textContent=vocalReverb.reverb==='off'?'混响 · 关闭 →':`混响 · ${vocalReverb.reverb==='ktv'?'KTV':'剧场'} ${Math.round(vocalReverb.amount*100)}% →`;
+    $('takeReverbSettings').textContent=vocalReverb.reverb==='off'?'本视频混响 · 关闭 · 调整全局':`本视频混响 · ${vocalReverb.reverb==='ktv'?'KTV':'剧场'} ${Math.round(vocalReverb.amount*100)}% · 调整全局`;
     $('takeReverbSettings').disabled=!editable;
     $('vocalReverbAmount').value=vocalReverb.amount;
     $('vocalReverbValue').textContent=`${Math.round(vocalReverb.amount*100)}%`;
