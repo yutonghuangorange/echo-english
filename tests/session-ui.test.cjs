@@ -880,6 +880,38 @@ test('captions follow playback with faded context while preserving recording bou
   (await storage.ready).close();
 });
 
+test('explicit sentence navigation keeps shortcuts, dropdown and followed lyrics synchronized',async()=>{
+  const storage=createStorage(new IDBFactory()),listeners=new Map();let time=21,paused=false,seeks=0;
+  const cues=Array.from({length:6},(_,i)=>({start:i*4,end:i*4+4,text:`Line number ${i+1}`}));
+  await storage.saveSession({videoId:'video',index:2,start:8,end:12,speed:'1',followCaptions:true,cues});
+  const emit=type=>listeners.get(type)?.({type});
+  const video={duration:24,get paused(){return paused;},pause(){paused=true;emit('pause');},
+    get currentTime(){return time;},set currentTime(value){time=value;seeks++;queueMicrotask(()=>emit('seeked'));},
+    addEventListener(name,fn){listeners.set(name,fn);},removeEventListener(name){listeners.delete(name);}};
+  const {nodes,document,events}=await mount(storage,{video});
+  const text=()=>nodes.get('caption').children.map(n=>n.textContent).join('');
+  assert.equal(seeks,0);assert.equal(text(),'Line number 6');
+  document.documentElement.children[0].style.display='block';
+  const press=code=>events.get('keydown')({altKey:true,shiftKey:true,code,preventDefault(){},stopPropagation(){}});
+  const check=i=>{
+    assert.equal(paused,true);assert.equal(time,cues[i].start);
+    assert.equal(nodes.get('clipCue').value,String(i));assert.equal(nodes.get('position').textContent,`${i+1} / 6`);
+    assert.equal(Number(nodes.get('start').value),cues[i].start);assert.equal(Number(nodes.get('end').value),cues[i].end);
+    assert.equal(text(),cues[i].text);
+  };
+  press('ArrowRight');check(3);
+  // Rapid navigation must also survive the queued native seek notifications.
+  press('ArrowLeft');press('ArrowLeft');await Promise.resolve();check(1);
+  paused=false;time=21;emit('timeupdate');assert.equal(text(),'Line number 6');
+  nodes.get('clipCue').value='0';nodes.get('clipCue').onchange();await Promise.resolve();check(0);
+  paused=false;time=21;emit('timeupdate');
+  nodes.get('list').children[4].click();await Promise.resolve();check(4);
+  // Playback still follows the video without moving the chosen practice range.
+  paused=false;time=21;emit('timeupdate');assert.equal(text(),'Line number 6');
+  assert.equal(nodes.get('clipCue').value,'4');assert.equal(Number(nodes.get('start').value),16);
+  (await storage.ready).close();
+});
+
 test('generated accompaniment is restored after a page reload without contacting the service',async()=>{
   const factory=new IDBFactory(),first=createStorage(factory);
   const mounted=await mount(first,{video:{duration:60,pause(){}},globals:{chrome:{runtime:{onMessage:{addListener(){}},async sendMessage(message){

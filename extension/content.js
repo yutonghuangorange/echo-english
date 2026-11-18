@@ -424,7 +424,7 @@
   $('clipCue').onchange=()=>{
     if(mode!=='idle')return;
     if($('clipCue').value===''){index=-1;updateCaption();chooseCurrentTake();saveProgress();return;}
-    select(Number($('clipCue').value));if(hasBackingTools())void restoreServerBacking();
+    select(Number($('clipCue').value),{navigate:true});if(hasBackingTools())void restoreServerBacking();
   };
   function renderParagraphOptions(){
     paragraphFirst=Math.max(0,Math.min(Number.isInteger(paragraphFirst)?paragraphFirst:0,Math.max(0,cues.length-2)));
@@ -1705,7 +1705,7 @@
     cues.forEach((cue,i)=>{
       const text=captionText(cue);if(query && !text.toLowerCase().includes(query))return;
       matches++;const button=document.createElement('button');button.className='cue';button.textContent=`${Math.floor(cue.start/60)}:${String(Math.floor(cue.start%60)).padStart(2,'0')}  ${text}`;
-      button.onclick=()=>select(i,true);button.disabled=mode!=='idle';button.classList.toggle('active',i===index);$('list').append(button);
+      button.onclick=()=>select(i,{navigate:true,focusRecord:true});button.disabled=mode!=='idle';button.classList.toggle('active',i===index);$('list').append(button);
     });
     $('transcriptSearch').hidden=!cues.length;$('transcriptNoMatches').hidden=!cues.length || matches>0;
   }
@@ -1799,12 +1799,18 @@
   document.addEventListener('play',event=>{
     if(event.target?.matches?.('video.html5-main-video')){attachCaptionVideo(event.target);syncCaptions(true);}
   },true);
-  function select(i, fromList=false) {
+  function select(i,{navigate=false,focusRecord=false}={}) {
     if (mode !== 'idle' || !cues[i]) return;
     index = i;clipRangeAdjusted=false; if(isParagraph())syncParagraphBounds();else{const range=EchoSelection.clipRange(cues,i,cues[i].start,cues[i].end);$('start').value = range.start.toFixed(2); $('end').value = range.end.toFixed(2);}
-    if(fromList && !isParagraph()){$('practiceScope').value='clip';karaokeIssue='';}
+    if(navigate && !isParagraph()){$('practiceScope').value='clip';karaokeIssue='';}
+    // A deliberate sentence choice owns the paused preview. Otherwise native
+    // YouTube playback/seek events would immediately replace it with another lyric.
+    if(navigate){
+      const v=document.querySelector('video.html5-main-video');
+      if(v){v.pause?.();if(Number.isFinite(v.duration) && cues[i].start<=v.duration)v.currentTime=cues[i].start;}
+    }
     updateCaption(); chooseCurrentTake();updateSummaries();saveProgress();showPage('practice');renderCueList();
-    if(fromList){$('record').focus();}
+    if(focusRecord){$('record').focus();}
   }
   function displayCues(next, preferredIndex = 0) {
     cues = next.map(c=>({...c,key:EchoStorage.cueKey(c)})); index = -1; $('list').replaceChildren();
@@ -1882,7 +1888,7 @@
     event.preventDefault();event.stopPropagation();target.click();
   });
   $('hideText').onchange = () => { updateCaption(); $('list').style.display = $('hideText').checked ? 'none' : ''; saveProgress(); };
-  $('prev').onclick = () => select(index - 1,true); $('next').onclick = () => select(index + 1,true);
+  $('prev').onclick = () => select(index - 1,{navigate:true,focusRecord:true}); $('next').onclick = () => select(index + 1,{navigate:true,focusRecord:true});
   $('markStart').onclick = guarded(() => { $('start').value = video().currentTime.toFixed(2); index = -1; updateCaption();chooseCurrentTake();saveProgress(); });
   $('markEnd').onclick = guarded(() => { $('end').value = video().currentTime.toFixed(2); index = -1; updateCaption();chooseCurrentTake();saveProgress(); });
   $('original').onclick = guarded(async () => { const r = selectedRange(), token = ++generation; mode = 'original'; controls(); status('正在播放原声…'); await original(r, token); if (token === generation) { finish();if($('practiceScope').value==='clip')updateCaption();status('原声播放完成。'); } });
