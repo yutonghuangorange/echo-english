@@ -95,3 +95,18 @@ test('invalid lyric input cannot export stale matches and remains recoverable in
 test('deleting the last existing cue leaves an empty editable draft rather than throwing',async()=>{
   const f=fixture();f.editor.open({videoId:'delete',video:f.video,cues:[{start:10,end:20,text:'One'}]});f.$('DeleteSlot').onclick();assert.equal(f.$('Apply').disabled,true);f.$('Undo').onclick();assert.equal(f.$('Apply').disabled,false);f.editor.close();await f.editor.flush();
 });
+test('previous end is the next default start, manual start overrides it and the final line saves immediately',async()=>{
+  const f=fixture();f.editor.open({videoId:'continuous',video:f.video,cues:[]});paste(f,'One\nTwo\nThree');mark(f,10,20);
+  assert.match(f.$('PendingMark').textContent,/默认开始 00:00:20.000/);assert.equal(f.$('SectionMarkEnd').disabled,false);
+  f.video.currentTime=30;f.$('SectionMarkEnd').onclick();assert.match(f.$('PendingMark').textContent,/默认开始 00:00:30.000/);
+  f.video.currentTime=35;f.$('SectionMarkStart').onclick();f.video.currentTime=45;f.$('SectionMarkEnd').onclick();assert.equal(f.$('Apply').disabled,false);
+  await f.$('Apply').onclick();assert.deepEqual(f.applied.map(c=>[c.start,c.end]),[[10,20],[20,30],[35,45]]);await f.editor.flush();
+});
+test('default start is restored from draft, follows boundary adjustment and manual cancellation returns to it',async()=>{
+  const f=fixture();f.editor.open({videoId:'default-draft',video:f.video,cues:[]});paste(f,'One\nTwo');mark(f,10,20);
+  f.$('End').value='22';f.$('End').onchange();assert.match(f.$('PendingMark').textContent,/默认开始 00:00:22.000/);
+  await f.editor.flush();const draft=f.drafts.at(-1).draft;f.editor.close();await f.editor.flush();f.editor.open({videoId:'default-draft',video:f.video,cues:[],draft});assert.match(f.$('PendingMark').textContent,/默认开始 00:00:22.000/);
+  f.video.currentTime=25;f.$('SectionMarkStart').onclick();f.$('CancelMark').onclick();assert.match(f.$('PendingMark').textContent,/默认开始 00:00:22.000/);
+  f.video.currentTime=30;f.$('SectionMarkEnd').onclick();f.$('Undo').onclick();assert.match(f.$('PendingMark').textContent,/默认开始 00:00:22.000/);f.$('Redo').onclick();assert.equal(f.$('Apply').disabled,false);
+  await f.$('Apply').onclick();assert.equal(f.applied[1].start,22);await f.editor.flush();
+});

@@ -23,6 +23,8 @@
       mapping=next;cues=next.rows;
       selected=Math.max(0,Math.min(selected,Math.max(cues.length,next.lineCount)-1));
     }
+    // An inherited start is derived from completed intervals, never an unfinished mark.
+    function slotStart(){return pendingSlotStart ?? (workflow==='slots' && mapping?.extraLyrics.length && timingSlots.length?timingSlots.at(-1).end:null);}
     function ready(){
       if(workflow==='slots'){
         syncMapping();
@@ -89,11 +91,12 @@
       $('WorkflowHint').textContent=marking?'粘贴歌词 → 播放歌曲 → 点击开始、结束，依次自动填入每一行。点击已标时歌词或区间试听。':'点击歌词或时间区间试听；拖动区间两端微调，或在右侧输入精确时间。';
       const next=mapping?.extraLyrics[0];
       $('MarkSelection').textContent=marking?(!lineCount?'先粘贴歌词，每行一句。':next?`第 ${timingSlots.length+1} 行：${next.text}`:'歌词已全部填入，可继续增加区间或试听检查。'):'';
-      $('SectionMarkStart').textContent=pendingSlotStart===null?'标记开始':'重新标记开始';
+      const start=slotStart(),inherited=start!==null && pendingSlotStart===null;
+      $('SectionMarkStart').textContent=inherited?'标记开始（覆盖默认）':pendingSlotStart===null?'标记开始':'重新标记开始';
       $('SectionMarkStart').disabled=!lineCount || !!mappingError;
-      $('SectionMarkEnd').disabled=pendingSlotStart===null || !!mappingError;
+      $('SectionMarkEnd').disabled=start===null || !!mappingError;
       $('CancelMark').hidden=pendingSlotStart===null;
-      $('PendingMark').textContent=pendingSlotStart===null?'听到这一行开始时点击“标记开始”。':`开始 ${D.time(pendingSlotStart)} · 听到结束时点击“标记结束”，自动填入。`;
+      $('PendingMark').textContent=inherited?`默认开始 ${D.time(start)}（上一句终点）· 直接点击“标记结束”，或点击“标记开始”覆盖。`:start===null?'听到这一行开始时点击“标记开始”。':`开始 ${D.time(start)} · 听到结束时点击“标记结束”，自动填入。`;
       const complete=!mappingError && cues.length && (!marking || (mapping.balanced && pendingSlotStart===null));
       for(const id of ['Apply','Srt','Vtt'])$(id).disabled=!complete;
       $('PlayRange').disabled=!has;
@@ -190,11 +193,11 @@
       message(draft?'已恢复本机草稿。':'点击歌词或时间区间试听，拖动两端调整时间。');$('DraftState').textContent='草稿自动保存；点击“保存并载入”后主界面生效。';
     }
     function finishSlot(){
-      if(pendingSlotStart===null)throw Error('请先点击“标记开始”。');
-      const next=D.captureSlot(timingSlots,pendingSlotStart,video.currentTime,duration);D.alignSlots(next,$('Paste').value || '',duration);const keys=new Set(timingSlots.map(c=>c.key)),index=next.findIndex(c=>!keys.has(c.key));
+      const start=slotStart();if(start===null)throw Error('请先点击“标记开始”。');
+      const next=D.captureSlot(timingSlots,start,video.currentTime,duration);D.alignSlots(next,$('Paste').value || '',duration);const keys=new Set(timingSlots.map(c=>c.key)),index=next.findIndex(c=>!keys.has(c.key));
       remember();timingSlots=next;pendingSlotStart=null;syncMapping();selected=index;
       if(cues[index].start<windowStart || cues[index].start>=windowStart+span)windowStart=Math.max(0,cues[index].start-span*.15);
-      $('List').scrollTop=Math.max(0,index*rowHeight-rowHeight*2);changed();draw();message('已记录开始／结束，歌词自动填入。继续播放并标记下一行。');
+      $('List').scrollTop=Math.max(0,index*rowHeight-rowHeight*2);changed();draw();message(mapping.extraLyrics.length?'歌词已填入；下一行默认从本句终点开始，可直接标记结束，也可重新标记开始。':'歌词已全部填入，可试听检查后保存。');
     }
     $('Close').onclick=close;dialog.oncancel=e=>{e.preventDefault();close();};
     $('List').onscroll=()=>drawList();
@@ -212,7 +215,7 @@
       remember();pendingSlotStart=video.currentTime;preview=null;if(mapping.extraLyrics.length){selected=timingSlots.length;$('List').scrollTop=Math.max(0,selected*rowHeight-rowHeight*2);}changed();draw();message('开始已标记。听到本句结束时点击“标记结束”。');
     });
     $('SectionMarkEnd').onclick=safely(finishSlot);
-    $('CancelMark').onclick=()=>{remember();pendingSlotStart=null;changed();draw();message('已取消未完成的开始标记。');};
+    $('CancelMark').onclick=()=>{remember();pendingSlotStart=null;changed();draw();message(slotStart()!==null?'已取消手动开始标记，恢复上一句终点作为默认起点。':'已取消未完成的开始标记。');};
     $('DeleteSlot').onclick=safely(()=>{
       if(!cues[selected])return;
       if(workflow==='slots'){remember();timingSlots.splice(selected,1);syncMapping();stopPreview();changed();draw();message('已删除时间区间，后续歌词按顺序重新填入。可撤销。');}
