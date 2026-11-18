@@ -1,16 +1,17 @@
 // Microphone processing and optional low-latency headphone monitoring.
 (function(root){
+  const effects = typeof module !== 'undefined' ? require('./vocal-effects.js') : root.EchoVocalEffects;
   function clampDb(value){return Number.isFinite(value)?Math.max(0,Math.min(24,value)):0;}
   function clampMonitorVolume(value){return Number.isFinite(value)?Math.max(0,Math.min(1,value)):0.35;}
-  async function createInput(microphone,db=0,env=root,{sidetone=false,sidetoneVolume=0.35,sidetoneMode='minimum'}={}){
+  async function createInput(microphone,db=0,env=root,{sidetone=false,sidetoneVolume=0.35,sidetoneMode='minimum',sidetoneReverb={}}={}){
     db=clampDb(db);
     if(db===0 && !sidetone)return {stream:microphone,db,dispose(){}};
-    let context,source,gain,destination,monitorGain,disposed=false,monitoring=false;
+    let context,source,gain,destination,monitorGain,reverb,disposed=false,monitoring=false;
     let volume=clampMonitorVolume(sidetoneVolume);
     function updateMonitor(){if(monitorGain && !disposed)monitorGain.gain.value=monitoring?volume:0;}
     function dispose(){
       if(disposed)return;disposed=true;
-      try{source?.disconnect();gain?.disconnect();monitorGain?.disconnect();}catch{}
+      try{reverb?.dispose();source?.disconnect();gain?.disconnect();monitorGain?.disconnect();}catch{}
       destination?.stream.getTracks().forEach(track=>track.stop());
       if(context)void context.close().catch(()=>{});
     }
@@ -24,12 +25,13 @@
       }
       if(sidetone){
         monitorGain=context.createGain();monitorGain.gain.value=0;
-        (gain || source).connect(monitorGain);monitorGain.connect(context.destination);
+        reverb=effects.createReverb(context,gain || source,monitorGain,sidetoneReverb);monitorGain.connect(context.destination);
       }
       await context.resume();
       if(context.state==='suspended')throw Error('Audio context suspended');
       return {stream:destination?.stream || microphone,db,dispose,
         monitoringInfo(){return sidetone?monitoringInfo(context,microphone,sidetoneMode):null;},
+        setMonitorReverb(value){if(!disposed)reverb?.set(value);},
         setMonitoring(enabled){monitoring=!!enabled;updateMonitor();},
         setMonitorVolume(value){volume=clampMonitorVolume(value);updateMonitor();}};
     }catch(error){

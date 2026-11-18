@@ -3,7 +3,7 @@
 (function(root){
   function attach({view,onOpen=()=>{}}){
     const $=id=>view.getElementById(id),dialog=$('settingsDialog');
-    const tabs={practice:'settingsPracticeTab',microphone:'settingsMicTab',captions:'settingsCaptionsTab',backing:'settingsBackingTab'};
+    const tabs={practice:'settingsPracticeTab',microphone:'settingsMicTab',captions:'settingsCaptionsTab',backing:'settingsBackingTab',sound:'settingsSoundTab'};
     let returnId='practiceSettings',current='microphone';
     function isOpen(){return !!dialog.open;}
     function select(section,focus=false){

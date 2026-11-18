@@ -1,4 +1,5 @@
 (function(root){
+  const effects = typeof module !== 'undefined' ? require('./vocal-effects.js') : root.EchoVocalEffects;
   function filename({title,videoId,start,end,kind='recording',assembled=false,extension='webm'}){
     const clean=value=>String(value || '').normalize('NFC').replace(/[<>:"/\\|?*\u0000-\u001f\u007f]/g,' ').replace(/\s+/g,' ').replace(/^[. ]+|[. ]+$/g,'');
     let name=clean(title) || clean(`YouTube-${videoId || '录音'}`);
@@ -56,13 +57,14 @@
     if(end<duration)gaps.push({start:end,end:duration});
     return {segments,gaps,duration};
   }
-  async function render({takes,duration,origin=0,selection=null,backing=null,volume=1,vocalVolume=1,sampleRate=44100,active=()=>true},env=root){
+  async function render({takes,duration,origin=0,selection=null,reverb={},backing=null,volume=1,vocalVolume=1,sampleRate=44100,active=()=>true},env=root){
     const shifted=takes.map(t=>({...t,start:t.start-origin,end:t.end-origin,...(Number.isFinite(t.capturedEnd)?{capturedEnd:t.capturedEnd-origin}:{})}));
     const timeline=selection===null?plan(shifted,duration):selectionPlan(shifted,duration,selection.map(s=>({...s,start:s.start-origin,end:s.end-origin})));
     if(backing && (backing.start>origin+0.001 || backing.end<origin+duration-0.001))throw Error('需要覆盖整个下载范围的伴奏，请先生成整首伴奏。');
     if(!timeline.segments.length)throw Error('此范围内没有已录人声。');
-    const length=Math.ceil(duration*sampleRate),channels=[new Float32Array(length),new Float32Array(length)];
+    const length=Math.ceil(duration*sampleRate),reverbSettings={...effects.normalize(reverb),delayMs:0};
     const context=new env.AudioContext({sampleRate});
+    let vocalBuffer=null,channels;
     const check=()=>{if(!active())throw Error('已取消合成。');};
     const pause=()=>new Promise(resolve=>env.setTimeout(resolve,0));
     async function add(buffer,start,end,offset,gain){
@@ -80,15 +82,27 @@
       }
     }
     try{
+      // Assemble directly into the offline input to avoid copying a full 10-minute stem.
+      vocalBuffer=effects.enabled(reverbSettings)?context.createBuffer(2,length,sampleRate):null;
+      channels=vocalBuffer?[vocalBuffer.getChannelData(0),vocalBuffer.getChannelData(1)]:[new Float32Array(length),new Float32Array(length)];
       for(const take of new Map(timeline.segments.map(s=>[s.take.id,s.take])).values()){
         check();const decoded=await context.decodeAudioData(await take.blob.arrayBuffer());check();
-        for(const segment of timeline.segments.filter(s=>s.take.id===take.id))await add(decoded,segment.start,segment.end,segment.start-take.start+(take.vocalOffset || 0),Math.max(0,Math.min(2,vocalVolume)));
+        for(const segment of timeline.segments.filter(s=>s.take.id===take.id))await add(decoded,segment.start,segment.end,segment.start-take.start+(take.vocalOffset || 0)-effects.normalize(take.effects).delayMs/1000,Math.max(0,Math.min(2,vocalVolume)));
+      }
+      if (vocalBuffer) {
+        check();const processed=await effects.process(vocalBuffer,reverbSettings,env);check();
+        channels=[processed.getChannelData(0),processed.getChannelData(1)];
       }
       if(backing){
         check();const decoded=await context.decodeAudioData(await backing.blob.arrayBuffer());check();
         await add(decoded,0,duration,origin-backing.start,Math.max(0,Math.min(2,volume)));
       }
       check();
+      const last=timeline.segments.at(-1),fadeSeconds=effects.normalize(last.take.effects).fadeOutSeconds;
+      if(fadeSeconds>0)for(let i=0;i<length;i++){
+        const gain=effects.fadeGain(i/sampleRate,last.end,fadeSeconds);
+        channels[0][i]*=gain;channels[1][i]*=gain;
+      }
       let peak=1;for(let i=0;i<length;i++)peak=Math.max(peak,Math.abs(channels[0][i]),Math.abs(channels[1][i]));
       const bytes=new ArrayBuffer(44+length*4),view=new DataView(bytes);
       const text=(at,value)=>{for(let i=0;i<value.length;i++)view.setUint8(at+i,value.charCodeAt(i));};

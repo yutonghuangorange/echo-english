@@ -37,8 +37,9 @@ async function mount(storage, overrides = {}) {
   const context={document:doc,location:{href:'https://www.youtube.com/watch?v=video',pathname:'/watch'},indexedDB:{},URL,Blob,console,setTimeout,clearTimeout,cancelAnimationFrame(){},requestAnimationFrame(){},crypto:globalThis.crypto,
     window:{addEventListener(){},speechSynthesis:{cancel(){}}},chrome:{runtime:{onMessage:{addListener(){}}}},
     EchoSubtitleEditor:require('../extension/subtitle-editor.js'),EchoSubtitleEditorView:require('../extension/subtitle-editor-view.js'),EchoSettingsDialog:require('../extension/settings-dialog.js'),EchoPracticeTools:require('../extension/practice-tools.js'),EchoCaptionTracks:require('../extension/caption-tracks.js'),EchoPanelView:require('../extension/panel-view.js'),EchoTransport:require('../extension/transport.js'),EchoPlayback:require('../extension/playback.js'),
-    EchoAudioExport:require('../extension/audio-export.js'),EchoAssembly:require('../extension/assembly.js'),EchoPanelSize:require('../extension/panel-size.js'),EchoLanguages:require('../extension/languages.js'),EchoKaraoke:require('../extension/karaoke.js'),EchoStorage:{...require('../extension/storage.js'),createStorage:()=>storage},EchoSelection:require('../extension/selection.js'),EchoPractice:require('../extension/practice.js'),EchoDictionary:require('../extension/dictionary.js'),EchoSubtitles:require('../extension/subtitles.js'),EchoLibrary:require('../extension/library.js'),EchoModels:require('../extension/models.js'),EchoLiveMeter:require('../extension/live-meter.js'),EchoRecording:require('../extension/recording.js'),EchoMicrophone:require('../extension/microphone.js'),EchoAudioAnalysis:require('../extension/audio-analysis.js')};
+    EchoVocalEffects:require('../extension/vocal-effects.js'),EchoAudioExport:require('../extension/audio-export.js'),EchoAssembly:require('../extension/assembly.js'),EchoPanelSize:require('../extension/panel-size.js'),EchoLanguages:require('../extension/languages.js'),EchoKaraoke:require('../extension/karaoke.js'),EchoStorage:{...require('../extension/storage.js'),createStorage:()=>storage},EchoSelection:require('../extension/selection.js'),EchoPractice:require('../extension/practice.js'),EchoDictionary:require('../extension/dictionary.js'),EchoSubtitles:require('../extension/subtitles.js'),EchoLibrary:require('../extension/library.js'),EchoModels:require('../extension/models.js'),EchoLiveMeter:require('../extension/live-meter.js'),EchoRecording:require('../extension/recording.js'),EchoMicrophone:require('../extension/microphone.js'),EchoAudioAnalysis:require('../extension/audio-analysis.js')};
   Object.assign(context,overrides.globals || {});
+  if(!overrides.globals?.EchoVocalEffects?.createPlayer)context.EchoVocalEffects={...context.EchoVocalEffects,async createPlayer(take){return new context.Audio(take.url);}};
   // Existing UI fixtures provide a caption transport; integration fixtures can
   // pass the real page-context client to verify fetch rather than messaging.
   if(!overrides.globals?.EchoCaptionTracks?.createClient)context.EchoCaptionTracks={...context.EchoCaptionTracks,createClient:()=>({request:message=>context.chrome.runtime.sendMessage?.({...message,type:'echo-captions'})})};
@@ -186,7 +187,7 @@ test('unsupported song assembly explains the reason before the user clicks',asyn
   const {nodes}=await mount(storage);
   assert.equal(nodes.get('songAssembly').hidden,false);
   assert.equal(nodes.get('assembleSong').disabled,true);
-  assert.equal(nodes.get('assemblyWarning').hidden,false);assert.match(nodes.get('assemblyWarning').textContent,/1×/);
+  assert.match(nodes.get('assembleSong').title,/1×/);
   (await storage.ready).close();
 });
 
@@ -323,7 +324,7 @@ test('waveform decoding starts only after opening recording details',async()=>{
   await storage.saveTake({id:'one',videoId:'video',cueKey:'manual:0.00:5.00',start:0,end:5,speed:1,createdAt:1,blob:new Blob(['audio'])});
   class AudioContext{constructor(){decodes++;throw Error('no decoder in fixture');}}
   const {nodes}=await mount(storage,{globals:{AudioContext}});
-  assert.equal(decodes,0);nodes.get('recordingDetails').open=true;nodes.get('recordingDetails').ontoggle();
+  assert.equal(decodes,0);nodes.get('openRecordingAdjust').onclick();nodes.get('recordingDetails').open=true;nodes.get('recordingDetails').ontoggle();
   assert.equal(decodes,1);assert.match(nodes.get('analysisText').textContent,/仍可回放或下载/);
   (await storage.ready).close();
 });
@@ -562,7 +563,7 @@ test('play all replays latest recordings in timeline order even without a curren
   (await storage.ready).close();
 });
 
-test('recording timeline plays in one click, exposes versions directly and filters by words',async()=>{
+test('recording timeline selects without autoplay, exposes versions and uses the fixed playback dock',async()=>{
   const storage=createStorage(new IDBFactory());const cue={start:0,end:1,text:'Hello world'};
   await storage.saveSession({videoId:'video',index:0,start:0,end:1,speed:'1',cues:[cue]});
   for(const [id,createdAt] of [['old',1],['new',2]])await storage.saveTake({id,createdAt,videoId:'video',cueKey:cueKey(cue),start:0,end:1,speed:1,label:'第 1 句',blob:new Blob([id])});
@@ -573,8 +574,14 @@ test('recording timeline plays in one click, exposes versions directly and filte
   assert.equal(nodes.get('historyList').children.length,1);
   assert.equal(nodes.get('versionChoices').children.length,2);
   assert.equal(nodes.get('versionChoices').children[1].getAttribute('aria-pressed'),'true');
-  await nodes.get('historyList').children[0].children[0].onclick();assert.equal(played,1);
-  await nodes.get('versionChoices').children[0].onclick();assert.equal(played,2);
+  assert.equal(nodes.get('recordingDock').hidden,true);nodes.get('tab-recordings').onclick();assert.equal(nodes.get('recordingDock').hidden,false);
+  assert.ok(nodes.get('recordingTransportSlot').children.includes(nodes.get('transport')));
+  assert.equal(nodes.get('transport').hidden,false);
+  assert.equal(nodes.get('transportProgress').disabled,true);
+  assert.equal(nodes.get('transportTime').textContent,'点击回放开始');
+  await nodes.get('historyList').children[0].children[0].onclick();assert.equal(played,0);
+  await nodes.get('versionChoices').children[0].onclick();assert.equal(played,0);
+  await nodes.get('reviewReplay').onclick();assert.equal(played,1);
   assert.equal(nodes.get('versionChoices').children[0].getAttribute('aria-pressed'),'true');
   nodes.get('recordingSearch').value='missing';nodes.get('recordingSearch').oninput();
   assert.equal(nodes.get('historyList').children[0].textContent,'没有匹配的录音，试试其他关键词。');
@@ -1192,7 +1199,7 @@ test('paragraph mode restores, keeps multi-sentence bounds during browsing, reco
   await nodes.get('record').onclick();
   const [take]=await storage.listTakes('video');assert.equal(take.start,3);assert.equal(take.end,11.8);assert.equal(take.kind,'song');
   assert.match(take.label,/第 2–4 句/);assert.equal(await take.blob.text(),'whole-paragraph');
-  assert.match(nodes.get('assemblyInfo').textContent,/已选 8.8 \/ 30.0 秒/);
+  assert.match(nodes.get('assembleSong').title,/已选 8.8 \/ 30.0 秒/);
   await nodes.get('assembleSong').onclick();assert.equal(nodes.get('assemblyDialog').open,true);assert.match(nodes.get('assemblyEditorInfo').textContent,/8.8 \/ 30.0/);nodes.get('closeAssembly').onclick();
   nodes.get('paragraphFirst').value='0';nodes.get('paragraphFirst').onchange();
   nodes.get('paragraphLast').value='2';nodes.get('paragraphLast').onchange();
@@ -1992,5 +1999,172 @@ test('subtitle editor is initialized on demand, loads drafts and applies stable 
   await config.onApply([{start:1,end:4,text:'Edited',key:'stable-cue'}]);
   const session=await storage.getSession('video');assert.equal(session.cues[0].key,'stable-cue');assert.equal(session.cues[0].start,1);assert.equal((await storage.listTakes('video'))[0].start,0);
   assert.match(nodes.get('status').textContent,/已载入 1/);nodes.get('close').onclick();assert.equal(closed,true);
+  (await storage.ready).close();
+});
+
+test('alignment is per version, reverb is per video, both restore and alignment resets independently',async()=>{
+  const storage=createStorage(new IDBFactory());
+  await storage.saveTake({id:'voice',videoId:'video',cueKey:'manual:0:5',start:0,end:5,speed:1,createdAt:1,capture:'vocal',blob:new Blob(['voice'])});
+  let {nodes}=await mount(storage);
+  nodes.get('tab-recordings').onclick();
+  assert.equal(nodes.get('vocalEffects').hidden,false);
+  nodes.get('vocalDelay').value='-120';await nodes.get('vocalDelay').onchange();
+  nodes.get('vocalReverb').value='ktv';await nodes.get('vocalReverb').onchange();
+  nodes.get('vocalReverbAmount').value='0.4';await nodes.get('vocalReverbAmount').onchange();
+  assert.deepEqual((await storage.listTakes('video'))[0].effects,{delayMs:-120});
+  ({nodes}=await mount(storage));nodes.get('tab-recordings').onclick();
+  assert.equal(Number(nodes.get('vocalDelay').value),-120);assert.equal(nodes.get('vocalReverb').value,'ktv');
+  await nodes.get('vocalEarlier').onclick();assert.equal(Number(nodes.get('vocalDelay').value),-130);
+  await nodes.get('resetVocalEffects').onclick();
+  assert.equal(nodes.get('vocalReverb').value,'ktv');
+  assert.deepEqual((await storage.getSession('video')).vocalReverb,{delayMs:0,reverb:'ktv',amount:0.4});
+  assert.deepEqual((await storage.listTakes('video'))[0].effects,{delayMs:0});
+  await storage.deleteTake('voice');assert.equal(await storage.updateTakeEffects('voice',{delayMs:100}),null);
+  assert.equal((await storage.listTakes('video')).length,0);
+  (await storage.ready).close();
+});
+
+test('stopping during vocal processing prevents stale audio playback',async()=>{
+  const storage=createStorage(new IDBFactory());let release,requested=false,created=0,disposed=0;
+  const blob=new Blob(['voice']);
+  await storage.saveTake({id:'voice',videoId:'video',cueKey:'manual:0:5',start:0,end:5,speed:1,createdAt:1,capture:'vocal',blob,effects:{delayMs:-100}});
+  const video={duration:60,currentTime:0,muted:false,playbackRate:1,pause(){},async play(){}};
+  const {nodes}=await mount(storage,{video,globals:{Audio:class{constructor(){created++;}},EchoVocalEffects:{...require('../extension/vocal-effects.js'),createPlayer(){requested=true;return new Promise(resolve=>{release=resolve;});}}}});
+  nodes.get('tab-recordings').onclick();
+  const playing=nodes.get('reviewReplay').onclick();
+  await waitUntil(()=>requested);
+  nodes.get('stop').onclick();release({dispose(){disposed++;}});await playing;
+  assert.equal(created,0);assert.equal(disposed,1);assert.equal(nodes.get('panel').dataset.mode,'idle');assert.equal(video.muted,false);
+  (await storage.ready).close();
+});
+
+test('editing alignment and reverb during replay updates the same player and saves without resetting progress',async()=>{
+  const storage=createStorage(new IDBFactory());let player,players=0,plays=0;
+  await storage.saveTake({id:'voice',videoId:'video',cueKey:'manual:0:5',start:0,end:5,speed:1,createdAt:1,capture:'vocal',blob:new Blob(['voice'])});
+  const video={duration:60,currentTime:0,muted:false,playbackRate:1,pause(){},async play(){},addEventListener(){},removeEventListener(){}};
+  const {nodes}=await mount(storage,{video,globals:{EchoVocalEffects:{...require('../extension/vocal-effects.js'),async createPlayer(){
+    players++;player={currentTime:0,duration:5,paused:true,async play(){plays++;this.paused=false;},pause(){this.paused=true;},dispose(){},setEffects(effects){this.effects=effects;},setVolume(){}};
+    return player;
+  }}}});
+  nodes.get('tab-recordings').onclick();
+  const playing=nodes.get('reviewReplay').onclick();await waitUntil(()=>nodes.get('transportProgress').disabled===false);
+  player.currentTime=2;video.currentTime=2;
+  assert.equal(nodes.get('vocalDelay').disabled,false);
+  nodes.get('vocalDelay').value='-120';nodes.get('vocalDelay').oninput();await nodes.get('vocalDelay').onchange();
+  nodes.get('vocalReverb').value='ktv';await nodes.get('vocalReverb').onchange();
+  nodes.get('vocalReverbAmount').value='0.5';nodes.get('vocalReverbAmount').oninput();await nodes.get('vocalReverbAmount').onchange();
+  nodes.get('vocalFadeOut').value='1.5';nodes.get('vocalFadeOut').oninput();await nodes.get('vocalFadeOut').onchange();
+  assert.equal(players,1);assert.equal(plays,1);assert.equal(player.currentTime,2);assert.equal(video.currentTime,2);
+  assert.equal(nodes.get('panel').dataset.mode,'replay');
+  assert.deepEqual(player.effects,{delayMs:-120,reverb:'ktv',amount:0.5,fadeOutSeconds:1.5});
+  assert.deepEqual((await storage.listTakes('video'))[0].effects,{delayMs:-120,fadeOutSeconds:1.5});
+  assert.deepEqual((await storage.getSession('video')).vocalReverb,{delayMs:0,reverb:'ktv',amount:0.5});
+  nodes.get('stop').onclick();await playing;(await storage.ready).close();
+});
+
+test('refresh reconnects a pending backing task, restores progress, and loads its result without starting again',async()=>{
+  const storage=createStorage(new IDBFactory()),id='a'.repeat(32),values=new Map();let polls=0,starts=0;
+  values.set('echo-backing-job:video',JSON.stringify({id,videoId:'video',start:10,end:20,model:'demucs-htdemucs',quality:'standard'}));
+  const job={id,videoId:'video',start:10,end:20};
+  const {nodes}=await mount(storage,{video:{duration:60,pause(){}},globals:{
+    setTimeout:(fn,ms)=>setTimeout(fn,ms===1500?150:ms),
+    window:{localStorage:{getItem:key=>values.get(key),setItem:(key,value)=>values.set(key,value),removeItem:key=>values.delete(key)},addEventListener(){}},
+    chrome:{runtime:{onMessage:{addListener(){}},async sendMessage(message){
+      if(message.action==='start')starts++;
+      if(message.action==='status')return {...job,state:++polls===1?'separating':'ready',progress:43};
+      if(message.action==='audio')return {audio:'YXVkaW8=',mime:'audio/mpeg'};
+      return {};
+    }}}
+  }});
+  await waitUntil(()=>nodes.get('panel').dataset.mode==='separating');
+  assert.equal(nodes.get('generationProgress').hidden,false);assert.equal(nodes.get('generationProgress').value,43);
+  await waitUntil(()=>nodes.get('panel').dataset.mode==='idle' && values.get('echo-backing-job:video')===undefined);
+  assert.equal(starts,0);const backings=await storage.listBackings('video');
+  assert.equal(backings.length,1);assert.equal(backings[0].start,10);assert.equal(backings[0].end,20);
+  (await storage.ready).close();
+});
+
+test('page unload detaches the pending backing poll without cancelling the server task',async()=>{
+  const storage=createStorage(new IDBFactory()),id='b'.repeat(32),values=new Map(),events=new Map();let cancels=0;
+  values.set('echo-backing-job:video',JSON.stringify({id,videoId:'video',start:0,end:5,quality:'standard'}));
+  const {nodes}=await mount(storage,{video:{duration:60,pause(){}},globals:{
+    setTimeout:(fn,ms)=>setTimeout(fn,ms===1500?30:ms),
+    window:{localStorage:{getItem:key=>values.get(key),setItem:(key,value)=>values.set(key,value),removeItem:key=>values.delete(key)},addEventListener:(name,fn)=>events.set(name,fn)},
+    chrome:{runtime:{onMessage:{addListener(){}},async sendMessage(message){
+      if(message.action==='cancel')cancels++;
+      return {id,videoId:'video',start:0,end:5,state:'separating',progress:50};
+    }}}
+  }});
+  await waitUntil(()=>nodes.get('panel').dataset.mode==='separating');
+  events.get('pagehide')();await new Promise(resolve=>setTimeout(resolve,40));
+  assert.equal(cancels,0);assert.ok(values.has('echo-backing-job:video'));
+  (await storage.ready).close();
+});
+
+test('reverb migrates from the selected legacy version, stays shared across versions and resets for another video',async()=>{
+  const storage=createStorage(new IDBFactory()),location={href:'https://www.youtube.com/watch?v=video',pathname:'/watch'};
+  const video={duration:60,currentTime:0,muted:false,playbackRate:1,pause(){},async play(){},addEventListener(){},removeEventListener(){}};
+  class Audio{constructor(){this.currentTime=0;this.duration=5;}async play(){}pause(){}}
+  for(const [id,createdAt,delayMs,reverb] of [['older',1,-120,'ktv'],['newer',2,80,'theatre']])await storage.saveTake({id,createdAt,videoId:'video',cueKey:'manual:0:5',start:0,end:5,speed:1,capture:'vocal',blob:new Blob(['voice']),effects:{delayMs,reverb,amount:.4}});
+  await storage.saveSession({videoId:'video',selectedTakeId:'older',start:0,end:5,index:-1,cues:[]});
+  const {nodes,events}=await mount(storage,{video,globals:{location,Audio}});
+  assert.equal(nodes.get('vocalReverb').value,'ktv');assert.equal(Number(nodes.get('vocalDelay').value),-120);
+  const selected=nodes.get('versionChoices').children.find(button=>button.attrs['aria-pressed']==='false');
+  await selected.onclick();assert.equal(Number(nodes.get('vocalDelay').value),80);
+  assert.equal(nodes.get('vocalReverb').value,'ktv');assert.equal(nodes.get('panel').dataset.mode,'idle');
+  await nodes.get('resetVocalEffects').onclick();assert.equal(nodes.get('vocalReverb').value,'ktv');
+  assert.equal((await storage.listTakes('video')).find(t=>t.id==='older').effects.delayMs,-120);
+  nodes.get('vocalReverb').value='theatre';await nodes.get('vocalReverb').onchange();
+  location.href='https://www.youtube.com/watch?v=other';events.get('yt-navigate-finish')();await waitUntil(()=>!nodes.get('read').disabled);
+  assert.equal(nodes.get('vocalReverb').value,'off');assert.equal(nodes.get('monitorReverb').checked,false);
+  (await storage.ready).close();
+});
+
+test('recording can change headphone reverb live while the saved stream stays dry',async()=>{
+  const storage=createStorage(new IDBFactory()),video=leadInVideo({hold:true}),mic={getTracks:()=>[{stop(){}}]};let configured,liveEffects;
+  class MediaRecorder{
+    static isTypeSupported(){return true;}
+    constructor(stream){assert.equal(stream,mic);this.state='inactive';this.mimeType='audio/webm';}
+    start(){this.state='recording';}stop(){this.state='inactive';this.ondataavailable({data:new Blob(['dry vocal'])});queueMicrotask(()=>this.onstop());}
+  }
+  const microphone={...require('../extension/microphone.js'),async createInput(stream,db,env,options){configured=options;return {stream,db,dispose(){},setMonitoring(){},setMonitorReverb(value){liveEffects=value;}};}};
+  const {nodes}=await mount(storage,{video,globals:{MediaRecorder,EchoMicrophone:microphone,navigator:{mediaDevices:{getUserMedia:async()=>mic}}}});
+  nodes.get('sidetoneEnabled').checked=true;nodes.get('sidetoneEnabled').onchange();
+  const recording=nodes.get('record').onclick();await waitUntil(()=>configured && nodes.get('panel').dataset.mode==='recording');
+  assert.equal(configured.sidetone,true);assert.equal(configured.sidetoneReverb.reverb,undefined);
+  nodes.get('liveVocalSettings').onclick();assert.equal(nodes.get('settings-microphone').hidden,false);
+  assert.equal(nodes.get('monitorReverb').disabled,false);
+  nodes.get('micVocalSettings').onclick();assert.equal(nodes.get('settings-sound').hidden,false);
+  nodes.get('vocalReverb').value='ktv';await nodes.get('vocalReverb').onchange();
+  nodes.get('settingsMicTab').onclick();assert.equal(nodes.get('settings-microphone').hidden,false);
+  nodes.get('monitorReverb').checked=true;await nodes.get('monitorReverb').onchange();
+  assert.equal(liveEffects.reverb,'ktv');assert.equal(liveEffects.delayMs,0);
+  nodes.get('monitorReverb').checked=false;await nodes.get('monitorReverb').onchange();assert.equal(liveEffects.reverb,undefined);
+  nodes.get('closeSettings').onclick();nodes.get('stop').onclick();await recording;
+  assert.equal(await (await storage.listTakes('video'))[0].blob.text(),'dry vocal');
+  const saved=await storage.getSession('video');assert.equal(saved.vocalReverb.reverb,'ktv');assert.equal(saved.monitorReverb,false);
+  (await storage.ready).close();
+});
+
+test('recording dialogs separate downloads and adjustments, block practice shortcuts and preserve live preview',async()=>{
+  const storage=createStorage(new IDBFactory());let player;
+  await storage.saveTake({id:'voice',videoId:'video',cueKey:'manual:0:5',start:0,end:5,speed:1,createdAt:1,capture:'vocal',blob:new Blob(['voice'])});
+  const video={duration:60,currentTime:0,muted:false,playbackRate:1,pause(){},async play(){},addEventListener(){},removeEventListener(){}};
+  const {nodes,document,events}=await mount(storage,{video,globals:{EchoVocalEffects:{...require('../extension/vocal-effects.js'),async createPlayer(){
+    return player={currentTime:0,duration:5,paused:true,async play(){this.paused=false;},pause(){this.paused=true;},dispose(){},setEffects(){},setVolume(){}};
+  }}}});
+  document.documentElement.children[0].style.display='block';nodes.get('tab-recordings').onclick();
+  nodes.get('openRecordingDownload').onclick();assert.equal(nodes.get('recordingDialog').open,true);
+  assert.equal(nodes.get('recording-adjustments').hidden,true);assert.equal(nodes.get('recording-downloads').hidden,false);
+  let shortcut=0;nodes.get('compare').onclick=()=>shortcut++;
+  events.get('keydown')({altKey:true,shiftKey:true,code:'KeyC',preventDefault(){},stopPropagation(){}});assert.equal(shortcut,0);
+  nodes.get('recordingAdjustTab').onclick();assert.equal(nodes.get('recording-adjustments').hidden,false);
+  const preview=nodes.get('recordingDialogPreview').onclick();await waitUntil(()=>player?.paused===false);
+  assert.equal(nodes.get('recordingDialog').open,true);assert.match(nodes.get('recordingDialogPreview').textContent,/停止/);
+  const stopped=nodes.get('recordingDialogPreview').onclick();await stopped;await preview;
+  assert.equal(nodes.get('panel').dataset.mode,'idle');assert.equal(nodes.get('recordingDialog').open,true);
+  nodes.get('takeReverbSettings').onclick();assert.equal(nodes.get('recordingDialog').open,false);assert.equal(nodes.get('settings-sound').hidden,false);
+  nodes.get('closeSettings').onclick();nodes.get('openRecordingAdjust').onclick();
+  nodes.get('closeRecordingDialog').onclick();assert.equal(nodes.get('recordingDialog').open,false);
   (await storage.ready).close();
 });
