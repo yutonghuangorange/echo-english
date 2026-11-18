@@ -188,7 +188,7 @@
   const captionEvents = ['timeupdate','seeking','seeked','play','pause','ended'];
   let savedBackings = [], activeKaraokeJob = null, songTake = null;
   let backingRestoreRequest=0, restoringBacking=false, karaokeIssue='';
-  let backingOutput=null;
+  let backingOutput=null,leadInOutput=null;
   let replayMonitor=null, replayVoiceOutput=null, replayTake=null, replayBackingReady=false, replayVoiceMax=2;
   for(const id of ['replayVocalVolume','replayBackingVolume'])$(id).value=1;
   $('mixControls').open=false;
@@ -784,11 +784,11 @@
     if(token!==generation)return false;
     const update=()=>status(`准备录音 · ${Math.max(0,Math.ceil((r.start-v.currentTime)/r.speed))} 秒后开始`);
     update();v.addEventListener('timeupdate',update);
-    let completed=false,restoreVolume=()=>{};
+    let completed=false,output=null;
     try{
+      output=EchoKaraoke.createLeadInOutput(v,{volume:Number($('backingVolume').value),end:r.start,speed:r.speed,fadeOut:!!recordingSession?.monitor},globalThis);leadInOutput=output;
       await v.play();
       if(token!==generation)return false;
-      if(recordingSession?.monitor)restoreVolume=EchoKaraoke.fadeOriginalOut(v,r.start,r.speed,globalThis);
       await new Promise((resolve,reject)=>{
         playback.onCancel(resolve);
         showVideoTransport('准备录音 · 前置原声',v,{start,end:r.start,speed:r.speed});
@@ -797,7 +797,7 @@
       });
       completed=true;
     }finally{
-      restoreVolume();
+      output?.dispose();if(leadInOutput===output)leadInOutput=null;
       v.removeEventListener('timeupdate',update);
       if(token===generation){playback.cancel();if(!completed)transport.hide();}
     }
@@ -1239,7 +1239,7 @@
     $(id).oninput=()=>{
       const value=Number($(id).value),volume=Number.isFinite(value)?Math.max(0,Math.min(2,value)):1;
       $('backingVolume').value=volume;renderBackingVolume();updateBackingControls();
-      backingOutput?.setVolume(volume);recordingSession?.setVolume(volume);
+      backingOutput?.setVolume(volume);leadInOutput?.setVolume(volume);recordingSession?.setVolume(volume);
     };
     $(id).onchange=saveProgress;
   }

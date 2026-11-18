@@ -1297,8 +1297,8 @@ for(const withBacking of [false,true])for(const leadMode of ['seconds','previous
   (await storage.ready).close();
 });
 test('stopping during the lead-in cancels preparation, releases the mic and saves no empty take',async()=>{
-  const storage=createStorage(new IDBFactory()),video=leadInVideo({hold:true});let stops=0,starts=0;
-  await storage.saveSession({videoId:'video',start:10,end:11,speed:'1',cues:[],leadInSeconds:3});
+  const storage=createStorage(new IDBFactory()),video=leadInVideo({hold:true});let stops=0,starts=0;video.volume=.7;
+  await storage.saveSession({videoId:'video',start:10,end:11,speed:'1',cues:[],leadInSeconds:3,backingVolume:.4});
   class MediaRecorder{static isTypeSupported(){return true;}constructor(){this.state='inactive';}start(){starts++;}}
   const {nodes}=await mount(storage,{video,globals:{MediaRecorder,
     navigator:{mediaDevices:{async getUserMedia(){return {getTracks:()=>[{stop(){stops++;}}]};}}},
@@ -1310,10 +1310,13 @@ test('stopping during the lead-in cancels preparation, releases the mic and save
   assert.equal(nodes.get('activityMode').hidden,true);assert.equal(nodes.get('clipBounds').hidden,true);
   assert.equal(nodes.get('practiceTools').hidden,true);assert.equal(nodes.get('practiceSettings').hidden,true);
   assert.equal(nodes.get('liveMeter').hidden,false);assert.equal(nodes.get('stop').textContent,'■ 取消准备');
+  assert.equal(video.volume,.4);
+  nodes.get('backingLiveVolume').value='.2';nodes.get('backingLiveVolume').oninput();assert.equal(video.volume,.2);
   assert.equal(starts,0); // Preparation shows the recording UI without recording context audio.
   nodes.get('stop').onclick();await pending;
   assert.equal(nodes.get('liveMeter').hidden,true);assert.equal(nodes.get('activityMode').hidden,false);
   assert.equal(starts,0);assert(stops>=1);assert.equal((await storage.listTakes('video')).length,0);
+  assert.equal(video.volume,.7);
   assert.equal(video.muted,true);assert.equal(video.playbackRate,1.25);assert.equal(nodes.get('record').disabled,false);
   (await storage.ready).close();
 });

@@ -103,15 +103,15 @@ test('whole-song backing covers shorter phrases but never another video or an un
 });
 
 test('lead-in fade follows media time at practice speed and restores the original volume on cancellation',()=>{
-  const {fadeOriginalOut}=require('../extension/karaoke.js'),frames=new Map();let id=0;
+  const {createLeadInOutput}=require('../extension/karaoke.js'),frames=new Map();let id=0;
   const env={requestAnimationFrame(fn){frames.set(++id,fn);return id;},cancelAnimationFrame(id){frames.delete(id);}};
   const video={currentTime:9,volume:.7};
-  const restore=fadeOriginalOut(video,10,.5,env);
+  const output=createLeadInOutput(video,{volume:.7,end:10,speed:.5,fadeOut:true},env);
   const tick=()=>{const [key,fn]=frames.entries().next().value;frames.delete(key);fn();};
   assert.equal(video.volume,.7);
   video.currentTime=9.985;tick();assert.ok(Math.abs(video.volume-.35)<.001);
   video.currentTime=10;tick();assert.equal(video.volume,0);
-  const stale=frames.values().next().value;restore();assert.equal(video.volume,.7);assert.equal(frames.size,0);
+  const stale=frames.values().next().value;output.dispose();assert.equal(video.volume,.7);assert.equal(frames.size,0);
   stale();assert.equal(video.volume,.7);
 });
 
@@ -281,4 +281,16 @@ test('generation uses the custom paragraph instead of the current recording rang
   assert.deepEqual(generationRange({scope:'paragraph',current:{start:0,end:5,speed:1},paragraph:{start:20,end:50,speed:1},duration:900}),{start:20,end:50,speed:1});
   assert.throws(()=>generationRange({scope:'paragraph',paragraph:{start:0,end:601,speed:1},duration:900}),/10 分钟/);
   assert.throws(()=>generationRange({scope:'paragraph',duration:900}),/有效/);
+});
+
+
+test('lead-in output follows live monitoring gain, clamps video volume and restores it',()=>{
+  const {createLeadInOutput}=require('../extension/karaoke.js');
+  const video={volume:.3,currentTime:2};
+  const output=createLeadInOutput(video,{volume:.6,end:10});
+  assert.equal(video.volume,.6);output.setVolume(.2);assert.equal(video.volume,.2);
+  output.setVolume(2);assert.equal(video.volume,1);
+  output.setVolume(0);assert.equal(video.volume,0);
+  output.dispose();assert.equal(video.volume,.3);
+  output.setVolume(.8);assert.equal(video.volume,.3);
 });

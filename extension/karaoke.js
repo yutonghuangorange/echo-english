@@ -66,18 +66,25 @@
     }catch(error){await context.close().catch(()=>{});throw error;}
   }
   // A short envelope changes monitoring only; microphone capture stays dry.
-  function fadeOriginalOut(video,end,speed,env=root) {
-    const volume=video.volume;
-    if(!Number.isFinite(volume))return ()=>{};
-    let frame=0,disposed=false;
-    function tick(){
-      if(disposed)return;
+  function createLeadInOutput(video,{volume=1,end,speed=1,fadeOut=false},env=root) {
+    const originalVolume=video.volume;
+    let level=1,frame=0,disposed=false;
+    function apply(){
       const remaining=(end-video.currentTime)/speed;
-      video.volume=volume*Math.max(0,Math.min(1,remaining/0.06));
-      frame=env.requestAnimationFrame(tick);
+      video.volume=level*(fadeOut?Math.max(0,Math.min(1,remaining/0.06)):1);
     }
-    tick();
-    return ()=>{disposed=true;env.cancelAnimationFrame(frame);video.volume=volume;};
+    function setVolume(value){
+      if(disposed)return;
+      // HTML video volume is limited to 100%; do not reroute YouTube's media
+      // element into a disposable AudioContext, which would silence it later.
+      level=Number.isFinite(value)?Math.max(0,Math.min(1,value)):1;apply();
+    }
+    function tick(){if(disposed)return;apply();frame=env.requestAnimationFrame(tick);}
+    setVolume(volume);if(fadeOut)frame=env.requestAnimationFrame(tick);
+    return {setVolume,dispose(){
+      if(disposed)return;disposed=true;if(frame)env.cancelAnimationFrame(frame);
+      if(Number.isFinite(originalVolume))video.volume=originalVolume;
+    }};
   }
   async function createMonitor({blob,video,start,speed,volume=1,initialPosition,fadeInSeconds=0}, env=root) {
     const context=new env.AudioContext();
@@ -164,6 +171,6 @@
       }
     };
   }
-  const api={generationRange,DEFAULT_MODEL,modelOf,qualityOf,fetchAudio,key,covers,canReplayBacking,backingForTake,progressText,blobFromBase64,fadeOriginalOut,createMonitor,createAudioOutput,createBackingOutput:createAudioOutput,followRecording};
+  const api={generationRange,DEFAULT_MODEL,modelOf,qualityOf,fetchAudio,key,covers,canReplayBacking,backingForTake,progressText,blobFromBase64,createLeadInOutput,createMonitor,createAudioOutput,createBackingOutput:createAudioOutput,followRecording};
   if(typeof module!=='undefined')module.exports=api;else root.EchoKaraoke=api;
 })(globalThis);
