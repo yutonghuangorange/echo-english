@@ -187,7 +187,7 @@ test('unsupported song assembly explains the reason before the user clicks',asyn
   const {nodes}=await mount(storage);
   assert.equal(nodes.get('songAssembly').hidden,false);
   assert.equal(nodes.get('assembleSong').disabled,true);
-  assert.equal(nodes.get('assemblyWarning').hidden,false);assert.match(nodes.get('assemblyWarning').textContent,/1×/);
+  assert.match(nodes.get('assembleSong').title,/1×/);
   (await storage.ready).close();
 });
 
@@ -1195,7 +1195,7 @@ test('paragraph mode restores, keeps multi-sentence bounds during browsing, reco
   await nodes.get('record').onclick();
   const [take]=await storage.listTakes('video');assert.equal(take.start,3);assert.equal(take.end,11.8);assert.equal(take.kind,'song');
   assert.match(take.label,/第 2–4 句/);assert.equal(await take.blob.text(),'whole-paragraph');
-  assert.match(nodes.get('assemblyInfo').textContent,/已选 8.8 \/ 30.0 秒/);
+  assert.match(nodes.get('assembleSong').title,/已选 8.8 \/ 30.0 秒/);
   await nodes.get('assembleSong').onclick();assert.equal(nodes.get('assemblyDialog').open,true);assert.match(nodes.get('assemblyEditorInfo').textContent,/8.8 \/ 30.0/);nodes.get('closeAssembly').onclick();
   nodes.get('paragraphFirst').value='0';nodes.get('paragraphFirst').onchange();
   nodes.get('paragraphLast').value='2';nodes.get('paragraphLast').onchange();

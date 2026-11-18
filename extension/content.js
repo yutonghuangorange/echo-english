@@ -629,11 +629,10 @@
     let assemblyError='',assemblyPlan=null;
     if(voices.length){try{assemblyPlan=EchoAssembly.preview(assemblyTakes(),document.querySelector('video.html5-main-video')?.duration,assemblyChoices,EchoAudioExport);}catch(error){assemblyError=error.message;}}
     $('assembleSong').disabled=busy || !voices.length || !!assemblyError;
-    $('assembleSong').title=assemblyError;
-    $('assemblyWarning').textContent=assemblyError;$('assemblyWarning').hidden=!assemblyError;
+    $('assembleSong').title=assemblyError || '选择片段、版本并试听或导出整首。';
     if(assemblyPlan){
       const covered=assemblyPlan.segments.reduce((sum,s)=>sum+s.end-s.start,0);
-      $('assemblyInfo').textContent=`${EchoPractice.recordingQueue(voices).length} 段独立人声 · 已选 ${covered.toFixed(1)} / ${assemblyPlan.duration.toFixed(1)} 秒。`;
+      $('assembleSong').title=`${EchoPractice.recordingQueue(voices).length} 段独立人声 · 已选 ${covered.toFixed(1)} / ${assemblyPlan.duration.toFixed(1)} 秒。点击选择片段并合成。`;
     }
     $('activityMode').hidden=recording;
     $('openPreparation').disabled=mode!=='idle';renderFavorite();
@@ -985,7 +984,6 @@
     $('recordingSummary').textContent=`${videoHistory.length} 个版本`;
     const songVoices=assemblyTakes();
     $('songAssembly').hidden=!songVoices.length;
-    $('assemblyInfo').textContent=`${EchoPractice.recordingQueue(songVoices).length} 段独立人声可用于合成；每段自动选最新版本。`;
     $('recordingEmpty').hidden=!!queue.length || !!take;
     list.replaceChildren();
     if(!shown.length && queue.length){const p=document.createElement('p');p.className='hint';p.textContent='没有匹配的录音，试试其他关键词。';list.append(p);}
