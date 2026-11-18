@@ -57,9 +57,10 @@
     }
     function draw(){
       const cue=cues[selected],has=!!cue;
+      $('MarkSelection').textContent=has?`为第 ${selected+1}–${last+1} 句打点`:'请先粘贴歌词或载入字幕';
       $('Workspace').hidden=!cues.length;$('Empty').hidden=!!cues.length;$('Count').textContent=`${cues.length} 句${cue?` · 已选第 ${selected+1}–${last+1} 句`:''}`;
       $('Undo').disabled=!history.length;$('Redo').disabled=!future.length;
-      for(const id of ['Apply','Srt','Vtt','PlayRange','Estimate','Merge','TextApply','MarkStart','MarkEnd','Start','End','First','Last','FixedStart','FixedEnd'])$(id).disabled=!has;
+      for(const id of ['Apply','Srt','Vtt','PlayRange','Estimate','Merge','TextApply','MarkStart','MarkEnd','Start','End','First','Last','FixedStart','FixedEnd','SectionStart','SectionEnd','SectionMarkStart','SectionMarkEnd','Group'])$(id).disabled=!has;
       $('Merge').disabled=!has || last<=selected;$('Current').disabled=!source.length;$('Original').disabled=!original.length;
       if(cue){
         $('Start').value=D.time(cue.start);$('End').value=D.time(cue.end);$('Text').value=cue.text.replace(/\n/g,'\u2028');$('FixedStart').checked=!!cue.startLocked;$('FixedEnd').checked=!!cue.endLocked;
@@ -151,8 +152,16 @@
     $('Redo').onclick=()=>{if(!future.length)return;history.push(snapshot());const value=future.pop();cues=value.cues;selected=value.selected;last=value.last;stopPreview();changed();draw();};
     $('First').onchange=()=>{selected=Number($('First').value);last=Math.max(selected,last);draw();changed();};$('Last').onchange=()=>{last=Number($('Last').value);draw();changed();};
     $('Group').onclick=()=>{const group=cues[selected]?.group;if(group===undefined){message('已有字幕未分段，请用起句与止句选择范围。');return;}const first=cues.findIndex(c=>c.group===group);let end=first;while(end+1<cues.length && cues[end+1].group===group)end++;selected=first;last=end;draw();changed();};
-    $('Estimate').onclick=safely(()=>commit(D.interpolate(cues,selected,last,D.parseTime($('SectionStart').value),D.parseTime($('SectionEnd').value),duration,$('Method').value),'已在固定锚点之间估算时间，建议循环试听后微调。'));
-    $('SectionMarkStart').onclick=()=>{$('SectionStart').value=D.time(video.currentTime);};$('SectionMarkEnd').onclick=()=>{$('SectionEnd').value=D.time(video.currentTime);};
+    $('Estimate').onclick=safely(()=>commit(D.interpolate(cues,selected,last,D.parseTime($('SectionStart').value),D.parseTime($('SectionEnd').value),duration,$('Method').value),'已应用段落起止时间，中间各句已估算。可播放选段检查，随时重新打点。'));
+    function markSection(edge){if(!cues.length || !video)return;$('Section'+edge).value=D.time(video.currentTime);message(`已标记${edge==='Start'?'开始':'结束'}：${D.time(video.currentTime)}。${edge==='Start'?'继续播放，到结尾按 O 标记结束。':'点击“应用时间到所选歌词”，再播放选段检查。'}`);}
+    $('SectionMarkStart').onclick=()=>markSection('Start');$('SectionMarkEnd').onclick=()=>markSection('End');
+    dialog.addEventListener('keydown',event=>{
+      if(!isOpen() || event.repeat || event.isComposing || event.ctrlKey || event.metaKey || event.altKey)return;
+      const typing=event.composedPath?.().some(el=>['INPUT','TEXTAREA','SELECT'].includes(el.tagName) || el.isContentEditable) || ['INPUT','TEXTAREA','SELECT'].includes(event.target?.tagName) || event.target?.isContentEditable;
+      if(typing)return;const key=event.code || event.key;
+      if(!['KeyI','KeyO','Space','i','I','o','O',' '].includes(key))return;
+      event.preventDefault();event.stopPropagation();if(['KeyI','i','I'].includes(key))markSection('Start');else if(['KeyO','o','O'].includes(key))markSection('End');else safely(()=>play())();
+    });
     $('Start').onchange=safely(()=>updateEdge('start',D.parseTime($('Start').value)));$('End').onchange=safely(()=>updateEdge('end',D.parseTime($('End').value)));
     $('MarkStart').onclick=safely(()=>updateEdge('start',video.currentTime));$('MarkEnd').onclick=safely(()=>updateEdge('end',video.currentTime));
     for(const edge of ['Start','End'])$('Fixed'+edge).onchange=safely(()=>{const next=D.copy(cues);next[selected][edge.toLowerCase()+'Locked']=$('Fixed'+edge).checked;commit(next);});

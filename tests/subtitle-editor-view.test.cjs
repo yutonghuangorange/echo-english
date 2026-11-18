@@ -54,3 +54,15 @@ test('autosave failure is visible and export remains usable',async()=>{
   const f=fixture({draftError:true});f.editor.open({videoId:'full',video:f.video,cues:f.cues.slice(0,2)});await f.editor.flush();
   assert.match(f.$('DraftState').textContent,/保存失败.*Storage full/);f.$('Srt').onclick();assert.equal(f.exports.length,1);f.editor.close();await f.editor.flush();
 });
+
+test('I/O marks section boundaries without interrupting playback, applies them and supports remarking estimated boundaries',async()=>{
+  const f=fixture();f.editor.open({videoId:'marks',video:f.video,cues:f.cues.slice(0,3)});
+  f.$('Last').value='2';f.$('Last').onchange();await f.$('Play').onclick();
+  const key=code=>f.$('Dialog').onkeydown({code,target:{tagName:'BUTTON'},preventDefault(){},stopPropagation(){}});
+  f.video.currentTime=2;key('KeyI');f.video.currentTime=8;key('KeyO');
+  assert.equal(f.video.paused,false);assert.equal(f.$('SectionStart').value,'00:00:02.000');assert.equal(f.$('SectionEnd').value,'00:00:08.000');
+  f.$('Estimate').onclick();await f.editor.flush();let draft=f.drafts.at(-1).draft;assert.equal(draft.cues[0].start,2);assert.equal(draft.cues.at(-1).end,8);
+  f.video.currentTime=1;key('KeyI');f.video.currentTime=9;key('KeyO');f.$('Estimate').onclick();await f.editor.flush();draft=f.drafts.at(-1).draft;assert.equal(draft.cues[0].start,1);assert.equal(draft.cues.at(-1).end,9);
+  f.video.currentTime=5;f.$('Dialog').onkeydown({code:'KeyI',target:{tagName:'INPUT'},preventDefault(){throw Error('typing must be ignored');},stopPropagation(){}});assert.equal(f.$('SectionStart').value,'00:00:01.000');
+  f.editor.close();await f.editor.flush();
+});

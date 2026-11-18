@@ -15,7 +15,7 @@ test('interpolation respects internal anchors and leaves an interlude between se
   const result=D.interpolate(source,0,4,0,100,100,'equal');
   assert.equal(result[0].end,20);assert.equal(result[1].start,20);assert.equal(result[1].end,30);assert.equal(result[2].start,40);assert.equal(result.at(-1).end,100);
   assert.equal(source[0].end,20);assert.equal(source[2].end,60);assert.equal(result[0].startLocked,true);assert.equal(result[4].endLocked,true);
-  assert.throws(()=>D.interpolate(result,0,4,1,100,100),/固定锚点/);
+  const remarked=D.interpolate(result,0,4,1,99,100);assert.equal(remarked[0].start,1);assert.equal(remarked[1].start,20);assert.equal(remarked[1].end,30);assert.equal(remarked[4].end,99);
 });
 test('range estimates leave outside cues intact and cannot create out of order or impossibly short cues',()=>{
   const source=input();const next=D.interpolate(source,1,2,3,8,10,'equal');assert.deepEqual(next[0],source[0]);assert.equal(next[1].start,3);assert.equal(next[1].end,5.5);assert.equal(next[2].end,8);

@@ -40,7 +40,9 @@
     if(!Number.isInteger(first) || !Number.isInteger(last) || first<0 || last<first || last>=source.length)throw Error('请选择有效的起句和止句。');
     if(!Number.isFinite(start) || !Number.isFinite(end) || start<0 || end>duration || end<=start)throw Error('请设置有效的段落开始和结束时间。');
     const cues=copy(source);
-    if(cues[first].startLocked && Math.abs(cues[first].start-start)>0.001 || cues[last].endLocked && Math.abs(cues[last].end-end)>0.001)throw Error('段落时间与固定锚点冲突，请调整段落时间或解除固定。');
+    // Explicit section marks redefine its outer boundaries. Interior anchors
+    // remain fixed, including gaps between separately fixed cue boundaries.
+    cues[first].start=start;cues[last].end=end;
     let runFirst=first,runStart=start;
     for(let i=first;i<=last;i++){
       if(cues[i].startLocked){
