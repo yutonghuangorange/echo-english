@@ -1,5 +1,6 @@
 (function(root){
   const effects = typeof module !== 'undefined' ? require('./vocal-effects.js') : root.EchoVocalEffects;
+  const pitch = typeof module !== 'undefined' ? require('./backing-pitch.js') : root.EchoBackingPitch;
   function filename({title,videoId,start,end,kind='recording',assembled=false,extension='webm'}){
     const clean=value=>String(value || '').normalize('NFC').replace(/[<>:"/\\|?*\u0000-\u001f\u007f]/g,' ').replace(/\s+/g,' ').replace(/^[. ]+|[. ]+$/g,'');
     let name=clean(title) || clean(`YouTube-${videoId || '录音'}`);
@@ -101,8 +102,21 @@
         channels=[processed.getChannelData(0),processed.getChannelData(1)];
       }
       if(backing){
-        check();const decoded=await context.decodeAudioData(await backing.blob.arrayBuffer());check();
-        await add(decoded,0,duration,origin-backing.start,Math.max(0,Math.min(2,volume)));
+        check();const original=await context.decodeAudioData(await backing.blob.arrayBuffer());check();
+        // Keep each chosen recording in its captured key, including its following gap.
+        const parts=[];
+        for(let i=0;i<timeline.segments.length;i++){
+          const segment=timeline.segments[i],semitones=pitch.normalize(segment.take.backingPitch);
+          const end=timeline.segments[i+1]?.start ?? duration,last=parts.at(-1);
+          if(last?.semitones===semitones)last.end=end;
+          else parts.push({start:i===0?0:segment.start,end,semitones});
+        }
+        for(const semitones of new Set(parts.map(part=>part.semitones))){
+          const decoded=await pitch.shiftBuffer(original,semitones,{active},env);check();
+          for(const part of parts.filter(part=>part.semitones===semitones)){
+            await add(decoded,part.start,part.end,origin+part.start-backing.start,Math.max(0,Math.min(2,volume)));
+          }
+        }
       }
       check();
       if(finalFade>0)for(let i=0;i<length;i++){

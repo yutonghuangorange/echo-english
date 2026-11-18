@@ -37,7 +37,7 @@ async function mount(storage, overrides = {}) {
   const context={document:doc,location:{href:'https://www.youtube.com/watch?v=video',pathname:'/watch'},indexedDB:{},URL,Blob,console,setTimeout,clearTimeout,cancelAnimationFrame(){},requestAnimationFrame(){},crypto:globalThis.crypto,
     window:{addEventListener(){},speechSynthesis:{cancel(){}}},chrome:{runtime:{onMessage:{addListener(){}}}},
     EchoSubtitleEditor:require('../extension/subtitle-editor.js'),EchoSubtitleEditorView:require('../extension/subtitle-editor-view.js'),EchoSettingsDialog:require('../extension/settings-dialog.js'),EchoPracticeTools:require('../extension/practice-tools.js'),EchoCaptionTracks:require('../extension/caption-tracks.js'),EchoPanelView:require('../extension/panel-view.js'),EchoTransport:require('../extension/transport.js'),EchoPlayback:require('../extension/playback.js'),EchoPlaybackControls:require('../extension/playback-controls.js'),
-    EchoVocalEffects:require('../extension/vocal-effects.js'),EchoAudioExport:require('../extension/audio-export.js'),EchoAssembly:require('../extension/assembly.js'),EchoPanelSize:require('../extension/panel-size.js'),EchoLanguages:require('../extension/languages.js'),EchoKaraoke:require('../extension/karaoke.js'),EchoStorage:{...require('../extension/storage.js'),createStorage:()=>storage},EchoSelection:require('../extension/selection.js'),EchoPractice:require('../extension/practice.js'),EchoDictionary:require('../extension/dictionary.js'),EchoSubtitles:require('../extension/subtitles.js'),EchoLibrary:require('../extension/library.js'),EchoModels:require('../extension/models.js'),EchoLiveMeter:require('../extension/live-meter.js'),EchoRecording:require('../extension/recording.js'),EchoMicrophone:require('../extension/microphone.js'),EchoAudioAnalysis:require('../extension/audio-analysis.js')};
+    EchoBackingPitch:require('../extension/backing-pitch.js'),EchoVocalEffects:require('../extension/vocal-effects.js'),EchoAudioExport:require('../extension/audio-export.js'),EchoAssembly:require('../extension/assembly.js'),EchoPanelSize:require('../extension/panel-size.js'),EchoLanguages:require('../extension/languages.js'),EchoKaraoke:require('../extension/karaoke.js'),EchoStorage:{...require('../extension/storage.js'),createStorage:()=>storage},EchoSelection:require('../extension/selection.js'),EchoPractice:require('../extension/practice.js'),EchoDictionary:require('../extension/dictionary.js'),EchoSubtitles:require('../extension/subtitles.js'),EchoLibrary:require('../extension/library.js'),EchoModels:require('../extension/models.js'),EchoLiveMeter:require('../extension/live-meter.js'),EchoRecording:require('../extension/recording.js'),EchoMicrophone:require('../extension/microphone.js'),EchoAudioAnalysis:require('../extension/audio-analysis.js')};
   Object.assign(context,overrides.globals || {});
   if(!overrides.globals?.EchoVocalEffects?.createPlayer)context.EchoVocalEffects={...context.EchoVocalEffects,async createPlayer(take){return new context.Audio(take.url);}};
   // Existing UI fixtures provide a caption transport; integration fixtures can
@@ -160,7 +160,7 @@ for(const activity of ['sing','speech'])for(const cached of [false,true])test(`$
 });
 
 test('movie dubbing monitors cached background but records dry speech and uses shared mixed export',async()=>{
-  const storage=createStorage(new IDBFactory()),listeners=new Map();let time=0,monitors=0,exported;
+  const storage=createStorage(new IDBFactory()),listeners=new Map();let time=0,monitors=0,exported,monitorOptions;
   await storage.saveBacking({key:'background',videoId:'video',start:0,end:60,createdAt:1,blob:new Blob(['music'])});
   const mic={getTracks:()=>[{stop(){}}]};
   const video={duration:60,muted:false,playbackRate:1,pause(){},get currentTime(){return time;},set currentTime(v){time=v;},
@@ -172,20 +172,22 @@ test('movie dubbing monitors cached background but records dry speech and uses s
   }
   const {nodes,downloads}=await mount(storage,{title:'电影片段 - YouTube',video,globals:{MediaRecorder,
     navigator:{mediaDevices:{getUserMedia:async({audio})=>{assert.equal(audio.echoCancellation,true);assert.equal(audio.autoGainControl,true);return mic;}}},
-    EchoKaraoke:{...require('../extension/karaoke.js'),async createMonitor(){monitors++;return {sync:async()=>{},pause(){},dispose(){},setVolume(){}};}},
+    EchoKaraoke:{...require('../extension/karaoke.js'),async createMonitor(options){monitors++;monitorOptions=options;return {sync:async()=>{},pause(){},dispose(){},setVolume(){}};}},
     EchoAudioExport:{...require('../extension/audio-export.js'),async render(options){exported=options;return {blob:new Blob(['mixed']),gaps:[]};}},
     requestAnimationFrame:fn=>setTimeout(fn,0),cancelAnimationFrame:clearTimeout,setTimeout:(fn,ms)=>setTimeout(fn,ms===30000?0:ms)}});
   nodes.get('recordingPlayback').value='backing';nodes.get('recordingPlayback').onchange();
+  nodes.get('backingPitch').value='3';nodes.get('backingPitch').oninput();
   await nodes.get('record').onclick();
   await waitUntil(()=>nodes.get('record').disabled===false);
   const [take]=await storage.listTakes('video');
-  assert.equal(await take.blob.text(),'dry movie voice');assert.equal(monitors,1);
+  assert.equal(await take.blob.text(),'dry movie voice');assert.equal(monitors,1);assert.equal(monitorOptions.pitchSemitones,3);assert.equal(take.backingPitch,3);
   assert.equal(take.kind,undefined);assert.equal(take.backingKey,'background');
   assert.equal(take.backingModel,'demucs-htdemucs');assert.equal(take.withBacking,undefined);
   assert.equal(nodes.get('takeMixDownload').hidden,false);assert.match(nodes.get('takeMixDownload').textContent,/背景音/);
   nodes.get('replayVocalVolume').value='1.4';nodes.get('replayBackingVolume').value='0.3';
+  nodes.get('backingPitchReset').onclick();
   await nodes.get('takeMixDownload').onclick();
-  assert.equal(exported.takes[0].id,take.id);assert.equal(exported.backing.key,'background');
+  assert.equal(exported.takes[0].id,take.id);assert.equal(exported.takes[0].backingPitch,3);assert.equal(exported.backing.key,'background');
   assert.equal(exported.vocalVolume,1.4);assert.equal(exported.volume,0.3);
   assert.match(downloads[0].download,/电影片段.*人声\+背景音.wav$/);
   assert.equal(nodes.get('songAssembly').hidden,true);
@@ -2517,4 +2519,19 @@ for(const stage of ['lead-in','recording'])test(`restart from ${stage} discards 
   nodes.get('stop').onclick();await Promise.all([first,restarted]);
   const takes=await storage.listTakes('video');assert.equal(takes.length,2);assert.ok(takes.some(take=>take.id==='kept-version'));
   assert.equal(nodes.get('restartRecording').hidden,true);(await storage.ready).close();
+});
+
+test('backing key controls save per-video semitones, bound changes and restore after reload',async()=>{
+  const storage=createStorage(new IDBFactory());
+  let {nodes}=await mount(storage);
+  nodes.get('backingPitch').value='3';nodes.get('backingPitch').oninput();
+  await waitUntil(()=>nodes.get('backingPitchValue').textContent==='+3 半音');
+  await new Promise(resolve=>setTimeout(resolve,10));
+  assert.equal((await storage.getSession('video')).backingPitch,3);
+  ({nodes}=await mount(storage));assert.equal(Number(nodes.get('backingPitch').value),3);
+  nodes.get('backingPitchUp').onclick();assert.equal(Number(nodes.get('backingPitch').value),4);
+  nodes.get('backingPitch').value='99';nodes.get('backingPitch').oninput();assert.equal(Number(nodes.get('backingPitch').value),6);
+  assert.equal(nodes.get('backingPitchUp').disabled,true);
+  nodes.get('backingPitchReset').onclick();assert.equal(nodes.get('backingPitchValue').textContent,'原调');
+  await new Promise(resolve=>setTimeout(resolve,10));(await storage.ready).close();
 });
