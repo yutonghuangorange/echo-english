@@ -2584,26 +2584,53 @@ test('stopping a lead-in restores volume immediately even while video.play is pe
 });
 
 
-for(const source of ['backing','original'])test(`skip intro and interlude with ${source} saves aligned vocal pieces without recording the skipped gaps`,async()=>{
-  const storage=createStorage(new IDBFactory()),video=leadInVideo({hold:true});let requests=0;
+for(const source of ['backing','original'])for(const seconds of [0,3,10])test(`skip intro and interlude with ${source} prepares ${seconds} seconds before lyrics and saves aligned vocal pieces`,async()=>{
+  const storage=createStorage(new IDBFactory()),video=leadInVideo({hold:true});let requests=0,captures=0;
   const cues=[{start:0,end:5,text:'[Music]'},{start:5,end:8,text:'First lyric'},{start:8,end:12,text:'间奏'},{start:12,end:16,text:'Second lyric'}];
-  await storage.saveSession({videoId:'video',activity:'sing',scopes:{sing:'whole'},recordingPlaybackPreferences:{speech:'silent',sing:source},start:0,end:60,speed:'0.5',cues,leadInMode:'seconds',leadInSeconds:3});
+  await storage.saveSession({videoId:'video',activity:'sing',scopes:{sing:'whole'},recordingPlaybackPreferences:{speech:'silent',sing:source},start:0,end:60,speed:'0.5',cues,leadInMode:'previous',leadInSeconds:seconds});
   await storage.saveBacking({key:'music',videoId:'video',start:0,end:60,createdAt:1,blob:new Blob(['music'])});
-  class MediaRecorder{static isTypeSupported(){return true;}constructor(){this.state='inactive';this.mimeType='audio/webm';}start(){this.state='recording';}stop(){this.state='inactive';this.ondataavailable({data:new Blob(['dry-voice'])});queueMicrotask(()=>this.onstop());}}
+  class MediaRecorder{static isTypeSupported(){return true;}constructor(){this.state='inactive';this.mimeType='audio/webm';}start(){captures++;this.state='recording';}stop(){this.state='inactive';this.ondataavailable({data:new Blob(['dry-voice'])});queueMicrotask(()=>this.onstop());}}
   const {nodes}=await mount(storage,{video,globals:{MediaRecorder,navigator:{mediaDevices:{async getUserMedia(){requests++;return {getTracks:()=>[{stop(){}}]};}}},EchoKaraoke:{...require('../extension/karaoke.js'),async createMonitor(){return {sync:async()=>{},pause(){},dispose(){},setVolume(){}};}},requestAnimationFrame:fn=>setTimeout(fn,1),cancelAnimationFrame:clearTimeout}});
   const first=nodes.get('record').onclick();await waitUntil(()=>nodes.get('panel').dataset.mode==='recording' && video.plays.length===1);
   assert.equal(nodes.get('skipInstrumental').disabled,false);assert.match(nodes.get('skipInstrumental').textContent,/前奏/);
   const intro=nodes.get('skipInstrumental').onclick();await waitUntil(()=>requests===2 && video.plays.length===2);
-  assert.equal(video.currentTime,5);assert.equal((await storage.listTakes('video')).length,0);assert.equal(video.playbackRate,1);
+  assert.equal(video.currentTime,Math.max(0,5-seconds));assert.equal((await storage.listTakes('video')).length,0);assert.equal(video.playbackRate,1);
+  if(seconds){
+    assert.equal(nodes.get('panel').dataset.mode,'lead-in');assert.equal(captures,1);
+    video.advance(5);await waitUntil(()=>nodes.get('panel').dataset.mode==='recording' && captures===2);
+  }
+  await waitUntil(()=>captures===2 && video.plays.length===(seconds?3:2));
   video.advance(6);assert.equal(nodes.get('skipInstrumental').disabled,true);
   video.advance(9);assert.equal(nodes.get('skipInstrumental').disabled,false);assert.match(nodes.get('skipInstrumental').textContent,/间奏/);
-  const middle=nodes.get('skipInstrumental').onclick();await waitUntil(()=>requests===3 && video.plays.length===3);
-  assert.equal(video.currentTime,12);video.advance(15);nodes.get('stop').onclick();await Promise.all([first,intro,middle]);
+  const beforeMiddle=video.plays.length;
+  const middle=nodes.get('skipInstrumental').onclick();await waitUntil(()=>requests===3 && video.plays.length===beforeMiddle+1);
+  assert.equal(video.currentTime,Math.max(0,12-seconds));
+  if(seconds){
+    assert.equal(nodes.get('panel').dataset.mode,'lead-in');assert.equal(captures,2);
+    video.advance(12);await waitUntil(()=>nodes.get('panel').dataset.mode==='recording' && captures===3);
+  }
+  await waitUntil(()=>captures===3 && video.plays.length===beforeMiddle+(seconds?2:1));video.advance(15);nodes.get('stop').onclick();await Promise.all([first,intro,middle]);
   const takes=(await storage.listTakes('video')).sort((a,b)=>a.start-b.start);assert.equal(takes.length,2);
   assert.deepEqual(takes.map(t=>[t.start,t.end,t.capturedEnd,t.speed]),[[5,9,9,1],[12,60,15,1]]);
   assert.equal(takes[0].effects,undefined);assert.ok(takes.every(t=>t.backingKey==='music' && t.capture==='vocal'));
   const plan=require('../extension/audio-export.js').plan(takes,60);assert.deepEqual(plan.segments.map(s=>[s.start,s.end]),[[5,9],[12,15]]);
   assert.equal(nodes.get('skipInstrumental').hidden,true);(await storage.ready).close();
+});
+
+test('restarting a skipped lyric keeps its N-second preparation instead of the previous-cue setting',async()=>{
+  const storage=createStorage(new IDBFactory()),video=leadInVideo({hold:true});let captures=0;
+  await storage.saveSession({videoId:'video',activity:'sing',scopes:{sing:'whole'},recordingPlaybackPreferences:{sing:'silent'},cues:[{start:5,end:10,text:'First lyric'}],leadInMode:'previous',leadInSeconds:3});
+  class MediaRecorder{static isTypeSupported(){return true;}constructor(){this.state='inactive';this.mimeType='audio/webm';}start(){captures++;this.state='recording';}stop(){this.state='inactive';this.ondataavailable({data:new Blob(['voice'])});queueMicrotask(()=>this.onstop());}}
+  const {nodes}=await mount(storage,{video,globals:{MediaRecorder,navigator:{mediaDevices:{async getUserMedia(){return {getTracks:()=>[{stop(){}}]};}}},requestAnimationFrame:fn=>setTimeout(fn,1),cancelAnimationFrame:clearTimeout}});
+  const recording=nodes.get('record').onclick();await waitUntil(()=>video.plays.length===1);
+  const skipping=nodes.get('skipInstrumental').onclick();await waitUntil(()=>video.plays.length===2);
+  assert.equal(video.currentTime,2);assert.equal(captures,1);
+  const restarting=nodes.get('restartRecording').onclick();await waitUntil(()=>video.plays.length===3);
+  assert.equal(video.currentTime,2);assert.equal(nodes.get('panel').dataset.mode,'lead-in');assert.equal(captures,1);
+  video.advance(5);await waitUntil(()=>video.plays.length===4 && captures===2);
+  video.advance(7);nodes.get('stop').onclick();await Promise.all([recording,skipping,restarting]);
+  const takes=await storage.listTakes('video');assert.equal(takes.length,1);assert.equal(takes[0].start,5);assert.equal(takes[0].capturedEnd,7);
+  (await storage.ready).close();
 });
 
 test('interlude skip stops on storage failure and leaves the unsaved vocal available for recovery',async()=>{

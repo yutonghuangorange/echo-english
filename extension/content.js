@@ -793,8 +793,7 @@
     if(!completed || token!==generation)throw Error('操作已停止。');
   }
   function leadInStart(r){return EchoPractice.leadInStart(r.start,$('leadInSeconds').value,{mode:$('leadInMode').value,cues});}
-  async function playRecordingLeadIn(v,r,token){
-    const start=leadInStart(r);
+  async function playRecordingLeadIn(v,r,token,start){
     if(start>=r.start)return false;
     mode='lead-in';controls();v.muted=false;v.playbackRate=r.speed;
     await seek(v,start,token);
@@ -1501,18 +1500,19 @@
       return false;
     }
   }
-  async function record({token = ++generation, keepBusy = false,continuation=null,skipLeadIn=false} = {}) {
+  async function record({token = ++generation, keepBusy = false,continuation=null,leadInStartOverride=null} = {}) {
     closeWord();
     const v=video(),resolved=EchoSelection.resolve({...selectionInput(v.duration),...(continuation?{scope:'clip',index:-1,start:continuation.start,end:continuation.end}:{}),speed:1});
     const selection=continuation?{...resolved,label:`分段录唱 · ${recordingTime(continuation.start)}–${recordingTime(continuation.end)}`}:resolved;
     const r=selection.range,id=videoId,singingTake=isSinging();
+    const preparationStart=leadInStartOverride ?? leadInStart(r);
     const source=recordingPlayback(),outputBacking=source==='silent'?null:backingFor(r);
     const ready=source==='backing'?outputBacking:null;
     if(usesBacking() && !ready)throw Error(`请先为当前片段准备${backingName()}，或在练习设置中选择原声或不播放参考音。`);
     deletedTake=null;$('undoDelete').hidden=true;
     const gainKey=singingTake?'sing':'speech',constraints=microphoneConstraints(singingTake);
     const active=()=>token===generation && id===videoId;
-    const attempt={media:v,range:r,cues:cues.filter(c=>c.end>r.start && c.start<r.end && EchoPractice.isLyricCue(c)),continuation,continuing:false,cutAt:null,saved:false,value:null};
+    const attempt={media:v,range:r,cues:cues.filter(c=>c.end>r.start && c.start<r.end && EchoPractice.isLyricCue(c)),continuation,leadInStartOverride,continuing:false,cutAt:null,saved:false,value:null};
     let starting=true,vocalOffset=0,capturedEnd=r.start;
     const observePosition=()=>{if(Number.isFinite(v.currentTime))capturedEnd=Math.max(capturedEnd,Math.min(r.end,v.currentTime));updateRecordingSkip();};
     const onWaiting=()=>session.pause();
@@ -1523,7 +1523,7 @@
     };
     const session=EchoRecording.create({constraints,quality:recordingQuality,sidetone:sidetoneEnabled,sidetoneVolume,sidetoneMode,sidetoneReverb:monitoringEffects(),gainDb:gainPreferences[gainKey]?0:manualGainPreferences[gainKey],active,
       microphone:EchoMicrophone,env:globalThis,
-      createMonitor:ready?()=>EchoKaraoke.createMonitor({blob:ready.blob,video:v,start:ready.start,speed:r.speed,volume:Number($('backingVolume').value),initialPosition:r.start,fadeInSeconds:!skipLeadIn && leadInStart(r)<r.start?0.04:0}):null,
+      createMonitor:ready?()=>EchoKaraoke.createMonitor({blob:ready.blob,video:v,start:ready.start,speed:r.speed,volume:Number($('backingVolume').value),initialPosition:r.start,fadeInSeconds:preparationStart<r.start?0.04:0}):null,
       createMeter:input=>EchoLiveMeter.start({stream:input,container:$('liveMeter'),canvas:$('liveMeterCanvas'),value:$('liveMeterValue'),bar:$('liveMeterBar')}),
       onError:error=>{if(recordingSession===session && id===videoId){stop();status(error.message);}},
       onComplete:async result=>{
@@ -1550,8 +1550,8 @@
     if(!await session.prepare())return false;
     if(!active())return false;
     saveVideo(v);v.playbackRate=r.speed;
-    if(!skipLeadIn && leadInStart(r)<r.start)session.startMeter();
-    if(!skipLeadIn)await playRecordingLeadIn(v,r,token);
+    if(preparationStart<r.start)session.startMeter();
+    await playRecordingLeadIn(v,r,token,preparationStart);
     if(!active())return false;
     v.muted=source!=='original';
     // The lead-in normally pauses at this position already. Re-seeking even
@@ -2010,15 +2010,15 @@
     }
     const values=await storage.listTakes(id);if(token!==generation || id!==videoId)return;
     videoHistory=values;renderHistory();
-    await record({token,continuation:{start:target,end:attempt.range.end},skipLeadIn:true});
+    await record({token,continuation:{start:target,end:attempt.range.end},leadInStartOverride:Math.max(0,target-EchoPractice.leadInSeconds($('leadInSeconds').value))});
   });
   $('restartRecording').onclick=guarded(async()=>{
     if(!['recording','lead-in'].includes(mode) || !recordingSession)return;
-    const previous=recordingSession,continuation=recordingAttempt?.continuation,token=++generation,id=videoId;
+    const previous=recordingSession,continuation=recordingAttempt?.continuation,leadInStartOverride=recordingAttempt?.leadInStartOverride,token=++generation,id=videoId;
     cancelPlayback();restoreVideo();mode='restarting';controls();status('正在重新准备录音…');
     await previous.discard();
     if(token!==generation || id!==videoId || mode!=='restarting')return;
-    await record({token,continuation});
+    await record({token,continuation,leadInStartOverride});
   });
   $('original').onclick = guarded(async () => { const r = selectedRange(), token = ++generation; mode = 'original'; controls(); status('正在播放原声…'); await original(r, token); if (token === generation) { finish();if($('practiceScope').value==='clip')updateCaption();status('原声播放完成。'); } });
   $('record').onclick = guarded(() => {
