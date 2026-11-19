@@ -2277,11 +2277,14 @@ test('editing alignment and reverb during replay updates the same player and sav
 });
 
 test('refresh reconnects a pending backing task, restores progress, and loads its result without starting again',async()=>{
-  const storage=createStorage(new IDBFactory()),id='a'.repeat(32),values=new Map();let polls=0,starts=0;
+  const storage=createStorage(new IDBFactory()),id='a'.repeat(32),values=new Map();let polls=0,starts=0,advancePoll;
   values.set('echo-backing-job:video',JSON.stringify({id,videoId:'video',start:10,end:20,model:'demucs-htdemucs',quality:'standard'}));
   const job={id,videoId:'video',start:10,end:20};
   const {nodes}=await mount(storage,{video:{duration:60,pause(){}},globals:{
-    setTimeout:(fn,ms)=>setTimeout(fn,ms===1500?150:ms),
+    setTimeout(fn,ms){
+      if(ms===1500){advancePoll=fn;return 0;}
+      return setTimeout(fn,ms);
+    },
     window:{localStorage:{getItem:key=>values.get(key),setItem:(key,value)=>values.set(key,value),removeItem:key=>values.delete(key)},addEventListener(){}},
     chrome:{runtime:{onMessage:{addListener(){}},async sendMessage(message){
       if(message.action==='start')starts++;
@@ -2292,6 +2295,7 @@ test('refresh reconnects a pending backing task, restores progress, and loads it
   }});
   await waitUntil(()=>nodes.get('panel').dataset.mode==='separating');
   assert.equal(nodes.get('generationProgress').hidden,false);assert.equal(nodes.get('generationProgress').value,43);
+  assert.equal(typeof advancePoll,'function');advancePoll();
   await waitUntil(()=>nodes.get('panel').dataset.mode==='idle' && values.get('echo-backing-job:video')===undefined);
   assert.equal(starts,0);const backings=await storage.listBackings('video');
   assert.equal(backings.length,1);assert.equal(backings[0].start,10);assert.equal(backings[0].end,20);
@@ -2534,4 +2538,24 @@ test('backing key controls save per-video semitones, bound changes and restore a
   assert.equal(nodes.get('backingPitchUp').disabled,true);
   nodes.get('backingPitchReset').onclick();assert.equal(nodes.get('backingPitchValue').textContent,'原调');
   await new Promise(resolve=>setTimeout(resolve,10));(await storage.ready).close();
+});
+
+test('custom assembly previews and downloads only its range using a covering partial backing',async()=>{
+  const storage=createStorage(new IDBFactory()),requests=[];
+  await storage.saveTake({id:'vocal',videoId:'video',kind:'song',capture:'vocal',cueKey:'same',label:'vocal',start:0,end:10,speed:1,createdAt:1,blob:new Blob(['voice'])});
+  await storage.saveBacking({key:'partial-backing',videoId:'video',start:3,end:8,createdAt:1,blob:new Blob(['music'])});
+  const {nodes,downloads}=await mount(storage,{video:{duration:20,pause(){}},globals:{setTimeout:(fn,ms)=>setTimeout(fn,ms===30000?0:ms),EchoAudioExport:{...require('../extension/audio-export.js'),async render(options){requests.push(options);return {blob:new Blob(['clip']),gaps:[]};}}}});
+  nodes.get('assemblyType').value='mixed';await nodes.get('assembleSong').onclick();
+  nodes.get('assemblyScope').value='custom';nodes.get('assemblyStart').value='3';nodes.get('assemblyEnd').value='8';nodes.get('assemblyScope').onchange();
+  assert.equal(nodes.get('assemblyCustomRange').hidden,false);
+  assert.match(nodes.get('assemblyEditorInfo').textContent,/5.0 \/ 5.0/);
+  await nodes.get('assemblyPreview').onclick();await nodes.get('assemblyDownload').onclick();
+  assert.equal(requests.length,2);
+  for(const request of requests){assert.equal(request.origin,3);assert.equal(request.duration,5);assert.equal(request.backing.key,'partial-backing');assert.deepEqual(request.selection.map(part=>[part.start,part.end,part.takeId]),[[3,8,'vocal']]);}
+  assert.match(downloads[0].download,/00m03.0s-00m08.0s_片段合成/);
+  nodes.get('assemblyStart').value='9';nodes.get('assemblyStart').onchange();assert.equal(nodes.get('assemblyDownload').disabled,true);assert.match(nodes.get('assemblyRangeHint').textContent,/起止时间/);
+  await nodes.get('assemblyDownload').onclick();assert.equal(requests.length,2);
+  nodes.get('assemblyStart').value='3';nodes.get('assemblyStart').onchange();assert.equal(nodes.get('assemblyDownload').disabled,false);
+  nodes.get('assemblyScope').value='whole';nodes.get('assemblyScope').onchange();assert.equal(nodes.get('assemblyCustomRange').hidden,true);assert.match(nodes.get('assemblyEditorInfo').textContent,/10.0 \/ 20.0/);
+  nodes.get('closeAssembly').onclick();(await storage.ready).close();
 });

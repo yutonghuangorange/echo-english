@@ -20,3 +20,17 @@ test('disabled choices stay excluded across newly added boundaries, and slow tak
   assert(rows.every(r=>r.candidates.every(t=>t.id!=='slow')));
   assert.throws(()=>buildRows([takes[2]],10,[],api),/1×/);
 });
+
+
+test('custom export clips selected versions at both boundaries without changing saved choices',()=>{
+  const {rangeSelection,choices}=require('../extension/assembly.js');
+  const takes=[voice('a',0,10,1),voice('b',5,15,2)];
+  const rows=buildRows(takes,20,[],api),before=choices(rows);
+  const selected=rangeSelection(rows,20,3,12);
+  assert.deepEqual(selected,[{start:3,end:5,takeId:'a'},{start:5,end:10,takeId:'b'},{start:10,end:12,takeId:'b'}]);
+  assert.deepEqual(choices(rows),before);
+  const shifted=takes.map(t=>({...t,start:t.start-3,end:t.end-3}));
+  const plan=api.selectionPlan(shifted,9,selected.map(part=>({...part,start:part.start-3,end:part.end-3})));
+  assert.equal(plan.duration,9);assert.equal(plan.segments[0].start,0);assert.equal(plan.segments.at(-1).end,9);
+  for(const [start,end] of [[-1,5],[4,4],[5,4],[0,21],[NaN,10]])assert.throws(()=>rangeSelection(rows,20,start,end),/起止时间/);
+});
