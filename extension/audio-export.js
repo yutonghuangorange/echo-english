@@ -1,6 +1,6 @@
 (function(root){
   const effects = typeof module !== 'undefined' ? require('./vocal-effects.js') : root.EchoVocalEffects;
-  function filename({title,videoId,start,end,kind='recording',assembled=false,extension='webm'}){
+  function filename({title,videoId,start,end,kind='recording',assembled=false,partial=false,extension='webm'}){
     const clean=value=>String(value || '').normalize('NFC').replace(/[<>:"/\\|?*\u0000-\u001f\u007f]/g,' ').replace(/\s+/g,' ').replace(/^[. ]+|[. ]+$/g,'');
     let name=clean(title) || clean(`YouTube-${videoId || '录音'}`);
     // Bound UTF-8 bytes as well as characters for macOS/Linux file systems.
@@ -10,7 +10,7 @@
     const time=value=>{const tenths=Math.round(Math.max(0,value)*10),minutes=Math.floor(tenths/600),seconds=((tenths%600)/10).toFixed(1).padStart(4,'0');return `${String(minutes).padStart(2,'0')}m${seconds}s`;};
     const range=Number.isFinite(start) && Number.isFinite(end)?`_${time(start)}-${time(end)}`:'';
     const type=({subtitles:'字幕',vocals:'人声',mixed:'人声+伴奏',background:'人声+背景音',dubbing:'配音',recording:'录音'})[kind] || '录音';
-    return `${name}${range}${assembled?'_整首合成':''}_${type}.${['wav','srt','vtt'].includes(extension)?extension:'webm'}`;
+    return `${name}${range}${assembled?(partial?'_片段合成':'_整首合成'):''}_${type}.${['wav','srt','vtt'].includes(extension)?extension:'webm'}`;
   }
   function plan(takes,duration){
     if(!Number.isFinite(duration) || duration<=0 || duration>600)throw Error('合成范围需在 10 分钟内。');

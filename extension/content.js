@@ -218,7 +218,7 @@
       if(options.withMusic && !backing)throw Error('请先生成覆盖试听或下载范围的伴奏；混合整首需整首伴奏。');
       return EchoAudioExport.render({takes:context.takes,selection:options.selection,duration:options.duration,origin:options.origin,backing,...context.mix,active});
     },
-    onDownload:blob=>{if(assemblyContext?.id===videoId)downloadAudio(blob,EchoAudioExport.filename({title:assemblyContext.title,videoId,start:0,end:assemblyContext.duration,assembled:true,kind:$('assemblyType').value==='mixed'?'mixed':'vocals',extension:'wav'}));}
+    onDownload:(blob,range)=>{if(assemblyContext?.id===videoId)downloadAudio(blob,EchoAudioExport.filename({title:assemblyContext.title,videoId,start:range.origin,end:range.origin+range.duration,assembled:true,partial:range.partial,kind:$('assemblyType').value==='mixed'?'mixed':'vocals',extension:'wav'}));}
   });
   $('openLibrary').onclick=()=>{if(mode!=='idle')return;saveProgress();return library.open();};
   let videoHistory = [], historyRequest = 0, restoring = true, progressWarning = false, deletedTake = null;
