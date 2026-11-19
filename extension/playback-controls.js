@@ -44,7 +44,7 @@
       try{owner.setSpeed(speed);onSpeed(speed);render();}catch(error){onError(error);}
     };
     render();
-    return {set,clear,render,get paused(){return paused;}};
+    return {set,clear,render,resume:async()=>{if(!paused)return false;await pauseButton.onclick();return true;},get paused(){return paused;}};
   }
   const api={attach};if(typeof module!=='undefined')module.exports=api;else root.EchoPlaybackControls=api;
 })(globalThis);

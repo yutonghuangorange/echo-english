@@ -37,7 +37,7 @@
   for(const id of ['pages','scopeControls','clipBounds','singDetails'])practiceLayoutObserver?.observe($(id));
 
   let cues = [], index = -1, take = null, mode = 'idle', generation = 0,clipRangeAdjusted=false;
-  let recordingSession = null, audio = null, savedVideo = null;
+  let recordingSession = null, audio = null, savedVideo = null,originalNavigation=null;
   const playback = EchoPlayback.create();
   const playbackActions=EchoPlaybackControls.attach({
     pauseButton:$('pausePlayback'),speedControl:$('playbackSpeedControl'),speedInput:$('playbackSpeed'),volumeControl:$('originalVolumeControl'),volumeInput:$('originalVolume'),volumeValue:$('originalVolumeValue'),clock:playback,
@@ -720,8 +720,9 @@
     root.querySelectorAll('.version-choice').forEach(b=>b.disabled=busy && mode!=='replay');
     root.querySelectorAll('.history-delete').forEach(b=>b.disabled=busy && mode!=='replay');
     root.querySelectorAll('.history-row').forEach(b=>b.disabled=busy && mode!=='replay');
-    root.querySelectorAll('.word').forEach(b => b.disabled = busy);
-    root.querySelectorAll('.cue').forEach(b => b.disabled = busy);
+    root.querySelectorAll('.word').forEach(b => {b.disabled=busy && mode!=='original';b.title=mode==='original'?'跳到本句开头':'查看发音和释义';});
+    root.querySelectorAll('.cue').forEach(b => b.disabled = busy && mode!=='original');
+    renderCaptionNavigation();
     renderMixControls();
     if(busy && focused?.disabled && !$('stop').disabled){
       returnFocus ||= focused;($('recordingDialog').open?$(mode==='replay'?'recordingDialogPreview':'recordingDialogStop'):settings.isOpen()?$('settingsStop'):$('stop')).focus();
@@ -735,7 +736,7 @@
     if (savedVideo) { const { v, muted, rate } = savedVideo; v.pause(); v.muted = muted; v.playbackRate = rate; savedVideo = null; }
   }
   function cancelPlayback() {
-    playbackActions.clear();
+    originalNavigation=null;playbackActions.clear();
     recordingSession?.pauseFeedback();
     transport.hide();
     replayMonitor?.dispose();replayMonitor=null;
@@ -826,8 +827,25 @@
           v.currentTime=r.start+elapsed*r.speed;
           playback.timeout(()=>{v.pause();resolve();},Math.max(0,(r.end-v.currentTime)/r.speed)*1000+15000);
         });
-        playback.watchEnd(v, r.end, () => { v.pause(); resolve(); });
-        playback.timeout(() => { v.pause(); resolve(); }, (r.end - r.start) / r.speed * 1000 + 15000);
+        const watch=()=>{
+          playback.watchEnd(v,r.end,()=>{v.pause();resolve();});
+          playback.timeout(()=>{v.pause();resolve();},Math.max(0,(r.end-v.currentTime)/r.speed)*1000+15000);
+        };
+        originalNavigation={jump:i=>guarded(async()=>{
+          if(token!==generation || mode!=='original' || !cues[i])return;
+          const cue=cues[i];index=i;
+          if($('practiceScope').value==='clip' || cue.start<r.start || cue.start>=r.end){
+            const range=EchoSelection.clipRange(cues,i,cue.start,cue.end);
+            r.start=range.start;r.end=range.end;clipRangeAdjusted=false;
+            $('practiceScope').value='clip';scopePreferences[activity]='clip';
+            $('start').value=String(r.start);$('end').value=String(r.end);
+          }
+          v.currentTime=cue.start;watch();
+          updateCaption();renderCueList();chooseCurrentTake();updateSummaries();saveProgress();
+          const resumed=await playbackActions.resume();
+          if(token===generation && !resumed)await v.play();
+        })()};
+        watch();
       });
     } while(token===generation && mode==='original' && $('originalLoop').checked);
     if (token === generation) { cancelPlayback(); restoreVideo(); }
@@ -1763,8 +1781,8 @@
     const query=$('transcriptSearch').value.trim().toLowerCase();let matches=0;
     cues.forEach((cue,i)=>{
       const text=captionText(cue);if(query && !text.toLowerCase().includes(query))return;
-      matches++;const button=document.createElement('button');button.className='cue';button.textContent=`${Math.floor(cue.start/60)}:${String(Math.floor(cue.start%60)).padStart(2,'0')}  ${text}`;
-      button.onclick=()=>select(i,{navigate:true,focusRecord:true});button.disabled=mode!=='idle';button.classList.toggle('active',i===index);$('list').append(button);
+      matches++;const button=document.createElement('button');button.className='cue';button.title=mode==='original'?'跳到本句开头继续听':'选择这句练习';button.textContent=`${Math.floor(cue.start/60)}:${String(Math.floor(cue.start%60)).padStart(2,'0')}  ${text}`;
+      button.onclick=()=>select(i,{navigate:true,focusRecord:true});button.disabled=!['idle','original'].includes(mode);button.classList.toggle('active',i===index);$('list').append(button);
     });
     $('transcriptSearch').hidden=!cues.length;$('transcriptNoMatches').hidden=!cues.length || matches>0;
   }
@@ -1796,6 +1814,20 @@
       $('captionPhase').textContent=`即将开始 · ${seconds} 秒`;
     }
   }
+  function renderCaptionNavigation(){
+    for(const [id,offset] of [['captionPrevious',-1],['captionNext',1]]){
+      const node=$(id),enabled=mode==='original' && !!cues[displayedCaptionIndex+offset];
+      node.setAttribute('role','button');node.setAttribute('aria-disabled',String(!enabled));node.tabIndex=enabled?0:-1;
+      node.title=enabled?'跳到本句开头':'';
+    }
+    const caption=$('caption'),clickable=mode==='original' && contentLanguage()!=='en' && !!cues[displayedCaptionIndex];
+    if(clickable)caption.setAttribute('role','button');else caption.removeAttribute('role');
+    caption.tabIndex=clickable?0:-1;
+  }
+  for(const [id,offset] of [['captionPrevious',-1],['captionNext',1],['caption',0]]){
+    $(id).onclick=()=>{if(mode==='original')return originalNavigation?.jump(displayedCaptionIndex+offset);};
+    $(id).onkeydown=event=>{if(mode==='original' && ['Enter',' '].includes(event.key)){event.preventDefault();event.stopPropagation();void originalNavigation?.jump(displayedCaptionIndex+offset);}};
+  }
   function renderCaptionContext(shownIndex){
     const hidden=$('hideText').checked || shownIndex<0;
     $('captionPrevious').textContent=hidden?'':captionText(cues[shownIndex-1]);
@@ -1803,9 +1835,9 @@
     $('captionPrevious').hidden=hidden || !cues[shownIndex-1];$('captionNext').hidden=hidden || !cues[shownIndex+1];
     const container=$('captionLater');container.replaceChildren();
     if(!hidden)for(let i=shownIndex+2;i<Math.min(cues.length,shownIndex+captionContextCount+1);i++){
-      const line=document.createElement('div');line.className='caption-surrounding-line';line.textContent=captionText(cues[i]);container.append(line);
+      const line=document.createElement('button');line.className='caption-surrounding-line caption-jump';line.textContent=captionText(cues[i]);line.disabled=mode!=='original';line.onclick=()=>originalNavigation?.jump(i);line.title='跳到本句开头';container.append(line);
     }
-    container.hidden=hidden || !container.children.length;
+    container.hidden=hidden || !container.children.length;renderCaptionNavigation();
   }
 
   function renderCaption(shownIndex, phase='selected', animate=false) {
@@ -1822,7 +1854,7 @@
       for(const part of text.split(/([A-Za-z]+(?:['’‘-][A-Za-z]+)*)/)){
         if(contentLanguage()==='en' && EchoDictionary.normalize(part)){
           const button=document.createElement('button');button.className='word';button.textContent=part;
-          button.title='查看发音和释义';button.onclick=()=>void lookupWord(part);button.disabled=mode!=='idle';$('caption').append(button);
+          button.title=mode==='original'?'播放本句开头':'查看发音和释义';button.onclick=event=>{if(mode==='original'){event?.stopPropagation();return originalNavigation?.jump(shownIndex);}void lookupWord(part);};button.disabled=!['idle','original'].includes(mode);$('caption').append(button);
         }else $('caption').append(document.createTextNode(part));
       }
     }
@@ -1859,6 +1891,7 @@
     if(event.target?.matches?.('video.html5-main-video')){attachCaptionVideo(event.target);syncCaptions(true);}
   },true);
   function select(i,{navigate=false,focusRecord=false}={}) {
+    if(mode==='original' && cues[i])return originalNavigation?.jump(i);
     if (mode !== 'idle' || !cues[i]) return;
     index = i;clipRangeAdjusted=false; if(isParagraph())syncParagraphBounds();else{const range=EchoSelection.clipRange(cues,i,cues[i].start,cues[i].end);$('start').value = range.start.toFixed(2); $('end').value = range.end.toFixed(2);}
     if(navigate && !isParagraph()){$('practiceScope').value='clip';karaokeIssue='';}

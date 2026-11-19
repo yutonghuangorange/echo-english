@@ -2539,3 +2539,33 @@ test('custom assembly previews and downloads only its range using a covering par
   nodes.get('assemblyScope').value='whole';nodes.get('assemblyScope').onchange();assert.equal(nodes.get('assemblyCustomRange').hidden,true);assert.match(nodes.get('assemblyEditorInfo').textContent,/10.0 \/ 20.0/);
   nodes.get('closeAssembly').onclick();(await storage.ready).close();
 });
+
+
+test('clicking lyrics during whole original playback seeks and resumes without changing range, speed or volume',async()=>{
+  const storage=createStorage(new IDBFactory()),video=leadInVideo({hold:true});video.volume=.4;
+  const cues=[{start:0,end:5,text:'First line'},{start:10,end:15,text:'Second line'},{start:20,end:25,text:'Third line'}];
+  await storage.saveSession({videoId:'video',activity:'sing',scopes:{sing:'whole'},start:0,end:30,index:0,speed:'0.5',cues,leadInMode:'none'});
+  const {nodes}=await mount(storage,{video,globals:{requestAnimationFrame:fn=>setTimeout(fn,1),cancelAnimationFrame:clearTimeout}});
+  const pending=nodes.get('original').onclick();await waitUntil(()=>!nodes.get('originalVolumeControl').hidden);
+  nodes.get('originalLoop').checked=true;
+  await nodes.get('pausePlayback').onclick();assert.equal(nodes.get('pausePlayback').textContent,'▶ 继续');
+  await nodes.get('captionNext').onclick();assert.equal(video.currentTime,10);assert.equal(nodes.get('position').textContent,'2 / 3');
+  assert.equal(nodes.get('pausePlayback').textContent,'Ⅱ 暂停');assert.equal(video.playbackRate,.5);assert.equal(video.volume,.4);
+  assert.equal(nodes.get('practiceScope').value,'whole');assert.equal(nodes.get('originalLoop').checked,true);
+  const row=nodes.get('list').children[2];assert.equal(row.disabled,false);await row.onclick();assert.equal(video.currentTime,20);assert.equal(nodes.get('position').textContent,'3 / 3');
+  nodes.get('stop').onclick();await pending;(await storage.ready).close();
+});
+
+test('clicking a different lyric in clip playback updates the end boundary instead of stopping at the old end',async()=>{
+  const storage=createStorage(new IDBFactory()),video=leadInVideo({hold:true});
+  await storage.saveSession({videoId:'video',start:0,end:5,index:0,speed:'1',cues:[{start:0,end:5,text:'First line'},{start:5,end:10,text:'Second line'}],leadInMode:'none'});
+  const {nodes}=await mount(storage,{video,globals:{requestAnimationFrame:fn=>setTimeout(fn,1),cancelAnimationFrame:clearTimeout}});
+  const pending=nodes.get('original').onclick();await waitUntil(()=>!nodes.get('originalVolumeControl').hidden);
+  await nodes.get('list').children[1].onclick();assert.equal(video.currentTime,5);
+  assert.equal(Number(nodes.get('start').value),5);assert.equal(Number(nodes.get('end').value),10);
+  await new Promise(resolve=>setTimeout(resolve,5));assert.equal(nodes.get('panel').dataset.mode,'original');
+  let stopped=0;const word=nodes.get('caption').children.find(node=>node.className==='word');assert.equal(word.disabled,false);
+  video.currentTime=7;await word.onclick({stopPropagation(){stopped++;}});assert.equal(video.currentTime,5);assert.equal(stopped,1);
+  video.currentTime=10;await pending;assert.equal(nodes.get('panel').dataset.mode,'idle');
+  (await storage.ready).close();
+});

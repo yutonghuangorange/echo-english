@@ -100,7 +100,7 @@
     .panel:not([data-mode="idle"]) .pages:not([data-spacious="true"]) .caption{min-height:40px;padding:6px 0}
     .panel:not([data-mode="idle"]) .pages:not([data-spacious="true"]) .caption-context{font-size:14px;margin:4px 0;min-height:0;max-height:22px;-webkit-line-clamp:1}
     .panel:not([data-mode="idle"]) .pages:not([data-spacious="true"]) #captionNext{margin-bottom:8px}
-    .cue-card #captionNext{color:#d1e1e6;opacity:.9}
+    [role="button"]:focus-visible{outline:2px solid #b3eedb;outline-offset:3px}.caption-jump{display:block;width:100%;padding:0;border:0;border-radius:0;background:transparent;text-align:left;font:inherit;color:inherit}.caption-jump:disabled{opacity:1;cursor:default}.caption-jump:hover:not(:disabled){background:transparent;text-decoration:underline}.panel[data-mode="original"] :is(#caption,#captionPrevious,#captionNext){cursor:pointer}.cue-card #captionNext{color:#d1e1e6;opacity:.9}
     .pages[data-spacious="true"] #captionNext{font-size:20px;line-height:1.5;max-height:30px}
     .panel:not([data-mode="idle"]) .pages:not([data-spacious="true"]) #captionNext{font-size:16px;max-height:24px}
     .panel[data-mode="recording"] .live-meter canvas{height:48px}
