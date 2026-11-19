@@ -3,7 +3,7 @@
 (function(root){
   const practice=typeof module!=='undefined'?require('./practice.js'):root.EchoPractice;
   function attach({pauseButton,speedControl,speedInput,volumeControl,volumeInput,volumeValue,clock,getSpeed,onSpeed,onError}){
-    let owner=null,paused=false,changing=false;
+    let owner=null,paused=false,changing=false,changeTask=null;
     function renderVolume(){
       if(!volumeControl)return;
       const media=owner?.volumeMedia;
@@ -20,10 +20,10 @@
     }
     function detachVolume(){owner?.volumeMedia?.removeEventListener?.('volumechange',renderVolume);}
     function set(pause,resume,setSpeed=null,volumeMedia=null){
-      detachVolume();owner={pause,resume,setSpeed,volumeMedia};paused=false;changing=false;
+      detachVolume();if(paused)clock.setPaused(false);owner={pause,resume,setSpeed,volumeMedia};paused=false;changing=false;changeTask=null;
       volumeMedia?.addEventListener?.('volumechange',renderVolume);render();
     }
-    function clear(){detachVolume();owner=null;paused=false;changing=false;render();}
+    function clear(){detachVolume();if(paused)clock.setPaused(false);owner=null;paused=false;changing=false;changeTask=null;render();}
     if(volumeInput)volumeInput.oninput=()=>{
       const media=owner?.volumeMedia,value=Number(volumeInput.value);
       if(!media || !Number.isFinite(value))return;
@@ -33,9 +33,11 @@
       if(!owner || changing)return;
       const current=owner;
       changing=true;paused=!paused;clock.setPaused(paused);render();
-      try{await (paused?current.pause():current.resume());}
+      const action=paused?current.pause:current.resume;
+      const task=(async()=>{await action();})();changeTask=task;
+      try{await task;}
       catch(error){if(owner===current)onError(error);}
-      finally{if(owner===current){changing=false;render();}}
+      finally{if(owner===current){changing=false;changeTask=null;render();}}
     };
     speedInput.onchange=()=>{
       if(!owner?.setSpeed || changing)return;
@@ -43,8 +45,17 @@
       if(!practice.SPEEDS.includes(speed)){render();return;}
       try{owner.setSpeed(speed);onSpeed(speed);render();}catch(error){onError(error);}
     };
+    async function resume(){
+      const current=owner;if(!current)return false;
+      if(changing){
+        await changeTask?.catch(()=>{});
+        if(owner!==current || !paused)return true;
+      }
+      if(!paused)return false;
+      await pauseButton.onclick();return true;
+    }
     render();
-    return {set,clear,render,resume:async()=>{if(!paused)return false;await pauseButton.onclick();return true;},get paused(){return paused;}};
+    return {set,clear,render,resume,get paused(){return paused;}};
   }
   const api={attach};if(typeof module!=='undefined')module.exports=api;else root.EchoPlaybackControls=api;
 })(globalThis);

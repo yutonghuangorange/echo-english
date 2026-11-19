@@ -737,6 +737,7 @@
   }
   function cancelPlayback() {
     originalNavigation=null;playbackActions.clear();
+    leadInOutput?.dispose();leadInOutput=null;
     recordingSession?.pauseFeedback();
     transport.hide();
     replayMonitor?.dispose();replayMonitor=null;
@@ -812,42 +813,22 @@
     r={...r,start:withLeadIn?leadInStart(r):r.start};
     closeWord();
     const v = video(); saveVideo(v); v.muted = false; v.playbackRate = r.speed;
-    do {
-      await seek(v, r.start, token);
-      if (token !== generation) return;
-      await v.play();
-      if (token !== generation) return;
-      await new Promise(resolve => {
-        playback.onCancel(resolve);
-        playbackActions.set(()=>v.pause(),()=>v.play(),mode==='original'?speed=>{
-          r.speed=speed;v.playbackRate=speed;
-          playback.timeout(()=>{v.pause();resolve();},Math.max(0,(r.end-v.currentTime)/speed)*1000+15000);
-        }:null,v);
-        showVideoTransport('原声',v,r,elapsed=>{
-          v.currentTime=r.start+elapsed*r.speed;
-          playback.timeout(()=>{v.pause();resolve();},Math.max(0,(r.end-v.currentTime)/r.speed)*1000+15000);
-        });
-        const watch=()=>{
-          playback.watchEnd(v,r.end,()=>{v.pause();resolve();});
-          playback.timeout(()=>{v.pause();resolve();},Math.max(0,(r.end-v.currentTime)/r.speed)*1000+15000);
-        };
-        originalNavigation={jump:i=>guarded(async()=>{
-          if(token!==generation || mode!=='original' || !cues[i])return;
-          const cue=cues[i];index=i;
-          if($('practiceScope').value==='clip' || cue.start<r.start || cue.start>=r.end){
-            const range=EchoSelection.clipRange(cues,i,cue.start,cue.end);
-            r.start=range.start;r.end=range.end;clipRangeAdjusted=false;
-            $('practiceScope').value='clip';scopePreferences[activity]='clip';
-            $('start').value=String(r.start);$('end').value=String(r.end);
-          }
-          v.currentTime=cue.start;watch();
-          updateCaption();renderCueList();chooseCurrentTake();updateSummaries();saveProgress();
-          const resumed=await playbackActions.resume();
-          if(token===generation && !resumed)await v.play();
-        })()};
-        watch();
-      });
-    } while(token===generation && mode==='original' && $('originalLoop').checked);
+    const listening=EchoReferencePlayback.create({media:v,range:r,clock:playback,actions:playbackActions,
+      seek:at=>seek(v,at,token),show:(range,seekTo)=>showVideoTransport('原声',v,range,seekTo),
+      active:()=>token===generation,changeSpeed:mode==='original',repeat:()=>mode==='original' && $('originalLoop').checked});
+    originalNavigation={jump:i=>guarded(async()=>{
+      if(token!==generation || mode!=='original' || !listening.ready || !cues[i])return;
+      const cue=cues[i],current=listening.range;let range=null;index=i;
+      if($('practiceScope').value==='clip' || cue.start<current.start || cue.start>=current.end){
+        range=EchoSelection.clipRange(cues,i,cue.start,cue.end);clipRangeAdjusted=false;
+        $('practiceScope').value='clip';scopePreferences[activity]='clip';
+        $('start').value=String(range.start);$('end').value=String(range.end);
+      }
+      const moving=listening.jump(cue.start,range);
+      updateCaption();renderCueList();chooseCurrentTake();updateSummaries();saveProgress();
+      await moving;
+    })()};
+    await listening.run();
     if (token === generation) { cancelPlayback(); restoreVideo(); }
   }
   const canEditSound=()=>['idle','replay','recording'].includes(mode);

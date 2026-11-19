@@ -129,3 +129,17 @@ test('subtitle editor drafts persist independently from progress saves and never
   assert.deepEqual(await storage.getCaptionDraft('video'),draft);assert.equal((await storage.listTakes('video'))[0].start,1);assert.equal(await storage.getCaptionDraft('another'),undefined);
   (await storage.ready).close();const restored=createStorage(factory);assert.deepEqual(await restored.getCaptionDraft('video'),draft);(await restored.ready).close();
 });
+
+
+test('snapshot scopes every store to one video and can omit accompaniment records',async()=>{
+  const storage=createStorage(new IDBFactory());
+  for(const videoId of ['one','two']){
+    await storage.saveSession({videoId,title:videoId});await storage.setFavorite({videoId});
+    await storage.saveTake(take(videoId,videoId));await storage.saveBacking({key:videoId,videoId,createdAt:1,blob:new Blob(['music'])});
+  }
+  const scoped=await storage.snapshot('one');for(const rows of Object.values(scoped)){assert.equal(rows.length,1);assert.equal(rows[0].videoId,'one');}
+  const without=await storage.snapshot('two',false);assert.equal(without.backings.length,0);assert.equal(without.recordings.length,1);
+  const all=await storage.snapshot(null,false);assert.equal(all.sessions.length,2);assert.equal(all.backings.length,0);
+  const absent=await storage.snapshot('absent');assert.ok(Object.values(absent).every(rows=>rows.length===0));
+  (await storage.ready).close();
+});

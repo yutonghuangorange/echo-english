@@ -36,7 +36,7 @@ async function mount(storage, overrides = {}) {
   doc.title=overrides.title || '';
   const context={document:doc,location:{href:'https://www.youtube.com/watch?v=video',pathname:'/watch'},indexedDB:{},URL,Blob,console,setTimeout,clearTimeout,cancelAnimationFrame(){},requestAnimationFrame(){},crypto:globalThis.crypto,
     window:{addEventListener(){},speechSynthesis:{cancel(){}}},chrome:{runtime:{onMessage:{addListener(){}}}},
-    EchoSubtitleEditor:require('../extension/subtitle-editor.js'),EchoSubtitleEditorView:require('../extension/subtitle-editor-view.js'),EchoSettingsDialog:require('../extension/settings-dialog.js'),EchoPracticeTools:require('../extension/practice-tools.js'),EchoCaptionTracks:require('../extension/caption-tracks.js'),EchoPanelView:require('../extension/panel-view.js'),EchoTransport:require('../extension/transport.js'),EchoPlayback:require('../extension/playback.js'),EchoPlaybackControls:require('../extension/playback-controls.js'),
+    EchoSubtitleEditor:require('../extension/subtitle-editor.js'),EchoSubtitleEditorView:require('../extension/subtitle-editor-view.js'),EchoSettingsDialog:require('../extension/settings-dialog.js'),EchoPracticeTools:require('../extension/practice-tools.js'),EchoCaptionTracks:require('../extension/caption-tracks.js'),EchoPanelView:require('../extension/panel-view.js'),EchoTransport:require('../extension/transport.js'),EchoPlayback:require('../extension/playback.js'),EchoPlaybackControls:require('../extension/playback-controls.js'),EchoReferencePlayback:require('../extension/reference-playback.js'),
     EchoVocalEffects:require('../extension/vocal-effects.js'),EchoAudioExport:require('../extension/audio-export.js'),EchoAssembly:require('../extension/assembly.js'),EchoPanelSize:require('../extension/panel-size.js'),EchoLanguages:require('../extension/languages.js'),EchoKaraoke:require('../extension/karaoke.js'),EchoStorage:{...require('../extension/storage.js'),createStorage:()=>storage},EchoSelection:require('../extension/selection.js'),EchoPractice:require('../extension/practice.js'),EchoDictionary:require('../extension/dictionary.js'),EchoSubtitles:require('../extension/subtitles.js'),EchoLibrary:require('../extension/library.js'),EchoModels:require('../extension/models.js'),EchoLiveMeter:require('../extension/live-meter.js'),EchoRecording:require('../extension/recording.js'),EchoMicrophone:require('../extension/microphone.js'),EchoAudioAnalysis:require('../extension/audio-analysis.js')};
   Object.assign(context,overrides.globals || {});
   if(!overrides.globals?.EchoVocalEffects?.createPlayer)context.EchoVocalEffects={...context.EchoVocalEffects,async createPlayer(take){return new context.Audio(take.url);}};
@@ -2567,5 +2567,18 @@ test('clicking a different lyric in clip playback updates the end boundary inste
   let stopped=0;const word=nodes.get('caption').children.find(node=>node.className==='word');assert.equal(word.disabled,false);
   video.currentTime=7;await word.onclick({stopPropagation(){stopped++;}});assert.equal(video.currentTime,5);assert.equal(stopped,1);
   video.currentTime=10;await pending;assert.equal(nodes.get('panel').dataset.mode,'idle');
+  (await storage.ready).close();
+});
+
+
+test('stopping a lead-in restores volume immediately even while video.play is pending',async()=>{
+  const storage=createStorage(new IDBFactory()),video=leadInVideo({hold:true});let release;
+  video.volume=.7;const play=video.play;video.play=async function(){await play.call(this);await new Promise(resolve=>{release=resolve;});};
+  await storage.saveSession({videoId:'video',start:10,end:15,speed:'1',cues:[],leadInMode:'seconds',leadInSeconds:3,backingVolume:.4});
+  class MediaRecorder{static isTypeSupported(){return true;}constructor(){this.state='inactive';}}
+  const {nodes}=await mount(storage,{video,globals:{MediaRecorder,navigator:{mediaDevices:{getUserMedia:async()=>({getTracks:()=>[{stop(){}}]})}},requestAnimationFrame:fn=>setTimeout(fn,1),cancelAnimationFrame:clearTimeout}});
+  const pending=nodes.get('record').onclick();await waitUntil(()=>!!release);
+  assert.equal(video.volume,.4);nodes.get('stop').onclick();assert.equal(video.volume,.7);
+  video.volume=.9;release();await pending;assert.equal(video.volume,.9);
   (await storage.ready).close();
 });

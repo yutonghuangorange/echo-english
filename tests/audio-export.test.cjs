@@ -162,3 +162,14 @@ test('automatic export planning never extends a recording beyond its selected en
   const result=plan([voice('a',0,2,1,{capturedEnd:5})],6);
   assert.equal(result.segments[0].end,2);assert.deepEqual(result.gaps,[{start:2,end:6}]);
 });
+
+
+test('cropping before a take fade does not introduce a fade into the export or its backing',async()=>{
+  class AudioContext{
+    async decodeAudioData(){return {length:16,duration:8,sampleRate:2,numberOfChannels:1,getChannelData:()=>new Float32Array(16).fill(.2)};}
+    async close(){}
+  }
+  const result=await render({takes:[voice('a',0,8,1,{effects:{fadeOutSeconds:2}})],origin:2,duration:2,sampleRate:2,selection:[{start:2,end:4,takeId:'a'}],backing:{start:0,end:8,blob:new Blob(['backing'])}}, {AudioContext,setTimeout:queueMicrotask});
+  const view=new DataView(await result.blob.arrayBuffer());
+  for(let i=0;i<4;i++)assert.ok(Math.abs(view.getInt16(44+i*4,true)/32767-.4)<.001,`frame ${i}`);
+});

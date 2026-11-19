@@ -93,7 +93,12 @@
       getFavorite(videoId) { return transaction(['favorites'],'readonly',(tx,set)=>{tx.objectStore('favorites').get(videoId).onsuccess=e=>set(e.target.result);}); },
       snapshot(videoId=null,includeBackings=true) { return transaction(['sessions','recordings','backings','favorites'],'readonly',(tx,set)=>{
         const result={sessions:[],recordings:[],backings:[],favorites:[]};set(result);
-        for(const name of Object.keys(result))tx.objectStore(name).getAll().onsuccess=e=>{result[name]=name==='backings' && !includeBackings?[]:e.target.result.filter(v=>videoId===null || v.videoId===videoId);};
+        for(const name of Object.keys(result)){
+          if(name==='backings' && !includeBackings)continue;
+          const store=tx.objectStore(name);
+          const request=videoId===null?store.getAll():['sessions','favorites'].includes(name)?store.get(videoId):store.index('videoId').getAll(videoId);
+          request.onsuccess=e=>{const value=e.target.result;result[name]=Array.isArray(value)?value:value?[value]:[];};
+        }
       }); },
       // Import is one atomic merge. Existing media is never overwritten and
       // imported audio is exempt from automatic rolling-cache eviction.

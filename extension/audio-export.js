@@ -65,7 +65,8 @@
     const last=timeline.segments.at(-1);
     // A take's fade belongs to its vocal stem. Only a fade at the actual export
     // endpoint may also fade the backing; an unrecorded outro must remain audible.
-    const finalFade=Math.abs(last.end-duration)<0.0001?effects.normalize(last.take.effects).fadeOutSeconds:0;
+    const takeEnd=Math.min(last.take.end,last.take.capturedEnd ?? last.take.end);
+    const finalFade=Math.abs(last.end-duration)<0.0001 && Math.abs(takeEnd-duration)<0.0001?effects.normalize(last.take.effects).fadeOutSeconds:0;
     const length=Math.ceil(duration*sampleRate),reverbSettings={...effects.normalize(reverb),delayMs:0};
     const context=new env.AudioContext({sampleRate});
     let vocalBuffer=null,channels;

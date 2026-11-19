@@ -56,3 +56,20 @@ test('all offered practice speeds apply during playback and unsupported speeds a
   }
   f.speedInput.value='0.1';f.speedInput.onchange();assert.equal(rate,1.5);assert.equal(f.speedInput.value,'1.5');
 });
+
+
+test('a lyric jump waits for a pending pause and resumes once without losing the UI state',async()=>{
+  const f=fixture();let release,resumes=0;
+  f.controls.set(()=>new Promise(resolve=>{release=resolve;}),()=>resumes++);
+  const pausing=f.pauseButton.onclick(),resuming=f.controls.resume();
+  assert.equal(resumes,0);release();await Promise.all([pausing,resuming]);
+  assert.equal(resumes,1);assert.equal(f.controls.paused,false);assert.equal(f.pauseButton.textContent,'Ⅱ 暂停');
+});
+
+test('a pending resume request cannot resume a replacement player',async()=>{
+  const f=fixture();let release,resumes=0;
+  f.controls.set(()=>new Promise(resolve=>{release=resolve;}),()=>resumes++);
+  const pausing=f.pauseButton.onclick(),resuming=f.controls.resume();
+  f.controls.clear();f.controls.set(()=>{},()=>resumes++);
+  release();await Promise.all([pausing,resuming]);assert.equal(resumes,0);assert.equal(f.controls.paused,false);
+});

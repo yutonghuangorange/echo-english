@@ -77,7 +77,7 @@ test('monitor routes only accompaniment to speakers and does not create a record
     async resume(){events.push('resume');}async close(){events.push('close');}
   }
   class Audio {
-    constructor(){music=this;}load(){queueMicrotask(()=>this.oncanplay?.());}
+    constructor(){music=this;}load(){this.playbackRate=1;queueMicrotask(()=>this.oncanplay?.());}
     async play(){events.push('play');}pause(){events.push('pause');}removeAttribute(){}
   }
   const env={AudioContext:Context,Audio,URL:{createObjectURL:()=> 'blob:music',revokeObjectURL:()=>events.push('revoke')},setTimeout,clearTimeout};

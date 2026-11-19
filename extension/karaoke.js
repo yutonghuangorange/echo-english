@@ -97,7 +97,7 @@
     };
     try {
       url=env.URL.createObjectURL(blob);music=new env.Audio(url);
-      music.preload='auto';music.playbackRate=speed;music.preservesPitch=true;
+      music.preload='auto';music.preservesPitch=true;
       const backing=context.createMediaElementSource(music), gain=context.createGain();setGain(gain,volume);
       backing.connect(gain);
       const fade=fadeInSeconds>0?context.createGain():null;
@@ -109,6 +109,8 @@
         music.onerror=()=>{clearLoading();reject(Error('伴奏无法解码，请重新生成。'));};
       });
       music.load();await Promise.all([ready,context.resume()]);
+      // load() resets playbackRate to defaultPlaybackRate in real browsers.
+      music.playbackRate=speed;
       if(Number.isFinite(initialPosition))music.currentTime=Math.max(0,initialPosition-start);
       return {setVolume:value=>setGain(gain,value),
         async sync(position=video.currentTime){
