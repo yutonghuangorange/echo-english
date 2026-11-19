@@ -37,7 +37,7 @@
   for(const id of ['pages','scopeControls','clipBounds','singDetails'])practiceLayoutObserver?.observe($(id));
 
   let cues = [], index = -1, take = null, mode = 'idle', generation = 0,clipRangeAdjusted=false;
-  let recordingSession = null, audio = null, savedVideo = null,originalNavigation=null;
+  let recordingSession = null, audio = null, savedVideo = null,originalNavigation=null,recordingAttempt=null;
   const playback = EchoPlayback.create();
   const playbackActions=EchoPlaybackControls.attach({
     pauseButton:$('pausePlayback'),speedControl:$('playbackSpeedControl'),speedInput:$('playbackSpeed'),volumeControl:$('originalVolumeControl'),volumeInput:$('originalVolume'),volumeValue:$('originalVolumeValue'),clock:playback,
@@ -624,6 +624,16 @@
     return v;
   }
   function status(text) { $('status').textContent = text;$('settingsStatus').textContent=text;$('clipDialogStatus').textContent=text; }
+  function recordingSkip(){
+    return recordingAttempt?EchoPractice.lyricSkip(recordingAttempt.cues,recordingAttempt.media.currentTime,recordingAttempt.range):null;
+  }
+  function updateRecordingSkip(){
+    const available=mode==='recording' && isSinging() && !!recordingAttempt;
+    const button=$('skipInstrumental');button.hidden=!available;
+    if(!available){button.disabled=true;return;}
+    const skip=recordingSkip();button.disabled=!skip?.target;
+    button.textContent=skip?.keep?'⏭ 跳过间奏':'⏭ 跳过前奏';button.title=skip?.reason || '';
+  }
   function renderPracticeActions() {
     const singing=isSinging(),scope=$('practiceScope').value,whole=scope==='whole',paragraph=scope==='paragraph';
     const range=selectionState().value?.range;
@@ -704,6 +714,7 @@
     $('recordingDialogStop').textContent=mode==='exporting'?'取消导出':'停止播放';
     for(const id of ['openRecordingAdjust','openRecordingDownload'])$(id).disabled=!take || !['idle','replay'].includes(mode);
     $('settingsStop').hidden=!busy;$('settingsStop').disabled=mode==='saving';
+    updateRecordingSkip();
     $('restartRecording').hidden=!['recording','lead-in'].includes(mode);
     $('restartRecording').disabled=!['recording','lead-in'].includes(mode);
     $('originalLoopControl').hidden=mode!=='original';
@@ -1475,22 +1486,25 @@
     }
     try {
       await storage.saveTake(value,{maxTakes:recordingTakeLimit()});
-      if (!ownsUI()) return;
+      if (!ownsUI()) return true;
       const request=++historyRequest;
       const values = await storage.listTakes(id);
-      if (!ownsUI() || request!==historyRequest) return;
+      if (!ownsUI() || request!==historyRequest) return true;
       videoHistory = values;
       renderHistory();
       if (token === generation || (take?.id === value.id && mode === 'idle')) {
         status(value.kind==='song'?(monitored?'演唱人声已保存，可单独下载或加伴奏导出。':'清唱人声已保存，可回听或下载。'):'配音完成，已加入本句录音版本。');
       }
+      return true;
     } catch {
       if (videoId === id && take?.id === value.id) status('录音已完成，但保存失败，请下载备份。');
+      return false;
     }
   }
-  async function record({token = ++generation, keepBusy = false} = {}) {
+  async function record({token = ++generation, keepBusy = false,continuation=null,skipLeadIn=false} = {}) {
     closeWord();
-    const v=video(),selection=EchoSelection.resolve({...selectionInput(v.duration),speed:1});
+    const v=video(),resolved=EchoSelection.resolve({...selectionInput(v.duration),...(continuation?{scope:'clip',index:-1,start:continuation.start,end:continuation.end}:{}),speed:1});
+    const selection=continuation?{...resolved,label:`分段录唱 · ${recordingTime(continuation.start)}–${recordingTime(continuation.end)}`}:resolved;
     const r=selection.range,id=videoId,singingTake=isSinging();
     const source=recordingPlayback(),outputBacking=source==='silent'?null:backingFor(r);
     const ready=source==='backing'?outputBacking:null;
@@ -1498,8 +1512,9 @@
     deletedTake=null;$('undoDelete').hidden=true;
     const gainKey=singingTake?'sing':'speech',constraints=microphoneConstraints(singingTake);
     const active=()=>token===generation && id===videoId;
+    const attempt={media:v,range:r,cues:cues.filter(c=>c.end>r.start && c.start<r.end && EchoPractice.isLyricCue(c)),continuation,continuing:false,cutAt:null,saved:false,value:null};
     let starting=true,vocalOffset=0,capturedEnd=r.start;
-    const observePosition=()=>{if(Number.isFinite(v.currentTime))capturedEnd=Math.max(capturedEnd,Math.min(r.end,v.currentTime));};
+    const observePosition=()=>{if(Number.isFinite(v.currentTime))capturedEnd=Math.max(capturedEnd,Math.min(r.end,v.currentTime));updateRecordingSkip();};
     const onWaiting=()=>session.pause();
     const onPlaying=()=>{
       if(starting || !active() || !['recording','paused'].includes(session.state))return;
@@ -1508,30 +1523,35 @@
     };
     const session=EchoRecording.create({constraints,quality:recordingQuality,sidetone:sidetoneEnabled,sidetoneVolume,sidetoneMode,sidetoneReverb:monitoringEffects(),gainDb:gainPreferences[gainKey]?0:manualGainPreferences[gainKey],active,
       microphone:EchoMicrophone,env:globalThis,
-      createMonitor:ready?()=>EchoKaraoke.createMonitor({blob:ready.blob,video:v,start:ready.start,speed:r.speed,volume:Number($('backingVolume').value),initialPosition:r.start,fadeInSeconds:leadInStart(r)<r.start?0.04:0}):null,
+      createMonitor:ready?()=>EchoKaraoke.createMonitor({blob:ready.blob,video:v,start:ready.start,speed:r.speed,volume:Number($('backingVolume').value),initialPosition:r.start,fadeInSeconds:!skipLeadIn && leadInStart(r)<r.start?0.04:0}):null,
       createMeter:input=>EchoLiveMeter.start({stream:input,container:$('liveMeter'),canvas:$('liveMeterCanvas'),value:$('liveMeterValue'),bar:$('liveMeterBar')}),
       onError:error=>{if(recordingSession===session && id===videoId){stop();status(error.message);}},
       onComplete:async result=>{
         v.removeEventListener('timeupdate',observePosition);
         v.removeEventListener('waiting',onWaiting);v.removeEventListener('playing',onPlaying);
-        const ownsUI=()=>recordingSession===session && id===videoId;
+        const ownsUI=()=>recordingSession===session && id===videoId && !attempt.continuing;
         try {
           if(!result){if(ownsUI() && mode==='saving'){mode='idle';controls();}return;}
           if(id===videoId)observePosition();
           const value={id:crypto.randomUUID(),videoId:id,cueKey:selection.key,label:selection.label,...r,...result,createdAt:Date.now(),capture:'vocal',referenceSource:source,
             ...(source==='original'?{backingModel:r.model,backingQuality:r.quality}:{}),
-            autoGainControl:constraints.autoGainControl,vocalOffset,...(capturedEnd>r.start?{capturedEnd}:{}),...(outputBacking?{backingKey:outputBacking.key,backingModel:EchoKaraoke.modelOf(outputBacking),backingQuality:EchoKaraoke.qualityOf(outputBacking)}:{}),...(singingTake?{kind:'song',...(capturedEnd>r.start && capturedEnd<r.end-0.1?{effects:{fadeOutSeconds:2}}:{})}:{})};
-          await saveRecording(value,{token,keepBusy,monitored:source!=='silent',ownsUI});
-        } finally {if(recordingSession===session)recordingSession=null;}
+            autoGainControl:constraints.autoGainControl,vocalOffset,...(capturedEnd>r.start?{capturedEnd}:{}),...(outputBacking?{backingKey:outputBacking.key,backingModel:EchoKaraoke.modelOf(outputBacking),backingQuality:EchoKaraoke.qualityOf(outputBacking)}:{}),...(singingTake?{kind:'song',...(!attempt.continuing && capturedEnd>r.start && capturedEnd<r.end-0.1?{effects:{fadeOutSeconds:2}}:{})}:{})};
+          if(attempt.cutAt!==null){
+            value.end=attempt.cutAt;value.capturedEnd=attempt.cutAt;
+            value.cueKey=`song:${EchoSelection.cueKey(null,r.start,attempt.cutAt)}`;
+            value.label=`分段录唱 · ${recordingTime(r.start)}–${recordingTime(attempt.cutAt)}`;
+          }
+          attempt.value=value;attempt.saved=await saveRecording(value,{token,keepBusy,monitored:source!=='silent',ownsUI});
+        } finally {if(recordingSession===session){recordingSession=null;recordingAttempt=null;}}
       }
     });
-    recordingSession=session;
+    recordingSession=session;recordingAttempt=attempt;
     mode='permission';controls();status('正在请求麦克风权限…');
     if(!await session.prepare())return false;
     if(!active())return false;
     saveVideo(v);v.playbackRate=r.speed;
-    if(leadInStart(r)<r.start)session.startMeter();
-    await playRecordingLeadIn(v,r,token);
+    if(!skipLeadIn && leadInStart(r)<r.start)session.startMeter();
+    if(!skipLeadIn)await playRecordingLeadIn(v,r,token);
     if(!active())return false;
     v.muted=source!=='original';
     // The lead-in normally pauses at this position already. Re-seeking even
@@ -1974,13 +1994,31 @@
   $('prev').onclick = () => select(index - 1,{navigate:true,focusRecord:true}); $('next').onclick = () => select(index + 1,{navigate:true,focusRecord:true});
   $('markStart').onclick = guarded(() => { $('start').value = video().currentTime.toFixed(2); index = -1; updateCaption();chooseCurrentTake();saveProgress(); });
   $('markEnd').onclick = guarded(() => { $('end').value = video().currentTime.toFixed(2); index = -1; updateCaption();chooseCurrentTake();saveProgress(); });
+  $('skipInstrumental').onclick=guarded(async()=>{
+    if(mode!=='recording' || !isSinging() || !recordingSession || !recordingAttempt)return;
+    const skip=recordingSkip();if(!skip?.target)return;
+    const previous=recordingSession,attempt=recordingAttempt,v=video();
+    const cut=Math.min(attempt.range.end,v.currentTime),target=skip.target.start;
+    const token=++generation,id=videoId;
+    attempt.continuing=true;if(skip.keep)attempt.cutAt=cut;
+    cancelPlayback();restoreVideo();mode='skipping';controls();status('正在跳过纯伴奏，准备从下一句继续录唱…');
+    if(skip.keep)await previous.stop();else await previous.discard();
+    if(token!==generation || id!==videoId || mode!=='skipping')return;
+    if(skip.keep && !attempt.saved){
+      if(attempt.value){setSongTake(attempt.value);setTake(attempt.value);}
+      throw Error('上一段人声保存失败，请先下载备份，再继续录唱。');
+    }
+    const values=await storage.listTakes(id);if(token!==generation || id!==videoId)return;
+    videoHistory=values;renderHistory();
+    await record({token,continuation:{start:target,end:attempt.range.end},skipLeadIn:true});
+  });
   $('restartRecording').onclick=guarded(async()=>{
     if(!['recording','lead-in'].includes(mode) || !recordingSession)return;
-    const previous=recordingSession,token=++generation,id=videoId;
+    const previous=recordingSession,continuation=recordingAttempt?.continuation,token=++generation,id=videoId;
     cancelPlayback();restoreVideo();mode='restarting';controls();status('正在重新准备录音…');
     await previous.discard();
     if(token!==generation || id!==videoId || mode!=='restarting')return;
-    await record({token});
+    await record({token,continuation});
   });
   $('original').onclick = guarded(async () => { const r = selectedRange(), token = ++generation; mode = 'original'; controls(); status('正在播放原声…'); await original(r, token); if (token === generation) { finish();if($('practiceScope').value==='clip')updateCaption();status('原声播放完成。'); } });
   $('record').onclick = guarded(() => {
@@ -2090,7 +2128,7 @@
     closeClipDialog();settings.close();closeRecordingDialog();tools.close();tools.resetSetup();setupUndo=null;favorite=false;favoriteRequest++;clipRangeAdjusted=false;
     library.close(true);
     stop();
-    recordingSession=null;
+    recordingSession=null;recordingAttempt=null;
     detachCaptionVideo();
     backingRestoreRequest++;
     restoringBacking = false;

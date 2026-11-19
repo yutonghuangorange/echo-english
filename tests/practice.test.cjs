@@ -93,3 +93,16 @@ test('paragraph ranges include all selected sentences and their intervening gaps
   assert.deepEqual(paragraphRange(cues,0,3),{start:1,end:17});
   for(const bounds of [[0,0],[-1,2],[0,4],[1.5,2]])assert.throws(()=>paragraphRange(cues,...bounds),/至少两句/);
 });
+
+
+test('instrumental skipping ignores music captions, requires a gap and stays within the recording range',()=>{
+  const {lyricSkip,isLyricCue}=require('../extension/practice.js');
+  for(const text of ['[Music]','（间奏）','【前奏】','♪ ♫','간주','間奏'])assert.equal(isLyricCue({start:0,end:2,text}),false,text);
+  assert.equal(isLyricCue({start:0,end:2,text:'Caught me in the middle'}),true);
+  const cues=[{start:0,end:5,text:'[Music]'},{start:5,end:8,text:'First lyric'},{start:8,end:12,text:'间奏'},{start:12,end:16,text:'Second lyric'}];
+  assert.equal(lyricSkip(cues,2,{start:0,end:20}).target.start,5);assert.equal(lyricSkip(cues,2,{start:0,end:20}).keep,false);
+  assert.equal(lyricSkip(cues,6,{start:0,end:20}).target,null);
+  const middle=lyricSkip(cues,9,{start:0,end:20});assert.equal(middle.target.start,12);assert.equal(middle.keep,true);
+  assert.equal(lyricSkip(cues,9,{start:0,end:10}).target,null);
+  assert.equal(lyricSkip([],0,{start:0,end:20}).target,null);
+});

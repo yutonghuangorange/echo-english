@@ -1,5 +1,20 @@
 (function(root) {
   const SPEEDS=Object.freeze([0.5,0.6,0.7,0.75,0.8,0.9,1,1.1,1.2,1.25,1.3,1.4,1.5]);
+  function isLyricCue(cue){
+    if(!Number.isFinite(cue?.start) || !Number.isFinite(cue?.end) || cue.end<=cue.start)return false;
+    const text=String(cue.text || '').trim().replace(/^[\[（(【]+|[\]）)】]+$/g,'').trim();
+    return !!text && !/^[\s♪♫♬♩🎵🎶.·…_–—-]+$/u.test(text) && !/^(music|instrumental|intro|interlude|outro|silence|applause|音乐|音樂|纯音乐|純音樂|伴奏|前奏|间奏|間奏|尾奏|音楽|演奏|간주|전주|후주)$/i.test(text);
+  }
+  function lyricSkip(cues,time,range){
+    let next=null,keep=false,active=false;
+    for(const cue of cues){
+      if(!isLyricCue(cue) || cue.end<=range.start || cue.start>=range.end)continue;
+      if(cue.start<time && cue.end>range.start)keep=true;
+      if(cue.start<=time+.05 && cue.end>time+.05)active=true;
+      if(cue.start>time+.05 && (!next || cue.start<next.start))next=cue;
+    }
+    return {target:active?null:next,keep,reason:active?'当前仍在歌词区间，间奏时可跳转。':next?'按字幕跳到下一句；已录人声按原时间轴分段保存。':'当前练习范围内没有后续歌词；需要准确的时间轴字幕。'};
+  }
   function splitCaption(text) {
     // Keep the original available: script-based separation is a display aid,
     // not translation or linguistic sentence alignment.
@@ -66,6 +81,6 @@
   async function playQueue({queue,active,play}) {
     for(let i=0;i<queue.length && active();i++)await play(queue[i],i,queue.length);
   }
-  const api = {SPEEDS,paragraphRange,leadInSeconds,leadInStart,splitCaption,captionFrame,nudge,runLoop,runPractice,recordingQueue,playQueue,playbackTimeout};
+  const api = {SPEEDS,isLyricCue,lyricSkip,paragraphRange,leadInSeconds,leadInStart,splitCaption,captionFrame,nudge,runLoop,runPractice,recordingQueue,playQueue,playbackTimeout};
   if (typeof module !== 'undefined') module.exports = api; else root.EchoPractice = api;
 })(globalThis);

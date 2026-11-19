@@ -1259,7 +1259,7 @@ test('manual input gain reaches the saved vocal recording and meter, then releas
 
 function leadInVideo({hold=false}={}){
   const events=new Map(),plays=[],seeks=[];let time=0;
-  return {duration:60,muted:true,playbackRate:1.25,plays,seeks,pause(){},
+  return {duration:60,muted:true,playbackRate:1.25,plays,seeks,pause(){},advance(value){time=value;for(const fn of [...events.get('timeupdate') || []])fn();},
     get currentTime(){return time;},set currentTime(value){time=value;seeks.push(value);queueMicrotask(()=>{for(const fn of events.get('seeked') || [])fn();});},
     addEventListener(name,fn){if(!events.has(name))events.set(name,new Set());events.get(name).add(fn);},
     removeEventListener(name,fn){events.get(name)?.delete(fn);},
@@ -2580,5 +2580,54 @@ test('stopping a lead-in restores volume immediately even while video.play is pe
   const pending=nodes.get('record').onclick();await waitUntil(()=>!!release);
   assert.equal(video.volume,.4);nodes.get('stop').onclick();assert.equal(video.volume,.7);
   video.volume=.9;release();await pending;assert.equal(video.volume,.9);
+  (await storage.ready).close();
+});
+
+
+for(const source of ['backing','original'])test(`skip intro and interlude with ${source} saves aligned vocal pieces without recording the skipped gaps`,async()=>{
+  const storage=createStorage(new IDBFactory()),video=leadInVideo({hold:true});let requests=0;
+  const cues=[{start:0,end:5,text:'[Music]'},{start:5,end:8,text:'First lyric'},{start:8,end:12,text:'间奏'},{start:12,end:16,text:'Second lyric'}];
+  await storage.saveSession({videoId:'video',activity:'sing',scopes:{sing:'whole'},recordingPlaybackPreferences:{speech:'silent',sing:source},start:0,end:60,speed:'0.5',cues,leadInMode:'seconds',leadInSeconds:3});
+  await storage.saveBacking({key:'music',videoId:'video',start:0,end:60,createdAt:1,blob:new Blob(['music'])});
+  class MediaRecorder{static isTypeSupported(){return true;}constructor(){this.state='inactive';this.mimeType='audio/webm';}start(){this.state='recording';}stop(){this.state='inactive';this.ondataavailable({data:new Blob(['dry-voice'])});queueMicrotask(()=>this.onstop());}}
+  const {nodes}=await mount(storage,{video,globals:{MediaRecorder,navigator:{mediaDevices:{async getUserMedia(){requests++;return {getTracks:()=>[{stop(){}}]};}}},EchoKaraoke:{...require('../extension/karaoke.js'),async createMonitor(){return {sync:async()=>{},pause(){},dispose(){},setVolume(){}};}},requestAnimationFrame:fn=>setTimeout(fn,1),cancelAnimationFrame:clearTimeout}});
+  const first=nodes.get('record').onclick();await waitUntil(()=>nodes.get('panel').dataset.mode==='recording' && video.plays.length===1);
+  assert.equal(nodes.get('skipInstrumental').disabled,false);assert.match(nodes.get('skipInstrumental').textContent,/前奏/);
+  const intro=nodes.get('skipInstrumental').onclick();await waitUntil(()=>requests===2 && video.plays.length===2);
+  assert.equal(video.currentTime,5);assert.equal((await storage.listTakes('video')).length,0);assert.equal(video.playbackRate,1);
+  video.advance(6);assert.equal(nodes.get('skipInstrumental').disabled,true);
+  video.advance(9);assert.equal(nodes.get('skipInstrumental').disabled,false);assert.match(nodes.get('skipInstrumental').textContent,/间奏/);
+  const middle=nodes.get('skipInstrumental').onclick();await waitUntil(()=>requests===3 && video.plays.length===3);
+  assert.equal(video.currentTime,12);video.advance(15);nodes.get('stop').onclick();await Promise.all([first,intro,middle]);
+  const takes=(await storage.listTakes('video')).sort((a,b)=>a.start-b.start);assert.equal(takes.length,2);
+  assert.deepEqual(takes.map(t=>[t.start,t.end,t.capturedEnd,t.speed]),[[5,9,9,1],[12,60,15,1]]);
+  assert.equal(takes[0].effects,undefined);assert.ok(takes.every(t=>t.backingKey==='music' && t.capture==='vocal'));
+  const plan=require('../extension/audio-export.js').plan(takes,60);assert.deepEqual(plan.segments.map(s=>[s.start,s.end]),[[5,9],[12,15]]);
+  assert.equal(nodes.get('skipInstrumental').hidden,true);(await storage.ready).close();
+});
+
+test('interlude skip stops on storage failure and leaves the unsaved vocal available for recovery',async()=>{
+  const storage=createStorage(new IDBFactory()),video=leadInVideo({hold:true});let requests=0;
+  await storage.saveSession({videoId:'video',activity:'sing',scopes:{sing:'whole'},recordingPlaybackPreferences:{sing:'silent'},speed:'1',cues:[{start:0,end:3,text:'First lyric'},{start:10,end:15,text:'Second lyric'}],leadInMode:'none'});
+  storage.saveTake=async()=>{throw Error('disk full');};
+  class MediaRecorder{static isTypeSupported(){return true;}constructor(){this.state='inactive';this.mimeType='audio/webm';}start(){this.state='recording';}stop(){this.state='inactive';this.ondataavailable({data:new Blob(['recover-this'])});queueMicrotask(()=>this.onstop());}}
+  const {nodes}=await mount(storage,{video,globals:{MediaRecorder,navigator:{mediaDevices:{async getUserMedia(){requests++;return {getTracks:()=>[{stop(){}}]};}}},requestAnimationFrame:fn=>setTimeout(fn,1),cancelAnimationFrame:clearTimeout}});
+  const pending=nodes.get('record').onclick();await waitUntil(()=>video.plays.length===1);video.advance(5);
+  await nodes.get('skipInstrumental').onclick();await pending;
+  assert.equal(requests,1);assert.equal(nodes.get('panel').dataset.mode,'idle');assert.match(nodes.get('status').textContent,/保存失败/);assert.equal(nodes.get('replay').disabled,false);
+  (await storage.ready).close();
+});
+
+test('stopping while an interlude segment is saving prevents the continuation from starting',async()=>{
+  const storage=createStorage(new IDBFactory()),video=leadInVideo({hold:true});let requests=0,release;
+  await storage.saveSession({videoId:'video',activity:'sing',scopes:{sing:'whole'},recordingPlaybackPreferences:{sing:'silent'},speed:'1',cues:[{start:0,end:3,text:'First lyric'},{start:10,end:15,text:'Second lyric'}],leadInMode:'none'});
+  const save=storage.saveTake;storage.saveTake=value=>new Promise(resolve=>{release=async()=>resolve(await save(value));});
+  class MediaRecorder{static isTypeSupported(){return true;}constructor(){this.state='inactive';this.mimeType='audio/webm';}start(){this.state='recording';}stop(){this.state='inactive';this.ondataavailable({data:new Blob(['keep-first-part'])});queueMicrotask(()=>this.onstop());}}
+  const {nodes}=await mount(storage,{video,globals:{MediaRecorder,navigator:{mediaDevices:{async getUserMedia(){requests++;return {getTracks:()=>[{stop(){}}]};}}},requestAnimationFrame:fn=>setTimeout(fn,1),cancelAnimationFrame:clearTimeout}});
+  const recording=nodes.get('record').onclick();await waitUntil(()=>video.plays.length===1);video.advance(5);
+  const skipping=nodes.get('skipInstrumental').onclick();await waitUntil(()=>!!release);
+  nodes.get('stop').onclick();await release();await Promise.all([recording,skipping]);
+  assert.equal(requests,1);assert.equal(video.plays.length,1);assert.equal(nodes.get('panel').dataset.mode,'idle');
+  const [take]=await storage.listTakes('video');assert.equal(take.start,0);assert.equal(take.end,5);
   (await storage.ready).close();
 });
